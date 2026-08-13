@@ -14,6 +14,7 @@ import { PROVIDER_LABELS } from '@/lib/plans';
 import { updateClientStatus, addCoachNote, toggleCoachNotePin } from './actions';
 import { createPaymentLink, markPaymentLinkPaid } from './payment-actions';
 import { assignProgram, unassignProgram } from './program-actions';
+import { setNutritionTarget } from './nutrition-actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -61,6 +62,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   const latestAgreement = client.agreements[0] ?? null;
   const latestLink = client.paymentLinks[0] ?? null;
   const activeProgram = client.clientPrograms[0] ?? null;
+  const currentTarget = client.nutritionTargets[0] ?? null;
 
   return (
     <div className="flex flex-col gap-8">
