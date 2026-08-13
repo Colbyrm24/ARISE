@@ -81,7 +81,7 @@ enum ClientStatus {
   lead
   payment_pending
   paid
-  contract_pending
+  agreement_pending
   onboarding
   active
   paused
@@ -105,7 +105,8 @@ model Client {
   coachNotes        CoachNote[]
   subscriptions      Subscription[]
   payments           Payment[]
-  contracts          Contract[]
+  paymentLinks       PaymentLink[]
+  agreements         Agreement[]
   onboardingResponses OnboardingResponse[]
   clientPrograms      ClientProgram[]
   workoutLogs         WorkoutLog[]
@@ -140,7 +141,15 @@ model CoachNote {
 }
 
 // ---------------------------------------------------------------------------
-// PAYMENTS & CONTRACTS
+// PAYMENTS & AGREEMENTS
+//
+// Payment, signature, and account activation are meant to feel like one
+// continuous step for the client, but under the hood they're three
+// deliberately separate records: PaymentLink (what the coach generated and
+// sent), Payment (what actually happened with money), and Agreement (the
+// legal document + signature). Keeping them separate means a payment is
+// never quietly lost if signing fails, and a signed agreement always has a
+// frozen, re-renderable-never-again snapshot of exactly what was agreed to.
 // ---------------------------------------------------------------------------
 
 enum BillingType {
@@ -154,6 +163,13 @@ enum PaymentProviderType {
   fanbasis
 }
 
+enum PaymentFrequency {
+  one_time
+  weekly
+  biweekly
+  monthly
+}
+
 enum PaymentStatus {
   succeeded
   failed
@@ -161,18 +177,33 @@ enum PaymentStatus {
   pending
 }
 
+enum PaymentLinkStatus {
+  pending
+  paid
+  expired
+  cancelled
+}
+
+// A reusable coaching offer — "6-Month Transformation," "12-Month Elite,"
+// etc. Selecting one when generating a payment link pre-fills everything
+// below, but every field can be overridden per client on PaymentLink so
+// ARISE never assumes two clients on the same plan committed to identical
+// terms.
 model Plan {
-  id              String              @id @default(uuid())
-  name            String
-  termMonths      Int                 @map("term_months")
-  price           Decimal             @db.Decimal(10, 2)
-  billingType     BillingType         @map("billing_type")
-  defaultProvider PaymentProviderType @map("default_provider")
-  active          Boolean             @default(true)
-  createdAt       DateTime            @default(now()) @map("created_at")
+  id               String              @id @default(uuid())
+  name             String
+  price            Decimal             @db.Decimal(10, 2)
+  billingType      BillingType         @map("billing_type")
+  paymentFrequency PaymentFrequency?   @map("payment_frequency") // null when billingType = one_time
+  numberOfPayments Int?                @map("number_of_payments") // null = ongoing subscription with no fixed count
+  termMonths       Int                 @map("term_months") // agreement duration: 3, 4, 6, 12...
+  defaultProvider  PaymentProviderType @map("default_provider")
+  active           Boolean             @default(true)
+  createdAt        DateTime            @default(now()) @map("created_at")
 
   subscriptions Subscription[]
-  contracts     Contract[]
+  agreements    Agreement[]
+  paymentLinks  PaymentLink[]
 
   @@map("plans")
 }
@@ -196,68 +227,112 @@ model Subscription {
   @@map("subscriptions")
 }
 
+// One row per payment link a coach generates and sends — this is what makes
+// "did they pay yet" answerable before any money has actually moved, and is
+// what the Stripe/FanBasis webhook looks up by providerRef to know which
+// client + plan + agreement template a completed checkout belongs to.
+model PaymentLink {
+  id                       String              @id @default(uuid())
+  clientId                 String              @map("client_id")
+  planId                   String              @map("plan_id")
+  agreementTemplateId      String              @map("agreement_template_id")
+  provider                 PaymentProviderType
+  priceOverride            Decimal?            @map("price_override") @db.Decimal(10, 2)
+  paymentFrequencyOverride PaymentFrequency?   @map("payment_frequency_override")
+  numberOfPaymentsOverride Int?                @map("number_of_payments_override")
+  termMonthsOverride       Int?                @map("term_months_override")
+  startDate                DateTime            @map("start_date") @db.Date
+  checkoutUrl              String              @map("checkout_url")
+  providerRef              String              @map("provider_ref") // Stripe Checkout Session id, or manual FanBasis reference
+  status                   PaymentLinkStatus   @default(pending)
+  createdAt                DateTime            @default(now()) @map("created_at")
+  expiresAt                DateTime?           @map("expires_at")
+
+  client   Client            @relation(fields: [clientId], references: [userId])
+  plan     Plan              @relation(fields: [planId], references: [id])
+  template AgreementTemplate @relation(fields: [agreementTemplateId], references: [id])
+  payment  Payment?
+  agreement Agreement?
+
+  @@index([clientId])
+  @@index([providerRef])
+  @@map("payment_links")
+}
+
 model Payment {
-  id               String              @id @default(uuid())
-  clientId         String              @map("client_id")
-  subscriptionId   String?             @map("subscription_id")
-  provider         PaymentProviderType
-  providerPaymentId String?            @map("provider_payment_id")
-  amount           Decimal             @db.Decimal(10, 2)
-  status           PaymentStatus
-  paidAt           DateTime?           @map("paid_at")
-  createdAt        DateTime            @default(now()) @map("created_at")
-  deletedAt        DateTime?           @map("deleted_at") // soft delete only
+  id                String              @id @default(uuid())
+  clientId          String              @map("client_id")
+  subscriptionId    String?             @map("subscription_id")
+  paymentLinkId     String?             @unique @map("payment_link_id")
+  provider          PaymentProviderType
+  providerPaymentId String?             @map("provider_payment_id")
+  amount            Decimal             @db.Decimal(10, 2)
+  status            PaymentStatus
+  paidAt            DateTime?           @map("paid_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  deletedAt         DateTime?           @map("deleted_at") // soft delete only
 
   client       Client        @relation(fields: [clientId], references: [userId])
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  paymentLink  PaymentLink?  @relation(fields: [paymentLinkId], references: [id])
 
   @@index([clientId])
   @@map("payments")
 }
 
-model ContractTemplate {
+model AgreementTemplate {
   id        String   @id @default(uuid())
   name      String
   body      String   // stores the {{variable}} template text
   version   Int      @default(1)
+  isDefault Boolean  @default(false) @map("is_default")
   createdAt DateTime @default(now()) @map("created_at")
 
-  contracts Contract[]
+  agreements   Agreement[]
+  paymentLinks PaymentLink[]
 
-  @@map("contract_templates")
+  @@map("agreement_templates")
 }
 
-model Contract {
-  id               String   @id @default(uuid())
-  clientId         String   @map("client_id")
-  templateId       String   @map("template_id")
-  templateVersion  Int      @map("template_version")
-  renderedText     String   @map("rendered_text") // frozen snapshot at signing time — never re-rendered later
-  planId           String   @map("plan_id")
-  createdAt        DateTime @default(now()) @map("created_at")
-  deletedAt        DateTime? @map("deleted_at") // soft delete only
+model Agreement {
+  id               String            @id @default(uuid())
+  clientId         String            @map("client_id")
+  paymentLinkId    String?           @unique @map("payment_link_id")
+  templateId       String            @map("template_id")
+  templateVersion  Int               @map("template_version")
+  renderedText     String            @map("rendered_text") // frozen snapshot at signing time — never re-rendered later
+  planId           String            @map("plan_id")
+  price            Decimal           @db.Decimal(10, 2)
+  paymentFrequency PaymentFrequency? @map("payment_frequency")
+  numberOfPayments Int?              @map("number_of_payments")
+  startDate        DateTime          @map("start_date") @db.Date
+  termMonths       Int               @map("term_months")
+  status           String            @default("pending_signature") // pending_signature | signed
+  createdAt        DateTime          @default(now()) @map("created_at")
+  deletedAt        DateTime?         @map("deleted_at") // soft delete only
 
-  client   Client            @relation(fields: [clientId], references: [userId])
-  template ContractTemplate  @relation(fields: [templateId], references: [id])
-  plan     Plan              @relation(fields: [planId], references: [id])
-  signature ContractSignature?
+  client      Client             @relation(fields: [clientId], references: [userId])
+  paymentLink PaymentLink?       @relation(fields: [paymentLinkId], references: [id])
+  template    AgreementTemplate  @relation(fields: [templateId], references: [id])
+  plan        Plan               @relation(fields: [planId], references: [id])
+  signature   AgreementSignature?
 
   @@index([clientId])
-  @@map("contracts")
+  @@map("agreements")
 }
 
-model ContractSignature {
-  id         String   @id @default(uuid())
-  contractId String   @unique @map("contract_id")
-  signedName String   @map("signed_name")
-  signedAt   DateTime @default(now()) @map("signed_at")
-  ipAddress  String?  @map("ip_address")
-  userAgent  String?  @map("user_agent")
-  status     String   @default("signed")
+model AgreementSignature {
+  id          String   @id @default(uuid())
+  agreementId String   @unique @map("agreement_id")
+  signedName  String   @map("signed_name")
+  signedAt    DateTime @default(now()) @map("signed_at")
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  status      String   @default("signed")
 
-  contract Contract @relation(fields: [contractId], references: [id])
+  agreement Agreement @relation(fields: [agreementId], references: [id])
 
-  @@map("contract_signatures")
+  @@map("agreement_signatures")
 }
 
 // ---------------------------------------------------------------------------
