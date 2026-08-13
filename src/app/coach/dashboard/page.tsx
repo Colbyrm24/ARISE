@@ -11,14 +11,14 @@ import { STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
 // coach using ARISE right now, and no assignment flow exists yet to give
 // coachId a real value. Revisit once multi-coach support is built.
 async function getDashboardCounts(coachId: string) {
-  const [unreadMessages, newLeads, unsignedContracts, failedPayments] = await Promise.all([
+  const [unreadMessages, newLeads, unsignedAgreements, failedPayments] = await Promise.all([
     prisma.message.count({ where: { recipientId: coachId, readAt: null } }),
     prisma.client.count({ where: { status: { in: ['lead', 'payment_pending'] } } }),
-    prisma.contract.count({ where: { signature: null } }),
+    prisma.agreement.count({ where: { signature: null } }),
     prisma.payment.count({ where: { status: 'failed' } }),
   ]);
 
-  return { unreadMessages, newLeads, unsignedContracts, failedPayments };
+  return { unreadMessages, newLeads, unsignedAgreements, failedPayments };
 }
 
 function initials(name: string | null | undefined, email: string) {
@@ -34,7 +34,7 @@ function initials(name: string | null | undefined, email: string) {
 const summaryCards = [
   { key: 'unreadMessages', label: 'Unread Messages', href: '/coach/inbox' },
   { key: 'newLeads', label: 'New Leads', href: '/coach/clients' },
-  { key: 'unsignedContracts', label: 'Contracts Waiting', href: '/coach/payments' },
+  { key: 'unsignedAgreements', label: 'Agreements Waiting', href: '/coach/payments' },
   { key: 'failedPayments', label: 'Failed Payments', href: '/coach/payments' },
 ] as const;
 
