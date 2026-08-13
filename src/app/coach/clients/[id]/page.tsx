@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pin, FileText } from 'lucide-react';
+import { ArrowLeft, Pin, FileText, Dumbbell } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,6 +13,7 @@ import { CLIENT_STATUSES, STATUS_LABELS, statusBadgeVariant } from '@/lib/client
 import { PROVIDER_LABELS } from '@/lib/plans';
 import { updateClientStatus, addCoachNote, toggleCoachNotePin } from './actions';
 import { createPaymentLink, markPaymentLinkPaid } from './payment-actions';
+import { assignProgram, unassignProgram } from './program-actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -35,19 +36,31 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       coachNotes: { orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }] },
       agreements: { orderBy: { createdAt: 'desc' }, take: 1 },
       paymentLinks: { orderBy: { createdAt: 'desc' }, take: 1 },
+      clientPrograms: {
+        where: { active: true },
+        take: 1,
+        include: { template: { include: { _count: { select: { workouts: true } } } } },
+      },
+      workoutLogs: {
+        orderBy: { startedAt: 'desc' },
+        take: 5,
+        include: { workout: true },
+      },
     },
   });
 
   if (!client) notFound();
 
-  const [plans, templates] = await Promise.all([
+  const [plans, templates, programTemplates] = await Promise.all([
     prisma.plan.findMany({ where: { active: true }, orderBy: { createdAt: 'desc' } }),
     prisma.agreementTemplate.findMany({ orderBy: { isDefault: 'desc' } }),
+    prisma.workoutTemplate.findMany({ orderBy: { name: 'asc' } }),
   ]);
 
   const name = client.user.profile?.fullName ?? null;
   const latestAgreement = client.agreements[0] ?? null;
   const latestLink = client.paymentLinks[0] ?? null;
+  const activeProgram = client.clientPrograms[0] ?? null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -268,17 +281,87 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
       </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {[
-          { label: 'Training', phase: 'Phase 4' },
-          { label: 'Nutrition', phase: 'Phase 5' },
-        ].map(({ label, phase }) => (
-          <Card key={label}>
-            <CardContent className="pt-6">
-              <p className="text-sm font-medium">{label}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Coming in {phase}.</p>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader>
+            <CardTitle>Training</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {activeProgram ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell size={16} className="text-accent" />
+                    <p className="text-sm font-medium">{activeProgram.template.name}</p>
+                  </div>
+                  <form action={unassignProgram}>
+                    <input type="hidden" name="clientProgramId" value={activeProgram.id} />
+                    <input type="hidden" name="clientId" value={client.userId} />
+                    <button type="submit" className="text-xs text-muted-foreground hover:text-destructive">
+                      Unassign
+                    </button>
+                  </form>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {activeProgram.template._count.workouts} day
+                  {activeProgram.template._count.workouts === 1 ? '' : 's'} ·{' '}
+                  <Link href={`/coach/programs/${activeProgram.templateId}`} className="text-accent hover:underline">
+                    View / edit program
+                  </Link>
+                </p>
+              </div>
+            ) : programTemplates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No programs built yet —{' '}
+                <Link href="/coach/programs" className="text-accent hover:underline">
+                  create one
+                </Link>{' '}
+                to assign here.
+              </p>
+            ) : (
+              <form action={assignProgram} className="flex flex-col gap-3">
+                <input type="hidden" name="clientId" value={client.userId} />
+                <select name="templateId" className={selectClass} required defaultValue="">
+                  <option value="" disabled>
+                    Assign a program…
+                  </option>
+                  {programTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <Button type="submit" size="sm" className="w-fit">
+                  Assign
+                </Button>
+              </form>
+            )}
+
+            {client.workoutLogs.length > 0 && (
+              <div className="flex flex-col gap-2 border-t border-border pt-3">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Recent Activity
+                </p>
+                <ul className="flex flex-col gap-1.5">
+                  {client.workoutLogs.map((log) => (
+                    <li key={log.id} className="flex items-center justify-between text-xs">
+                      <span>{log.workout.name}</span>
+                      <span className="text-muted-foreground">
+                        {log.startedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {log.completedAt ? ' · completed' : ' · in progress'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm font-medium">Nutrition</p>
+            <p className="mt-1 text-xs text-muted-foreground">Coming in Phase 5.</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
