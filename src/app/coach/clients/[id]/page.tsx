@@ -1,14 +1,21 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pin } from 'lucide-react';
+import { ArrowLeft, Pin, FileText } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { CopyLinkButton } from '@/components/copy-link-button';
 import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
+import { PROVIDER_LABELS } from '@/lib/plans';
 import { updateClientStatus, addCoachNote, toggleCoachNotePin } from './actions';
+import { createPaymentLink, markPaymentLinkPaid } from './payment-actions';
+
+const selectClass =
+  'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 function initials(name: string | null | undefined, email: string) {
   if (name) {
@@ -26,12 +33,21 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
     include: {
       user: { include: { profile: true } },
       coachNotes: { orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }] },
+      agreements: { orderBy: { createdAt: 'desc' }, take: 1 },
+      paymentLinks: { orderBy: { createdAt: 'desc' }, take: 1 },
     },
   });
 
   if (!client) notFound();
 
+  const [plans, templates] = await Promise.all([
+    prisma.plan.findMany({ where: { active: true }, orderBy: { createdAt: 'desc' } }),
+    prisma.agreementTemplate.findMany({ orderBy: { isDefault: 'desc' } }),
+  ]);
+
   const name = client.user.profile?.fullName ?? null;
+  const latestAgreement = client.agreements[0] ?? null;
+  const latestLink = client.paymentLinks[0] ?? null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -150,11 +166,111 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Card>
+        <CardHeader>
+          <CardTitle>Payment & Agreement</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          {latestAgreement ? (
+            <Link
+              href={`/agreement/${latestAgreement.id}`}
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
+            >
+              <div className="flex items-center gap-3">
+                <FileText size={18} className="text-accent" />
+                <div>
+                  <p className="text-sm font-medium">
+                    {latestAgreement.status === 'signed' ? 'Signed Agreement' : 'Agreement Awaiting Signature'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    ${Number(latestAgreement.price).toLocaleString('en-US', { minimumFractionDigits: 2 })} ·{' '}
+                    {latestAgreement.termMonths} mo
+                  </p>
+                </div>
+              </div>
+              <Badge variant={latestAgreement.status === 'signed' ? 'success' : 'accent'}>
+                {latestAgreement.status === 'signed' ? 'Signed' : 'Pending'}
+              </Badge>
+            </Link>
+          ) : latestLink && latestLink.status === 'pending' ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Payment link sent</p>
+                <Badge variant="outline">{PROVIDER_LABELS[latestLink.provider]} · pending</Badge>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input readOnly value={latestLink.checkoutUrl} className="flex-1 text-xs" />
+                <CopyLinkButton url={latestLink.checkoutUrl} />
+              </div>
+              {latestLink.provider === 'fanbasis' && (
+                <form action={markPaymentLinkPaid}>
+                  <input type="hidden" name="paymentLinkId" value={latestLink.id} />
+                  <input type="hidden" name="clientId" value={client.userId} />
+                  <Button type="submit" size="sm" variant="secondary">
+                    Mark as Paid
+                  </Button>
+                </form>
+              )}
+            </div>
+          ) : plans.length === 0 || templates.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Set up at least one{' '}
+              <Link href="/coach/payments" className="text-accent hover:underline">
+                coaching plan and agreement template
+              </Link>{' '}
+              before sending a payment link.
+            </p>
+          ) : (
+            <form action={createPaymentLink} className="flex flex-col gap-3">
+              <input type="hidden" name="clientId" value={client.userId} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <select name="planId" className={selectClass} required defaultValue="">
+                  <option value="" disabled>
+                    Choose a plan…
+                  </option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} — ${Number(plan.price).toLocaleString('en-US')}
+                    </option>
+                  ))}
+                </select>
+                <select name="agreementTemplateId" className={selectClass} required defaultValue={templates.find((t) => t.isDefault)?.id ?? ''}>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+                <select name="provider" className={selectClass} required defaultValue="stripe">
+                  <option value="stripe">Stripe</option>
+                  <option value="fanbasis">FanBasis</option>
+                </select>
+                <Input name="startDate" type="date" required />
+                <Input name="priceOverride" type="number" step="0.01" min="0" placeholder="Override price ($, optional)" />
+                <Input name="termMonthsOverride" type="number" min="1" placeholder="Override duration (months, optional)" />
+                <Input
+                  name="manualCheckoutUrl"
+                  placeholder="FanBasis checkout link (FanBasis only)"
+                  className="sm:col-span-2"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Stripe links are generated automatically. For FanBasis, paste the checkout link you
+                created in FanBasis&apos;s own dashboard — see the note on the Payments settings page
+                for why.
+              </p>
+              <Button type="submit" size="sm" className="w-fit">
+                Generate Payment Link
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {[
           { label: 'Training', phase: 'Phase 4' },
           { label: 'Nutrition', phase: 'Phase 5' },
-          { label: 'Payments', phase: 'Phase 3' },
         ].map(({ label, phase }) => (
           <Card key={label}>
             <CardContent className="pt-6">
