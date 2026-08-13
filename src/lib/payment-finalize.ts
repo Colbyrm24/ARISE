@@ -31,15 +31,24 @@ async function createAgreementAndPayment(
 
   const coach = await prisma.user.findFirst({ where: { role: 'coach' }, include: { profile: true } });
 
+  // {{price}} is just the raw dollar figure; {{payment_structure}} is the
+  // full plain-English billing description (frequency, number of
+  // payments, etc). Templates can use either or both — keeping them
+  // separate avoids a template reading "$1.00, billed $1.00 per payment,
+  // 1 payments monthly" when both tokens appear in the same sentence.
+  const formattedPrice = `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const paymentStructure = describePaymentStructure({
+    price,
+    billingType: paymentLink.plan.billingType,
+    paymentFrequency,
+    numberOfPayments,
+  });
+
   const renderedText = renderAgreementTemplate(paymentLink.template.body, {
     client_name: client.user.profile?.fullName ?? client.user.email,
     coach_name: coach?.profile?.fullName ?? 'Your Coach',
-    price: describePaymentStructure({
-      price,
-      billingType: paymentLink.plan.billingType,
-      paymentFrequency,
-      numberOfPayments,
-    }),
+    price: formattedPrice,
+    payment_structure: paymentStructure,
     start_date: formatAgreementDate(paymentLink.startDate),
     term_months: String(termMonths),
     // signed_date intentionally left as a literal placeholder — filled in
