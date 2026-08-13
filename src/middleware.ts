@@ -42,6 +42,20 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Getting the user above may have refreshed an expired session and
+  // queued fresh cookies onto `response` via the `set`/`remove` callbacks
+  // above. Any time we redirect instead of returning `response` directly,
+  // we must carry those cookies over onto the redirect — otherwise the
+  // browser keeps its old (expired) cookie, the next request refreshes
+  // again, and we loop forever ("too many redirects").
+  function redirectWithFreshCookies(url: URL) {
+    const redirectResponse = NextResponse.redirect(url);
+    response.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
+    return redirectResponse;
+  }
+
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/signup');
   const isCoachRoute = pathname.startsWith('/coach');
@@ -54,7 +68,7 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
+    return redirectWithFreshCookies(url);
   }
 
   // Logged in and sitting on an auth page -> send them where they belong.
@@ -62,7 +76,7 @@ export async function middleware(request: NextRequest) {
     const role = (user.app_metadata as { role?: string })?.role ?? 'client';
     const url = request.nextUrl.clone();
     url.pathname = role === 'coach' || role === 'admin' ? '/coach/dashboard' : '/today';
-    return NextResponse.redirect(url);
+    return redirectWithFreshCookies(url);
   }
 
   // Logged in as a client, trying to reach the coach console -> bounce them.
@@ -71,7 +85,7 @@ export async function middleware(request: NextRequest) {
     if (role !== 'coach' && role !== 'admin') {
       const url = request.nextUrl.clone();
       url.pathname = '/today';
-      return NextResponse.redirect(url);
+      return redirectWithFreshCookies(url);
     }
   }
 
