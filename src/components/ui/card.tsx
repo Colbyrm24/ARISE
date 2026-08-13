@@ -3,16 +3,23 @@ import { cn } from '@/lib/utils';
 
 /**
  * The single surface component used across ARISE.
- * Deliberately plain: no shadow, no gradient, one subtle border —
- * the brief was "minimal borders, minimal visual clutter, avoid
- * making everything look like separate floating cards."
+ * Still minimal — one border, no loud shadows — but with a hint of
+ * depth: a faint top sheen and a soft ambient shadow so surfaces don't
+ * read as completely flat. Pass `interactive` on any Card that sits
+ * inside a Link/button so it lifts slightly on hover.
  */
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  interactive?: boolean;
+}
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, interactive, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        'rounded-2xl border border-border bg-card text-card-foreground',
+        'surface-sheen rounded-2xl border border-border bg-card text-card-foreground shadow-[0_1px_0_0_hsl(0_0%_100%/0.03)_inset,0_8px_20px_-12px_rgb(0_0_0/0.5)] transition-all duration-200',
+        interactive &&
+          'hover:-translate-y-0.5 hover:border-accent/25 hover:shadow-[0_1px_0_0_hsl(0_0%_100%/0.03)_inset,0_16px_30px_-14px_rgb(0_0_0/0.6),0_0_0_1px_hsl(var(--accent)/0.06)]',
         className
       )}
       {...props}
