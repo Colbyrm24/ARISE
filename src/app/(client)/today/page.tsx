@@ -129,7 +129,8 @@ export default async function TodayPage() {
       </Card>
 
       {/* Nutrition */}
-      <Card>
+      <Link href="/nutrition">
+              <Card className="transition-colors hover:bg-secondary/40">
         <CardContent className="flex flex-col gap-4 pt-6">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nutrition</p>
           {target ? (
@@ -158,6 +159,7 @@ export default async function TodayPage() {
           )}
         </CardContent>
       </Card>
+      </Link>
 
       {/* Steps */}
       <Card>
