@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pin, FileText, Dumbbell } from 'lucide-react';
+import { ArrowLeft, Pin, FileText, Dumbbell, Apple } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +47,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
         take: 5,
         include: { workout: true },
       },
+      nutritionTargets: { orderBy: { effectiveDate: 'desc' }, take: 1 },
     },
   });
 
@@ -359,11 +360,34 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm font-medium">Nutrition</p>
-            <p className="mt-1 text-xs text-muted-foreground">Coming in Phase 5.</p>
-          </CardContent>
-        </Card>
+<CardHeader>
+  <CardTitle>Nutrition</CardTitle>
+</CardHeader>
+<CardContent className="flex flex-col gap-4">
+  {currentTarget && (
+    <div className="flex items-center gap-2 rounded-xl border border-border bg-secondary/20 px-4 py-3">
+      <Apple size={16} className="text-accent" />
+      <div className="text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">{currentTarget.calories} cal</span> ·{' '}
+        {Number(currentTarget.protein)}g protein · {Number(currentTarget.carbs)}g carbs ·{' '}
+        {Number(currentTarget.fat)}g fat
+      </div>
+    </div>
+  )}
+  <form action={setNutritionTarget} className="flex flex-col gap-2">
+    <input type="hidden" name="clientId" value={client.userId} />
+    <div className="grid grid-cols-2 gap-2">
+      <Input name="calories" type="number" min="0" placeholder="Calories" required defaultValue={currentTarget?.calories ?? undefined} />
+      <Input name="protein" type="number" step="0.1" min="0" placeholder="Protein (g)" required defaultValue={currentTarget ? Number(currentTarget.protein) : undefined} />
+      <Input name="carbs" type="number" step="0.1" min="0" placeholder="Carbs (g)" required defaultValue={currentTarget ? Number(currentTarget.carbs) : undefined} />
+      <Input name="fat" type="number" step="0.1" min="0" placeholder="Fat (g)" required defaultValue={currentTarget ? Number(currentTarget.fat) : undefined} />
+    </div>
+    <Button type="submit" size="sm" variant="secondary" className="w-fit">
+      {currentTarget ? 'Update Target' : 'Set Target'}
+    </Button>
+  </form>
+</CardContent>
+</Card>
       </div>
     </div>
   );
