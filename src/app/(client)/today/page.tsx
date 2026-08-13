@@ -19,9 +19,9 @@ export default async function TodayPage() {
   const today = todayDateOnly();
 
   // Everything below reads real data where the feature already exists.
-  // Where the feature is later in the roadmap (workouts, water, etc.),
-  // this shows an honest empty state instead of pretending.
-  const [goals, goalLogs, target, nutritionLogs, stepLog, latestMessage] = user
+  // Where the feature is later in the roadmap (water, etc.), this shows
+  // an honest empty state instead of pretending.
+  const [goals, goalLogs, target, nutritionLogs, stepLog, latestMessage, activeProgram] = user
     ? await Promise.all([
         prisma.dailyGoal.findMany({ where: { clientId: user.id, active: true } }),
         prisma.dailyGoalLog.findMany({ where: { clientId: user.id, date: today } }),
@@ -36,8 +36,12 @@ export default async function TodayPage() {
           orderBy: { createdAt: 'desc' },
           include: { sender: { include: { profile: true } } },
         }),
+        prisma.clientProgram.findFirst({
+          where: { clientId: user.id, active: true },
+          include: { template: { include: { workouts: { orderBy: { dayOrder: 'asc' } } } } },
+        }),
       ])
-    : [[], [], null, [], null, null];
+    : [[], [], null, [], null, null, null];
 
   const completedCount = goalLogs.filter((g) => g.completed).length;
   const totalGoals = goals.length;
@@ -45,6 +49,23 @@ export default async function TodayPage() {
 
   const caloriesEaten = nutritionLogs.reduce((sum, l) => sum + l.calories, 0);
   const proteinEaten = nutritionLogs.reduce((sum, l) => sum + Number(l.protein), 0);
+
+  // Rotate through the assigned program's days based on how many days have
+  // passed since it was assigned — a simple, predictable cadence with no
+  // extra scheduling data needed.
+  const workouts = activeProgram?.template.workouts ?? [];
+  const daysSinceStart = activeProgram
+    ? Math.max(0, Math.floor((today.getTime() - activeProgram.assignedAt.getTime()) / 86400000))
+    : 0;
+  const todaysWorkout = workouts.length > 0 ? workouts[daysSinceStart % workouts.length] : null;
+
+  const todaysLog =
+    user && todaysWorkout
+      ? await prisma.workoutLog.findFirst({
+          where: { clientId: user.id, workoutId: todaysWorkout.id, startedAt: { gte: today } },
+          orderBy: { startedAt: 'desc' },
+        })
+      : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,12 +100,31 @@ export default async function TodayPage() {
         <CardContent className="flex items-center justify-between pt-6">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Workout</p>
-            <p className="mt-1 text-base font-medium">No workout assigned yet</p>
-            <p className="text-sm text-muted-foreground">Your coach will add your program soon.</p>
+            {todaysWorkout ? (
+              <>
+                <p className="mt-1 text-base font-medium">{todaysWorkout.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {todaysLog?.completedAt ? 'Completed today' : `Day ${todaysWorkout.dayOrder}`}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-1 text-base font-medium">No workout assigned yet</p>
+                <p className="text-sm text-muted-foreground">Your coach will add your program soon.</p>
+              </>
+            )}
           </div>
-          <Button variant="outline" size="sm" disabled>
-            Start
-          </Button>
+          {todaysWorkout ? (
+            <Link href={`/workouts/${todaysWorkout.id}`}>
+              <Button variant="outline" size="sm">
+                {todaysLog?.completedAt ? 'View' : todaysLog ? 'Continue' : 'Start'}
+              </Button>
+            </Link>
+          ) : (
+            <Button variant="outline" size="sm" disabled>
+              Start
+            </Button>
+          )}
         </CardContent>
       </Card>
 
