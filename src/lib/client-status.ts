@@ -9,7 +9,7 @@ export const CLIENT_STATUSES: ClientStatus[] = [
   'lead',
   'payment_pending',
   'paid',
-  'contract_pending',
+  'agreement_pending',
   'onboarding',
   'active',
   'paused',
@@ -22,7 +22,7 @@ export const STATUS_LABELS: Record<ClientStatus, string> = {
   lead: 'Lead',
   payment_pending: 'Payment Pending',
   paid: 'Paid',
-  contract_pending: 'Contract Pending',
+  agreement_pending: 'Agreement Pending',
   onboarding: 'Onboarding',
   active: 'Active',
   paused: 'Paused',
@@ -39,7 +39,7 @@ export function statusBadgeVariant(status: ClientStatus): StatusBadgeVariant {
       return 'success';
     case 'lead':
     case 'payment_pending':
-    case 'contract_pending':
+    case 'agreement_pending':
     case 'onboarding':
       return 'accent';
     case 'cancelled':
