@@ -1,0 +1,711 @@
+// ARISE — main database schema
+// This mirrors the schema approved in coaching-platform-architecture.md.
+// Run `npm run db:migrate` once DATABASE_URL is set to turn this into real tables.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// IDENTITY & ACCESS
+// ---------------------------------------------------------------------------
+
+enum Role {
+  client
+  coach
+  admin
+}
+
+// Mirrors the Supabase Auth user by id. Supabase owns the password/session;
+// this table is what the rest of ARISE joins against.
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  role      Role     @default(client)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile               Profile?
+  clientRecord          Client?                    @relation("ClientUser")
+  coachRelationships     CoachClientRelationship[] @relation("CoachSide")
+  clientRelationships    CoachClientRelationship[] @relation("ClientSide")
+  coachNotesAuthored     CoachNote[]                @relation("NoteAuthor")
+  messagesSent           Message[]                  @relation("MessageSender")
+  messagesReceived       Message[]                  @relation("MessageRecipient")
+  notifications          Notification[]
+  aiConversations        AiConversation[]
+  auditLogEntries        AuditLog[]                 @relation("AuditActor")
+  workoutTemplatesOwned  WorkoutTemplate[]           @relation("TemplateCoach")
+  recipesCreated         Recipe[]                    @relation("RecipeCoach")
+
+  @@map("users")
+}
+
+model Profile {
+  userId    String   @id @map("user_id")
+  fullName  String?  @map("full_name")
+  avatarUrl String?  @map("avatar_url")
+  phone     String?
+  timezone  String?  @default("America/New_York")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+// Lets ARISE support more than one coach later without restructuring anything.
+model CoachClientRelationship {
+  id         String   @id @default(uuid())
+  coachId    String   @map("coach_id")
+  clientId   String   @map("client_id")
+  status     String   @default("active") // active | inactive
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  coach  User @relation("CoachSide", fields: [coachId], references: [id])
+  client User @relation("ClientSide", fields: [clientId], references: [id])
+
+  @@unique([coachId, clientId])
+  @@index([clientId])
+  @@map("coach_client_relationships")
+}
+
+// ---------------------------------------------------------------------------
+// COACHING RELATIONSHIP / CRM
+// ---------------------------------------------------------------------------
+
+enum ClientStatus {
+  lead
+  payment_pending
+  paid
+  contract_pending
+  onboarding
+  active
+  paused
+  ending_soon
+  completed
+  cancelled
+}
+
+model Client {
+  userId      String       @id @map("user_id")
+  coachId     String?      @map("coach_id")
+  status      ClientStatus @default(lead)
+  startDate   DateTime?    @map("start_date")
+  endDate     DateTime?    @map("end_date")
+  currentWeek Int?         @map("current_week")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user User @relation("ClientUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  coachNotes        CoachNote[]
+  subscriptions      Subscription[]
+  payments           Payment[]
+  contracts          Contract[]
+  onboardingResponses OnboardingResponse[]
+  clientPrograms      ClientProgram[]
+  workoutLogs         WorkoutLog[]
+  nutritionLogs       NutritionLog[]
+  nutritionTargets    NutritionTarget[]
+  dailyGoals          DailyGoal[]
+  dailyGoalLogs       DailyGoalLog[]
+  stepLogs            StepLog[]
+  weightLogs          WeightLog[]
+  measurements        Measurement[]
+  progressPhotos      ProgressPhoto[]
+  checkIns            CheckIn[]
+
+  @@index([coachId])
+  @@index([status])
+  @@map("clients")
+}
+
+model CoachNote {
+  id        String   @id @default(uuid())
+  clientId  String   @map("client_id")
+  coachId   String   @map("coach_id")
+  body      String
+  pinned    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  client Client @relation(fields: [clientId], references: [userId], onDelete: Cascade)
+  coach  User   @relation("NoteAuthor", fields: [coachId], references: [id])
+
+  @@index([clientId])
+  @@map("coach_notes")
+}
+
+// ---------------------------------------------------------------------------
+// PAYMENTS & CONTRACTS
+// ---------------------------------------------------------------------------
+
+enum BillingType {
+  one_time
+  subscription
+  payment_plan
+}
+
+enum PaymentProviderType {
+  stripe
+  fanbasis
+}
+
+enum PaymentStatus {
+  succeeded
+  failed
+  refunded
+  pending
+}
+
+model Plan {
+  id              String              @id @default(uuid())
+  name            String
+  termMonths      Int                 @map("term_months")
+  price           Decimal             @db.Decimal(10, 2)
+  billingType     BillingType         @map("billing_type")
+  defaultProvider PaymentProviderType @map("default_provider")
+  active          Boolean             @default(true)
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  subscriptions Subscription[]
+  contracts     Contract[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                    String              @id @default(uuid())
+  clientId              String              @map("client_id")
+  planId                String              @map("plan_id")
+  provider              PaymentProviderType
+  providerSubscriptionId String?            @map("provider_subscription_id")
+  status                String              @default("active")
+  currentPeriodEnd      DateTime?           @map("current_period_end")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  deletedAt             DateTime?           @map("deleted_at") // soft delete only — never hard-delete billing records
+
+  client   Client    @relation(fields: [clientId], references: [userId])
+  plan     Plan      @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@index([clientId])
+  @@map("subscriptions")
+}
+
+model Payment {
+  id               String              @id @default(uuid())
+  clientId         String              @map("client_id")
+  subscriptionId   String?             @map("subscription_id")
+  provider         PaymentProviderType
+  providerPaymentId String?            @map("provider_payment_id")
+  amount           Decimal             @db.Decimal(10, 2)
+  status           PaymentStatus
+  paidAt           DateTime?           @map("paid_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  deletedAt        DateTime?           @map("deleted_at") // soft delete only
+
+  client       Client        @relation(fields: [clientId], references: [userId])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@index([clientId])
+  @@map("payments")
+}
+
+model ContractTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  body      String   // stores the {{variable}} template text
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contracts Contract[]
+
+  @@map("contract_templates")
+}
+
+model Contract {
+  id               String   @id @default(uuid())
+  clientId         String   @map("client_id")
+  templateId       String   @map("template_id")
+  templateVersion  Int      @map("template_version")
+  renderedText     String   @map("rendered_text") // frozen snapshot at signing time — never re-rendered later
+  planId           String   @map("plan_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at") // soft delete only
+
+  client   Client            @relation(fields: [clientId], references: [userId])
+  template ContractTemplate  @relation(fields: [templateId], references: [id])
+  plan     Plan              @relation(fields: [planId], references: [id])
+  signature ContractSignature?
+
+  @@index([clientId])
+  @@map("contracts")
+}
+
+model ContractSignature {
+  id         String   @id @default(uuid())
+  contractId String   @unique @map("contract_id")
+  signedName String   @map("signed_name")
+  signedAt   DateTime @default(now()) @map("signed_at")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  status     String   @default("signed")
+
+  contract Contract @relation(fields: [contractId], references: [id])
+
+  @@map("contract_signatures")
+}
+
+// ---------------------------------------------------------------------------
+// ONBOARDING
+// ---------------------------------------------------------------------------
+
+model OnboardingResponse {
+  id          String    @id @default(uuid())
+  clientId    String    @map("client_id")
+  stepKey     String    @map("step_key") // e.g. "goals", "injuries", "equipment"
+  answerJson  Json      @map("answer_json")
+  completedAt DateTime? @map("completed_at")
+
+  client Client @relation(fields: [clientId], references: [userId])
+
+  @@unique([clientId, stepKey])
+  @@map("onboarding_responses")
+}
+
+// ---------------------------------------------------------------------------
+// TRAINING
+// ---------------------------------------------------------------------------
+
+model ExerciseVideo {
+  id              String  @id @default(uuid())
+  storageProvider String  @map("storage_provider") // "supabase" | "mux"
+  externalId      String  @map("external_id") // storage path or Mux asset id
+  thumbnailUrl    String? @map("thumbnail_url")
+  duration        Int?    // seconds
+
+  exercises Exercise[]
+
+  @@map("exercise_videos")
+}
+
+model Exercise {
+  id               String   @id @default(uuid())
+  name             String
+  videoId          String?  @map("video_id")
+  musclePrimary    String   @map("muscle_primary")
+  muscleSecondary  String[] @map("muscle_secondary")
+  equipment        String
+  difficulty       String
+  movementPattern  String?  @map("movement_pattern")
+  instructions     String?
+  cues             String?
+  commonMistakes   String?  @map("common_mistakes")
+  substitutions    String[]
+  tags             String[]
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  video           ExerciseVideo?    @relation(fields: [videoId], references: [id])
+  workoutExercises WorkoutExercise[]
+
+  @@index([musclePrimary])
+  @@index([equipment])
+  @@map("exercises")
+}
+
+model WorkoutTemplate {
+  id          String   @id @default(uuid())
+  coachId     String   @map("coach_id")
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  coach          User            @relation("TemplateCoach", fields: [coachId], references: [id])
+  workouts       Workout[]
+  clientPrograms ClientProgram[]
+
+  @@map("workout_templates")
+}
+
+model Workout {
+  id         String   @id @default(uuid())
+  templateId String?  @map("template_id") // null = client-specific, customized copy
+  name       String
+  dayOrder   Int      @map("day_order")
+
+  template         WorkoutTemplate?  @relation(fields: [templateId], references: [id])
+  workoutExercises WorkoutExercise[]
+  workoutLogs      WorkoutLog[]
+
+  @@map("workouts")
+}
+
+model WorkoutExercise {
+  id             String  @id @default(uuid())
+  workoutId      String  @map("workout_id")
+  exerciseId     String  @map("exercise_id")
+  order          Int
+  supersetGroup  String? @map("superset_group")
+  notes          String?
+
+  workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id])
+  sets    WorkoutSet[]
+
+  @@index([workoutId])
+  @@map("workout_exercises")
+}
+
+enum SetType {
+  warmup
+  working
+  drop
+}
+
+model WorkoutSet {
+  id                String  @id @default(uuid())
+  workoutExerciseId String  @map("workout_exercise_id")
+  setNumber         Int     @map("set_number")
+  type              SetType @default(working)
+  targetReps        String? @map("target_reps") // stored as text to support ranges like "8-10" or "to failure"
+  targetWeight       Decimal? @map("target_weight") @db.Decimal(6, 2)
+  targetRir          Int?     @map("target_rir")
+  tempo              String?
+  restSeconds        Int?     @map("rest_seconds")
+
+  workoutExercise WorkoutExercise  @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+  logs            WorkoutLogSet[]
+
+  @@map("workout_sets")
+}
+
+// Lets one client have a customized copy of a shared template without
+// touching anyone else's program.
+model ClientProgram {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  templateId  String   @map("workout_template_id")
+  assignedAt  DateTime @default(now()) @map("assigned_at")
+  active      Boolean  @default(true)
+
+  client   Client          @relation(fields: [clientId], references: [userId])
+  template WorkoutTemplate @relation(fields: [templateId], references: [id])
+
+  @@index([clientId])
+  @@map("client_programs")
+}
+
+model WorkoutLog {
+  id          String    @id @default(uuid())
+  clientId    String    @map("client_id")
+  workoutId   String    @map("workout_id")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  duration    Int?      // seconds
+  totalVolume Decimal?  @map("total_volume") @db.Decimal(10, 2)
+
+  client  Client          @relation(fields: [clientId], references: [userId])
+  workout Workout         @relation(fields: [workoutId], references: [id])
+  sets    WorkoutLogSet[]
+
+  @@index([clientId, startedAt])
+  @@map("workout_logs")
+}
+
+model WorkoutLogSet {
+  id             String   @id @default(uuid())
+  workoutLogId   String   @map("workout_log_id")
+  workoutSetId   String   @map("workout_set_id")
+  actualWeight   Decimal? @map("actual_weight") @db.Decimal(6, 2)
+  actualReps     Int?     @map("actual_reps")
+  isPr           Boolean  @default(false) @map("is_pr")
+  notes          String?
+
+  workoutLog WorkoutLog @relation(fields: [workoutLogId], references: [id], onDelete: Cascade)
+  workoutSet WorkoutSet @relation(fields: [workoutSetId], references: [id])
+
+  @@map("workout_log_sets")
+}
+
+// ---------------------------------------------------------------------------
+// NUTRITION
+// ---------------------------------------------------------------------------
+
+model Food {
+  id          String   @id @default(uuid())
+  name        String
+  source      String   @default("custom") // custom | recipe | external (future)
+  calories    Int
+  protein     Decimal  @db.Decimal(6, 2)
+  carbs       Decimal  @db.Decimal(6, 2)
+  fat         Decimal  @db.Decimal(6, 2)
+  servingSize String?  @map("serving_size")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  nutritionLogs NutritionLog[]
+
+  @@map("foods")
+}
+
+model Recipe {
+  id              String   @id @default(uuid())
+  coachId         String?  @map("coach_id")
+  title           String
+  imageUrl        String?  @map("image_url")
+  calories        Int
+  protein         Decimal  @db.Decimal(6, 2)
+  carbs           Decimal  @db.Decimal(6, 2)
+  fat             Decimal  @db.Decimal(6, 2)
+  servingSize     String?  @map("serving_size")
+  ingredientsJson Json     @map("ingredients_json")
+  instructions    String
+  prepTime        Int?     @map("prep_time")
+  cookTime        Int?     @map("cook_time")
+  tags            String[]
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  coach         User?          @relation("RecipeCoach", fields: [coachId], references: [id])
+  nutritionLogs NutritionLog[]
+
+  @@index([calories])
+  @@map("recipes")
+}
+
+model NutritionLog {
+  id        String   @id @default(uuid())
+  clientId  String   @map("client_id")
+  date      DateTime @db.Date
+  meal      String?  // breakfast | lunch | dinner | snack | null
+  foodId    String?  @map("food_id")
+  recipeId  String?  @map("recipe_id")
+  quantity  Decimal  @default(1) @db.Decimal(6, 2)
+  calories  Int
+  protein   Decimal  @db.Decimal(6, 2)
+  carbs     Decimal  @db.Decimal(6, 2)
+  fat       Decimal  @db.Decimal(6, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  client Client  @relation(fields: [clientId], references: [userId])
+  food   Food?   @relation(fields: [foodId], references: [id])
+  recipe Recipe? @relation(fields: [recipeId], references: [id])
+
+  @@index([clientId, date])
+  @@map("nutrition_logs")
+}
+
+model NutritionTarget {
+  id            String   @id @default(uuid())
+  clientId      String   @map("client_id")
+  calories      Int
+  protein       Decimal  @db.Decimal(6, 2)
+  carbs         Decimal  @db.Decimal(6, 2)
+  fat           Decimal  @db.Decimal(6, 2)
+  effectiveDate DateTime @map("effective_date") @db.Date
+
+  client Client @relation(fields: [clientId], references: [userId])
+
+  @@index([clientId, effectiveDate])
+  @@map("nutrition_targets")
+}
+
+// ---------------------------------------------------------------------------
+// ACCOUNTABILITY
+// ---------------------------------------------------------------------------
+
+model DailyGoal {
+  id         String   @id @default(uuid())
+  clientId   String   @map("client_id")
+  goalType   String   @map("goal_type") // workout | steps | protein | calories | water | sleep | photo | custom
+  targetValue String? @map("target_value")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  client Client         @relation(fields: [clientId], references: [userId])
+  logs   DailyGoalLog[]
+
+  @@index([clientId])
+  @@map("daily_goals")
+}
+
+model DailyGoalLog {
+  id            String   @id @default(uuid())
+  clientId      String   @map("client_id")
+  dailyGoalId   String   @map("daily_goal_id")
+  date          DateTime @db.Date
+  completed     Boolean  @default(false)
+  autoCompleted Boolean  @default(false) @map("auto_completed")
+
+  client    Client    @relation(fields: [clientId], references: [userId])
+  dailyGoal DailyGoal @relation(fields: [dailyGoalId], references: [id])
+
+  @@unique([dailyGoalId, date])
+  @@index([clientId, date])
+  @@map("daily_goal_logs")
+}
+
+model StepLog {
+  id       String   @id @default(uuid())
+  clientId String   @map("client_id")
+  date     DateTime @db.Date
+  steps    Int
+  source   String   @default("manual") // manual | apple_health | google_health
+
+  client Client @relation(fields: [clientId], references: [userId])
+
+  @@unique([clientId, date])
+  @@index([clientId, date])
+  @@map("step_logs")
+}
+
+model WeightLog {
+  id       String   @id @default(uuid())
+  clientId String   @map("client_id")
+  date     DateTime @db.Date
+  weight   Decimal  @db.Decimal(6, 2)
+
+  client Client @relation(fields: [clientId], references: [userId])
+
+  @@index([clientId, date])
+  @@map("weight_logs")
+}
+
+model Measurement {
+  id       String   @id @default(uuid())
+  clientId String   @map("client_id")
+  date     DateTime @db.Date
+  type     String   // waist | chest | arms | thighs | etc.
+  value    Decimal  @db.Decimal(6, 2)
+
+  client Client @relation(fields: [clientId], references: [userId])
+
+  @@index([clientId, date])
+  @@map("measurements")
+}
+
+model ProgressPhoto {
+  id          String   @id @default(uuid())
+  clientId    String   @map("client_id")
+  date        DateTime @db.Date
+  angle       String   // front | side | back
+  storagePath String   @map("storage_path") // private bucket path, never a public URL
+
+  client Client @relation(fields: [clientId], references: [userId])
+
+  @@index([clientId, date])
+  @@map("progress_photos")
+}
+
+model CheckIn {
+  id          String    @id @default(uuid())
+  clientId    String    @map("client_id")
+  weekOf      DateTime  @map("week_of") @db.Date
+  answersJson Json      @map("answers_json")
+  submittedAt DateTime  @default(now()) @map("submitted_at")
+  aiSummary   String?   @map("ai_summary") // always shown alongside raw answers, never instead of
+
+  client Client @relation(fields: [clientId], references: [userId])
+
+  @@index([clientId, weekOf])
+  @@map("check_ins")
+}
+
+// ---------------------------------------------------------------------------
+// MESSAGING
+// ---------------------------------------------------------------------------
+
+model Message {
+  id          String    @id @default(uuid())
+  senderId    String    @map("sender_id")
+  recipientId String    @map("recipient_id")
+  body        String?
+  contextType String?   @map("context_type") // meal | workout | exercise | progress | null
+  contextId   String?   @map("context_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  readAt      DateTime? @map("read_at")
+
+  sender      User                @relation("MessageSender", fields: [senderId], references: [id])
+  recipient   User                @relation("MessageRecipient", fields: [recipientId], references: [id])
+  attachments MessageAttachment[]
+
+  @@index([senderId, recipientId, createdAt])
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id          String @id @default(uuid())
+  messageId   String @map("message_id")
+  storagePath String @map("storage_path")
+  type        String // photo | video | voice
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@map("message_attachments")
+}
+
+// ---------------------------------------------------------------------------
+// AI
+// ---------------------------------------------------------------------------
+
+model AiConversation {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  roleContext String   @map("role_context") // client | coach
+  startedAt   DateTime @default(now()) @map("started_at")
+
+  user     User        @relation(fields: [userId], references: [id])
+  messages AiMessage[]
+
+  @@index([userId])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String   @id @default(uuid())
+  conversationId String   @map("conversation_id")
+  role           String   // user | assistant | tool
+  content        String
+  toolCallsJson  Json?    @map("tool_calls_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("ai_messages")
+}
+
+// ---------------------------------------------------------------------------
+// SYSTEM
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  type      String
+  body      String
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String?  @map("actor_id")
+  action       String
+  targetType   String   @map("target_type")
+  targetId     String?  @map("target_id")
+  metadataJson Json?    @map("metadata_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}

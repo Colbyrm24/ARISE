@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  ARISE design tokens.
+  Dark, minimal, premium, masculine. One restrained accent color.
+  Everything else in the app should pull from these variables —
+  never hard-code a color in a component.
+*/
+@layer base {
+  :root {
+    --background: 240 6% 6%;
+    --foreground: 40 10% 95%;
+
+    --card: 240 5% 9%;
+    --card-foreground: 40 10% 95%;
+
+    --primary: 40 10% 95%;
+    --primary-foreground: 240 6% 6%;
+
+    --secondary: 240 5% 13%;
+    --secondary-foreground: 40 10% 95%;
+
+    --muted: 240 4% 14%;
+    --muted-foreground: 240 5% 62%;
+
+    --accent: 38 46% 58%;
+    --accent-foreground: 240 6% 6%;
+
+    --destructive: 4 62% 48%;
+    --destructive-foreground: 40 10% 95%;
+
+    --success: 142 40% 45%;
+    --success-foreground: 40 10% 95%;
+
+    --border: 240 4% 17%;
+    --input: 240 4% 17%;
+    --ring: 38 46% 58%;
+
+    --radius: 14px;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'ss01', 'ss02';
+  }
+  h1, h2, h3, h4 {
+    @apply tracking-tight;
+  }
+}
+
+/* Thin, quiet scrollbars — matches the "minimal borders, minimal clutter" brief */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 999px;
+}
