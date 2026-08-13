@@ -1,11 +1,124 @@
-import { PlaceholderScreen } from '@/components/placeholder-screen';
+import { Dumbbell, Trash2 } from 'lucide-react';
+import { prisma } from '@/lib/prisma';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { createExercise, deleteExercise } from './actions';
 
-export default function CoachExercisesPage() {
+const selectClass =
+  'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+const EQUIPMENT_OPTIONS = ['Barbell', 'Dumbbell', 'Cable', 'Machine', 'Bodyweight', 'Kettlebell', 'Band', 'Other'];
+const DIFFICULTY_OPTIONS = ['Beginner', 'Intermediate', 'Advanced'];
+
+export default async function CoachExercisesPage() {
+  const exercises = await prisma.exercise.findMany({ orderBy: { name: 'asc' } });
+
   return (
-    <PlaceholderScreen
-      title="Exercises"
-      phase="Phase 4 · Training"
-      description="Upload exercise demo videos, tag muscles/equipment, and manage the full exercise library from here."
-    />
+    <div className="flex flex-col gap-8">
+      <header>
+        <h1 className="text-2xl font-semibold">Exercise Library</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Every exercise here becomes available when you build a workout template below.
+        </p>
+      </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Add Exercise</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form action={createExercise} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input name="name" placeholder="Exercise name" required className="sm:col-span-2" />
+            <Input name="musclePrimary" placeholder="Primary muscle (e.g. Chest)" required />
+            <select name="equipment" className={selectClass} required defaultValue="">
+              <option value="" disabled>
+                Equipment…
+              </option>
+              {EQUIPMENT_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <select name="difficulty" className={selectClass} required defaultValue="">
+              <option value="" disabled>
+                Difficulty…
+              </option>
+              {DIFFICULTY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+            <Input name="muscleSecondary" placeholder="Secondary muscles, comma separated" />
+            <Input name="movementPattern" placeholder="Movement pattern (e.g. Push)" className="sm:col-span-2" />
+            <textarea
+              name="instructions"
+              rows={2}
+              placeholder="Instructions"
+              className="w-full resize-none rounded-xl border border-border bg-secondary/30 p-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:col-span-2"
+            />
+            <textarea
+              name="cues"
+              rows={2}
+              placeholder="Coaching cues"
+              className="w-full resize-none rounded-xl border border-border bg-secondary/30 p-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:col-span-2"
+            />
+            <Input name="tags" placeholder="Tags, comma separated" className="sm:col-span-2" />
+            <Button type="submit" size="sm" className="w-fit sm:col-span-2">
+              Add Exercise
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {exercises.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+            <Dumbbell size={22} className="text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No exercises yet — add your first one above.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {exercises.map((ex) => (
+            <li key={ex.id}>
+              <Card>
+                <CardContent className="flex items-start justify-between gap-4 pt-6">
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-medium">{ex.name}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <Badge variant="accent">{ex.musclePrimary}</Badge>
+                      <Badge variant="outline">{ex.equipment}</Badge>
+                      <Badge variant="outline">{ex.difficulty}</Badge>
+                      {ex.muscleSecondary.map((m) => (
+                        <Badge key={m} variant="default">
+                          {m}
+                        </Badge>
+                      ))}
+                    </div>
+                    {ex.instructions && (
+                      <p className="text-xs text-muted-foreground">{ex.instructions}</p>
+                    )}
+                  </div>
+                  <form action={deleteExercise}>
+                    <input type="hidden" name="id" value={ex.id} />
+                    <button
+                      type="submit"
+                      title="Delete exercise"
+                      className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </form>
+                </CardContent>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
