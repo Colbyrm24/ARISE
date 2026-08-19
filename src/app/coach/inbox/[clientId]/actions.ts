@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { notify, displayName } from '@/lib/notifications';
 
 /** Confirms this coach actually coaches this client before anything is written. */
 async function assertOwns(coachId: string, clientId: string) {
@@ -22,6 +23,9 @@ export async function sendMessageToClient(formData: FormData) {
   await prisma.message.create({
     data: { senderId: coach.id, recipientId: clientId, body },
   });
+
+  const name = await displayName(coach.id);
+  await notify(clientId, 'message', `${name}: ${body.slice(0, 80)}`);
 
   revalidatePath(`/coach/inbox/${clientId}`);
   revalidatePath('/coach/inbox');
