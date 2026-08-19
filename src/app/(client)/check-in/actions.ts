@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
-import { CHECK_IN_QUESTIONS, weekOf, type CheckInAnswers } from '@/lib/check-in';
+import { CHECK_IN_QUESTIONS, weekOf, formatWeek, type CheckInAnswers } from '@/lib/check-in';
+import { notifyCoach, displayName } from '@/lib/notifications';
 
 export async function submitCheckIn(formData: FormData) {
   const user = await requireClient();
@@ -41,6 +42,13 @@ export async function submitCheckIn(formData: FormData) {
     await prisma.checkIn.create({
       data: { clientId: user.id, weekOf: week, answersJson: answers },
     });
+  }
+
+  // Only announce the first submission of a week — editing your own answers
+  // shouldn't ping the coach again and again.
+  if (!existing) {
+    const name = await displayName(user.id);
+    await notifyCoach(user.id, 'check_in', `${name} sent their check-in for ${formatWeek(week)}`);
   }
 
   revalidatePath('/check-in');
