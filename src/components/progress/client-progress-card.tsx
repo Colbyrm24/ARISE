@@ -1,6 +1,9 @@
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { WeightChart } from '@/components/progress/weight-chart';
+import { PhotoGrid } from '@/components/progress/photo-grid';
+import { signPhotoUrls } from '@/lib/progress-photos';
+import { CHECK_IN_QUESTIONS, formatWeek, readAnswers } from '@/lib/check-in';
 
 function daysAgo(n: number) {
   const d = new Date();
@@ -17,7 +20,7 @@ function daysAgo(n: number) {
  * client list, so there's nothing extra to authorize here.
  */
 export async function ClientProgressCard({ clientId }: { clientId: string }) {
-  const [logs, measurements] = await Promise.all([
+  const [logs, measurements, photos, checkIn] = await Promise.all([
     prisma.weightLog.findMany({
       where: { clientId, date: { gte: daysAgo(90) } },
       orderBy: { date: 'asc' },
@@ -27,7 +30,23 @@ export async function ClientProgressCard({ clientId }: { clientId: string }) {
       orderBy: { date: 'desc' },
       take: 20,
     }),
+    prisma.progressPhoto.findMany({
+      where: { clientId },
+      orderBy: { date: 'desc' },
+      take: 12,
+    }),
+    prisma.checkIn.findFirst({ where: { clientId }, orderBy: { weekOf: 'desc' } }),
   ]);
+
+  const signed = await signPhotoUrls(photos.map((p) => p.storagePath));
+  const photoTiles = photos.map((p) => ({
+    id: p.id,
+    date: p.date,
+    angle: p.angle,
+    url: signed.get(p.storagePath) ?? null,
+  }));
+
+  const answers = readAnswers(checkIn?.answersJson);
 
   const points = logs.map((l) => ({ date: l.date, weight: Number(l.weight) }));
   const latest = points[points.length - 1] ?? null;
@@ -85,6 +104,34 @@ export async function ClientProgressCard({ clientId }: { clientId: string }) {
             ))}
           </ul>
         )}
+
+        {checkIn && (
+          <div className="rounded-xl border border-border bg-secondary/20 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Check-in · {formatWeek(checkIn.weekOf)}
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+              {CHECK_IN_QUESTIONS.filter((q) => q.type === 'scale').map((q) => (
+                <li key={q.key} className="text-muted-foreground">
+                  <span className="capitalize">{q.key}</span>{' '}
+                  <span className="tabular-nums text-foreground">
+                    {typeof answers[q.key] === 'number' ? `${answers[q.key]}/10` : '—'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {CHECK_IN_QUESTIONS.filter((q) => q.type === 'text').map((q) =>
+              typeof answers[q.key] === 'string' ? (
+                <div key={q.key} className="mt-3">
+                  <p className="text-xs text-muted-foreground">{q.label}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-sm">{String(answers[q.key])}</p>
+                </div>
+              ) : null
+            )}
+          </div>
+        )}
+
+        {photoTiles.length > 0 && <PhotoGrid photos={photoTiles} />}
       </CardContent>
     </Card>
   );
