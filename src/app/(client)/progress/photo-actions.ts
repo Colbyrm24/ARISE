@@ -11,6 +11,7 @@ import {
   uploadPhoto,
   removePhoto,
 } from '@/lib/progress-photos';
+import { notifyCoach, displayName } from '@/lib/notifications';
 
 function todayDateOnly() {
   const d = new Date();
@@ -36,6 +37,16 @@ export async function uploadProgressPhoto(formData: FormData) {
   await prisma.progressPhoto.create({
     data: { clientId: user.id, date, angle, storagePath: path },
   });
+
+  // Uploading front, side and back back-to-back is one event to the coach,
+  // not three — so only the first photo of the day pings them.
+  const todaysCount = await prisma.progressPhoto.count({
+    where: { clientId: user.id, date },
+  });
+  if (todaysCount === 1) {
+    const name = await displayName(user.id);
+    await notifyCoach(user.id, 'progress_photo', `${name} uploaded new progress photos`);
+  }
 
   revalidatePath('/progress');
 }
