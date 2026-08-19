@@ -21,7 +21,16 @@ export default async function TodayPage() {
   // Everything below reads real data where the feature already exists.
   // Where the feature is later in the roadmap (water, etc.), this shows
   // an honest empty state instead of pretending.
-  const [goals, goalLogs, target, nutritionLogs, stepLog, latestMessage, activeProgram] = user
+  const [
+    goals,
+    goalLogs,
+    target,
+    nutritionLogs,
+    stepLog,
+    latestMessage,
+    activeProgram,
+    latestWeight,
+  ] = user
     ? await Promise.all([
         prisma.dailyGoal.findMany({ where: { clientId: user.id, active: true } }),
         prisma.dailyGoalLog.findMany({ where: { clientId: user.id, date: today } }),
@@ -40,8 +49,14 @@ export default async function TodayPage() {
           where: { clientId: user.id, active: true },
           include: { template: { include: { workouts: { orderBy: { dayOrder: 'asc' } } } } },
         }),
+        prisma.weightLog.findFirst({
+          where: { clientId: user.id },
+          orderBy: { date: 'desc' },
+        }),
       ])
-    : [[], [], null, [], null, null, null];
+    : [[], [], null, [], null, null, null, null];
+
+  const weighedInToday = latestWeight ? latestWeight.date.getTime() === today.getTime() : false;
 
   const completedCount = goalLogs.filter((g) => g.completed).length;
   const totalGoals = goals.length;
@@ -173,6 +188,26 @@ export default async function TodayPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Weight */}
+      <Link href="/progress">
+        <Card className="transition-colors hover:bg-secondary/40">
+          <CardContent className="flex items-center justify-between pt-6">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Weight
+              </p>
+              <p className="mt-1 text-base font-medium">
+                {latestWeight ? `${Number(latestWeight.weight).toFixed(1)} lb` : 'Not logged yet'}
+              </p>
+            </div>
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              {weighedInToday ? 'Progress' : 'Weigh in'}
+              <ChevronRight size={16} />
+            </span>
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Message preview */}
       <Link href="/messages">
