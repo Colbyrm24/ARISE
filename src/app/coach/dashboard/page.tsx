@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
+import { NotificationList } from '@/components/notifications/notification-list';
+import { markAllNotificationsRead } from './notification-actions';
 
 // Single-coach MVP: counts and the recent-clients list below cover every
 // client rather than filtering by an assigned coachId — there's only one
@@ -47,6 +49,15 @@ export default async function CoachDashboardPage() {
     take: 5,
   });
 
+  const notifications = user
+    ? await prisma.notification.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+        take: 12,
+      })
+    : [];
+  const unreadCount = notifications.filter((n) => !n.readAt).length;
+
   return (
     <div className="flex flex-col gap-8">
       <header>
@@ -68,6 +79,29 @@ export default async function CoachDashboardPage() {
           </Link>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle>
+            Activity
+            {unreadCount > 0 && (
+              <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                {unreadCount}
+              </span>
+            )}
+          </CardTitle>
+          {unreadCount > 0 && (
+            <form action={markAllNotificationsRead}>
+              <button type="submit" className="text-xs font-medium text-accent hover:underline">
+                Mark all read
+              </button>
+            </form>
+          )}
+        </CardHeader>
+        <CardContent className="px-0 pb-0">
+          <NotificationList notifications={notifications} role="coach" />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
