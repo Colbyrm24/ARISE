@@ -1,10 +1,16 @@
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import { requireClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { WeightChart } from '@/components/progress/weight-chart';
+import { PhotoGrid } from '@/components/progress/photo-grid';
+import { PHOTO_ANGLES, signPhotoUrls } from '@/lib/progress-photos';
+import { weekOf, formatWeek } from '@/lib/check-in';
 import { logWeight, logMeasurement, removeWeightLog } from './actions';
+import { uploadProgressPhoto, deleteProgressPhoto } from './photo-actions';
 
 const MEASUREMENTS = [
   { type: 'waist', label: 'Waist' },
@@ -25,7 +31,7 @@ export default async function ProgressPage() {
   const user = await requireClient();
   const since = daysAgo(90);
 
-  const [logs, measurements] = await Promise.all([
+  const [logs, measurements, photos, thisWeeksCheckIn] = await Promise.all([
     prisma.weightLog.findMany({
       where: { clientId: user.id, date: { gte: since } },
       orderBy: { date: 'asc' },
@@ -34,7 +40,21 @@ export default async function ProgressPage() {
       where: { clientId: user.id },
       orderBy: { date: 'desc' },
     }),
+    prisma.progressPhoto.findMany({
+      where: { clientId: user.id },
+      orderBy: { date: 'desc' },
+      take: 24,
+    }),
+    prisma.checkIn.findFirst({ where: { clientId: user.id, weekOf: weekOf() } }),
   ]);
+
+  const signed = await signPhotoUrls(photos.map((p) => p.storagePath));
+  const photoTiles = photos.map((p) => ({
+    id: p.id,
+    date: p.date,
+    angle: p.angle,
+    url: signed.get(p.storagePath) ?? null,
+  }));
 
   const points = logs.map((l) => ({ date: l.date, weight: Number(l.weight) }));
   const latest = points[points.length - 1] ?? null;
@@ -147,6 +167,61 @@ export default async function ProgressPage() {
           </form>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Photos</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <form action={uploadProgressPhoto} className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <select
+                name="angle"
+                required
+                className="h-11 w-32 rounded-xl border border-input bg-secondary/40 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {PHOTO_ANGLES.map((a) => (
+                  <option key={a} value={a} className="capitalize">
+                    {a}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="file"
+                name="photo"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                required
+                className="flex-1 text-sm text-muted-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-secondary file:px-3 file:py-2 file:text-sm file:text-foreground"
+              />
+            </div>
+            <Button type="submit" size="sm" variant="secondary" className="w-fit">
+              Upload
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Only you and your coach can see these.
+            </p>
+          </form>
+
+          <PhotoGrid photos={photoTiles} action={deleteProgressPhoto} />
+        </CardContent>
+      </Card>
+
+      <Link href="/check-in">
+        <Card className="transition-colors hover:bg-secondary/40">
+          <CardContent className="flex items-center justify-between pt-6">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Weekly check-in
+              </p>
+              <p className="mt-1 text-base font-medium">
+                {thisWeeksCheckIn ? 'Submitted' : 'Not sent yet'}
+              </p>
+              <p className="text-xs text-muted-foreground">{formatWeek(weekOf())}</p>
+            </div>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </CardContent>
+        </Card>
+      </Link>
 
       {points.length > 0 && (
         <Card>
