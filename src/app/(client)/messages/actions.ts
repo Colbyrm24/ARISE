@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { notify, displayName } from '@/lib/notifications';
 
 /**
  * A client only ever talks to their own coach. We resolve the coach from
@@ -28,6 +29,9 @@ export async function sendMessageToCoach(formData: FormData) {
   await prisma.message.create({
     data: { senderId: user.id, recipientId: coachId, body },
   });
+
+  const name = await displayName(user.id);
+  await notify(coachId, 'message', `${name}: ${body.slice(0, 80)}`, { clientId: user.id });
 
   revalidatePath('/messages');
 }
