@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { ClientProgressCard } from '@/components/progress/client-progress-card';
+import { IntakeCard } from '@/components/onboarding/intake-card';
 import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
 import { PROVIDER_LABELS } from '@/lib/plans';
@@ -390,6 +391,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
 </CardContent>
 </Card>
         <ClientProgressCard clientId={client.userId} />
+        <IntakeCard clientId={client.userId} />
       </div>
     </div>
   );
