@@ -58,6 +58,10 @@ export default async function TodayPage() {
 
   const weighedInToday = latestWeight ? latestWeight.date.getTime() === today.getTime() : false;
 
+  const unreadUpdates = user
+    ? await prisma.notification.count({ where: { userId: user.id, readAt: null } })
+    : 0;
+
   const completedCount = goalLogs.filter((g) => g.completed).length;
   const totalGoals = goals.length;
   const ringProgress = totalGoals > 0 ? completedCount / totalGoals : 0;
@@ -88,7 +92,17 @@ export default async function TodayPage() {
         <p className="text-sm text-muted-foreground">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </p>
-        <h1 className="mt-1 text-2xl font-semibold">Good morning, {firstName}.</h1>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold">Good morning, {firstName}.</h1>
+          {unreadUpdates > 0 && (
+            <Link
+              href="/notifications"
+              className="shrink-0 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground"
+            >
+              {unreadUpdates} new
+            </Link>
+          )}
+        </div>
       </header>
 
       {/* Daily progress ring */}
