@@ -28,7 +28,18 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
 
   if (!template) notFound();
 
-  const exercises = await prisma.exercise.findMany({ orderBy: { name: 'asc' } });
+  const exercises = await prisma.exercise.findMany({
+    orderBy: [{ musclePrimary: 'asc' }, { name: 'asc' }],
+  });
+
+  // A few hundred exercises in one flat dropdown is unusable, so they're
+  // grouped by muscle — the browser renders these as labelled sections.
+  const grouped = new Map<string, typeof exercises>();
+  for (const ex of exercises) {
+    if (!grouped.has(ex.musclePrimary)) grouped.set(ex.musclePrimary, []);
+    grouped.get(ex.musclePrimary)!.push(ex);
+  }
+  const exercisesByMuscle = [...grouped.entries()];
 
   return (
     <div className="flex flex-col gap-8">
@@ -140,10 +151,14 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
                       <option value="" disabled>
                         Exercise…
                       </option>
-                      {exercises.map((ex) => (
-                        <option key={ex.id} value={ex.id}>
-                          {ex.name}
-                        </option>
+                      {exercisesByMuscle.map(([muscleGroup, list]) => (
+                        <optgroup key={muscleGroup} label={muscleGroup}>
+                          {list.map((ex) => (
+                            <option key={ex.id} value={ex.id}>
+                              {ex.name} · {ex.equipment}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                     <Input name="numSets" type="number" min="1" placeholder="Sets" defaultValue={3} />
