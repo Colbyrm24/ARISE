@@ -39,6 +39,7 @@ model User {
   notifications          Notification[]
   aiConversations        AiConversation[]
   auditLogEntries        AuditLog[]                 @relation("AuditActor")
+  pushSubscriptions      PushSubscription[]
   workoutTemplatesOwned  WorkoutTemplate[]           @relation("TemplateCoach")
   recipesCreated         Recipe[]                    @relation("RecipeCoach")
 
@@ -764,6 +765,34 @@ model AiMessage {
 // ---------------------------------------------------------------------------
 // SYSTEM
 // ---------------------------------------------------------------------------
+
+/**
+ * One row per browser that agreed to receive pushes — a client on a phone and
+ * a laptop is two rows, and both should ring.
+ *
+ * endpoint is unique because it IS the browser's identity to the push service.
+ * Re-subscribing on the same device returns the same endpoint, so upserting on
+ * it is what stops duplicates piling up every time the app is opened.
+ *
+ * Subscriptions expire on their own — the browser is reinstalled, permission
+ * is revoked, the push service retires it. The send path deletes any row the
+ * service reports as gone, so this table prunes itself rather than slowly
+ * filling with endpoints that can never be delivered to.
+ */
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
 
 model Notification {
   id        String    @id @default(uuid())
