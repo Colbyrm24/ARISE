@@ -10,7 +10,12 @@ const Avatar = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AvatarPrimitive.Root
     ref={ref}
-    className={cn('relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full', className)}
+    /* Square, with a hairline. Circular avatars would be the one soft shape
+       in an interface built entirely out of 1px rectangles. */
+    className={cn(
+      'relative flex h-10 w-10 shrink-0 overflow-hidden rounded-none border border-border',
+      className
+    )}
     {...props}
   />
 ));
@@ -30,7 +35,10 @@ const AvatarFallback = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AvatarPrimitive.Fallback
     ref={ref}
-    className={cn('flex h-full w-full items-center justify-center rounded-full bg-secondary text-sm font-medium text-foreground', className)}
+    className={cn(
+      'flex h-full w-full items-center justify-center rounded-none bg-secondary font-mono text-[11px] uppercase tracking-widest text-muted-foreground',
+      className
+    )}
     {...props}
   />
 ));

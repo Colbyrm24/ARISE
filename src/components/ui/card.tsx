@@ -17,9 +17,9 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        'surface-sheen rounded-2xl border border-border bg-card text-card-foreground shadow-[0_1px_0_0_hsl(0_0%_100%/0.03)_inset,0_8px_20px_-12px_rgb(0_0_0/0.5)] transition-all duration-200',
+        'surface-sheen rounded-none border border-border bg-card text-card-foreground transition-all duration-200',
         interactive &&
-          'hover:-translate-y-0.5 hover:border-accent/25 hover:shadow-[0_1px_0_0_hsl(0_0%_100%/0.03)_inset,0_16px_30px_-14px_rgb(0_0_0/0.6),0_0_0_1px_hsl(var(--accent)/0.06)]',
+          'hover:border-accent/35 hover:shadow-[0_0_0_1px_hsl(var(--accent)/0.08),0_16px_36px_-18px_hsl(var(--system)/0.5)]',
         className
       )}
       {...props}
@@ -37,7 +37,17 @@ CardHeader.displayName = 'CardHeader';
 
 const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn('text-sm font-medium text-muted-foreground', className)} {...props} />
+    /* Card titles are the system naming a region, so they take the mono
+       voice. This one line is what makes every existing card in the app
+       read as part of the new language without touching the pages. */
+    <h3
+      ref={ref}
+      className={cn(
+        'font-mono text-[11px] font-normal uppercase tracking-[0.2em] text-muted-foreground',
+        className
+      )}
+      {...props}
+    />
   )
 );
 CardTitle.displayName = 'CardTitle';

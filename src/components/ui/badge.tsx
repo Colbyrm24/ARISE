@@ -2,15 +2,20 @@ import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
+/*
+  Badges are status, and status is something the system reports about
+  itself — so they're set in the mono face, uppercase and tracked, like a
+  readout tag rather than a label someone wrote.
+*/
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset',
+  'inline-flex items-center rounded-none px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] ring-1 ring-inset',
   {
     variants: {
       variant: {
-        default: 'bg-secondary text-secondary-foreground ring-border',
-        accent: 'bg-accent/10 text-accent ring-accent/25',
-        success: 'bg-success/10 text-success ring-success/25',
-        destructive: 'bg-destructive/10 text-destructive ring-destructive/25',
+        default: 'bg-secondary text-muted-foreground ring-border',
+        accent: 'bg-accent/[0.08] text-accent ring-accent/30',
+        success: 'bg-success/[0.08] text-success ring-success/30',
+        destructive: 'bg-destructive/[0.08] text-destructive ring-destructive/35',
         outline: 'border border-border text-muted-foreground ring-0',
       },
     },
