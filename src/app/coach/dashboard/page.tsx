@@ -60,24 +60,37 @@ export default async function CoachDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <header>
-        <p className="text-sm text-muted-foreground">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+      <header className="border-b border-border pb-5">
+        <p className="readout text-[11px] uppercase text-muted-foreground">
+          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </p>
-        <h1 className="mt-1 text-2xl font-semibold">Who needs you today?</h1>
+        <h1 className="display mt-2 text-3xl">Who needs you today?</h1>
       </header>
 
+      {/* Counts are something the system reports about itself, so they take
+          the mono voice. A zero stays quiet; anything above zero is lit. */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {summaryCards.map(({ key, label, href }) => (
-          <Link key={key} href={href}>
-            <Card interactive>
-              <CardContent className="pt-6">
-                <p className="text-3xl font-semibold">{counts?.[key] ?? 0}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{label}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+        {summaryCards.map(({ key, label, href }) => {
+          const n = counts?.[key] ?? 0;
+          return (
+            <Link key={key} href={href}>
+              <Card interactive className="h-full">
+                <CardContent className="pt-5">
+                  <p
+                    className={
+                      n > 0
+                        ? 'readout text-3xl text-accent glow-soft'
+                        : 'readout text-3xl text-muted-foreground'
+                    }
+                  >
+                    {String(n).padStart(2, '0')}
+                  </p>
+                  <p className="readout mt-2 text-[10px] uppercase text-muted-foreground">{label}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
 
       <Card>
@@ -85,9 +98,7 @@ export default async function CoachDashboardPage() {
           <CardTitle>
             Activity
             {unreadCount > 0 && (
-              <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                {unreadCount}
-              </span>
+              <span className="ml-2 text-accent">[{unreadCount}]</span>
             )}
           </CardTitle>
           {unreadCount > 0 && (
