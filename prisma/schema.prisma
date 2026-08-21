@@ -40,6 +40,7 @@ model User {
   aiConversations        AiConversation[]
   auditLogEntries        AuditLog[]                 @relation("AuditActor")
   pushSubscriptions      PushSubscription[]
+  mealLogsReviewed       NutritionLog[]             @relation("MealReviewer")
   workoutTemplatesOwned  WorkoutTemplate[]           @relation("TemplateCoach")
   recipesCreated         Recipe[]                    @relation("RecipeCoach")
 
@@ -574,11 +575,41 @@ model NutritionLog {
   fat       Decimal  @db.Decimal(6, 2)
   createdAt DateTime @default(now()) @map("created_at")
 
-  client Client  @relation(fields: [clientId], references: [userId])
-  food   Food?   @relation(fields: [foodId], references: [id])
-  recipe Recipe? @relation(fields: [recipeId], references: [id])
+  // Where the numbers on this row came from:
+  //   manual  — the client typed them in
+  //   library — copied from a Food row
+  //   recipe  — copied from a Recipe row
+  //   photo   — read off a photograph
+  source String @default("manual")
+
+  // Set only when source is photo.
+  //   estimated — nobody has looked at it yet
+  //   confirmed — the coach agreed with the numbers
+  //   corrected — the coach changed them
+  //   failed    — the read didn't come back, so the row holds zeros and the
+  //               client still needs to enter numbers
+  // Null on every other source, which is what keeps the review queue from
+  // filling up with rows nobody ever needs to look at.
+  reviewState String? @map("review_state")
+
+  // What was actually read off the photo: the items, the portion assumed for
+  // each, and the model's own numbers. Kept separately from the columns above
+  // so that a coach's correction can be compared against the original guess
+  // rather than erasing it — the gap between the two is the only way to find
+  // out whether the reads run consistently high or low.
+  estimate Json?
+
+  reviewedAt   DateTime? @map("reviewed_at")
+  reviewedById String?   @map("reviewed_by_id")
+
+  client     Client  @relation(fields: [clientId], references: [userId])
+  food       Food?   @relation(fields: [foodId], references: [id])
+  recipe     Recipe? @relation(fields: [recipeId], references: [id])
+  reviewedBy User?   @relation("MealReviewer", fields: [reviewedById], references: [id])
 
   @@index([clientId, date])
+  // Drives the coach's review queue, which reads oldest-unreviewed-first.
+  @@index([reviewState, createdAt])
   @@map("nutrition_logs")
 }
 
