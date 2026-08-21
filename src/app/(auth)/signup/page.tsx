@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
+import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -51,8 +51,8 @@ export default function SignupPage() {
   }
 
   return (
-    <Card>
-      <CardContent className="pt-6">
+    <SystemWindow title="Create account">
+      <SystemWindowContent className="pt-4">
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="fullName">Full name</Label>
@@ -93,16 +93,16 @@ export default function SignupPage() {
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" disabled={loading} className="mt-2 w-full">
-            {loading ? 'Creating account…' : 'Create Account'}
+            {loading ? 'Creating account…' : 'Create account'}
           </Button>
         </form>
-      </CardContent>
+      </SystemWindowContent>
       <div className="border-t border-border p-5 text-center text-sm text-muted-foreground">
         Already coaching with us?{' '}
         <Link href="/login" className="text-accent hover:underline">
           Sign in
         </Link>
       </div>
-    </Card>
+    </SystemWindow>
   );
 }
