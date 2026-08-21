@@ -244,7 +244,19 @@ export default async function CoachDashboardPage() {
                       href={`/coach/clients/${a.clientId}`}
                       className="flex items-start gap-3 transition-opacity hover:opacity-80"
                     >
-                      <Av>{a.initials}</Av>
+                      {a.photoUrl ? (
+                        /* The plate, right in the rail. Seeing what they ate
+                           beside the numbers they entered is the whole point —
+                           it's what makes a wrong guess correctable. */
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={a.photoUrl}
+                          alt=""
+                          className="h-10 w-10 shrink-0 border border-border object-cover"
+                        />
+                      ) : (
+                        <Av>{a.initials}</Av>
+                      )}
                       <span className="min-w-0 flex-1 text-[13px] leading-snug">
                         <span className="font-medium">{a.name}</span>{' '}
                         <span className="text-muted-foreground">{a.text}</span>
