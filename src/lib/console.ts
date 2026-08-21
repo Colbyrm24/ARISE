@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { signMealPhotoUrls } from '@/lib/meal-photos';
 
 /*
   The coach console's two reads.
@@ -153,6 +154,8 @@ export type ActivityItem = {
   initials: string;
   /** Already carries its number — "logged lunch — 620 cal, 48g protein". */
   text: string;
+  /** Signed, short-lived. Present only for meals logged with a photo. */
+  photoUrl?: string;
 };
 
 /**
@@ -168,7 +171,10 @@ export async function getRecentActivity(limit = 12): Promise<ActivityItem[]> {
       where: { createdAt: { gte: since } },
       orderBy: { createdAt: 'desc' },
       take: limit,
-      select: { id: true, createdAt: true, clientId: true, meal: true, calories: true, protein: true },
+      select: {
+        id: true, createdAt: true, clientId: true, meal: true,
+        calories: true, protein: true, photoPath: true,
+      },
     }),
     prisma.workoutLog.findMany({
       where: { completedAt: { gte: since } },
@@ -203,12 +209,15 @@ export async function getRecentActivity(limit = 12): Promise<ActivityItem[]> {
     }),
   ]);
 
-  const rows: Array<{ id: string; at: Date; clientId: string; text: string }> = [
+  const rows: Array<{
+    id: string; at: Date; clientId: string; text: string; photoPath?: string | null;
+  }> = [
     ...meals.map((m) => ({
       id: `meal-${m.id}`,
       at: m.createdAt,
       clientId: m.clientId,
       text: `logged ${m.meal ?? 'a meal'} — ${m.calories} cal, ${Math.round(Number(m.protein))}g protein`,
+      photoPath: m.photoPath,
     })),
     ...workouts.map((w) => {
       const prs = w.sets.filter((s) => s.isPr).length;
@@ -245,19 +254,26 @@ export async function getRecentActivity(limit = 12): Promise<ActivityItem[]> {
 
   if (rows.length === 0) return [];
 
-  // One lookup for every name in the merged set rather than per-table joins.
-  const users = await prisma.user.findMany({
-    where: { id: { in: [...new Set(rows.map((r) => r.clientId))] } },
-    include: { profile: true },
-  });
+  // One lookup for every name in the merged set rather than per-table joins,
+  // and one signing round trip for whatever photos survived the slice.
+  const [users, photoUrls] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: [...new Set(rows.map((r) => r.clientId))] } },
+      include: { profile: true },
+    }),
+    signMealPhotoUrls(
+      rows.map((r) => r.photoPath).filter((p): p is string => Boolean(p))
+    ),
+  ]);
   const byId = new Map(users.map((u) => [u.id, u]));
 
-  return rows.map((r) => {
+  return rows.map(({ photoPath, ...r }) => {
     const u = byId.get(r.clientId);
     return {
       ...r,
       name: u?.profile?.fullName ?? u?.email ?? 'Client',
       initials: initialsOf(u?.profile?.fullName, u?.email ?? '?'),
+      photoUrl: photoPath ? photoUrls.get(photoPath) : undefined,
     };
   });
 }
