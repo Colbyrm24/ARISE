@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
-import { anthropic } from '@/lib/ai';
+import { anthropic, AI_MODEL } from '@/lib/ai';
 
 function todayDateOnly() {
   const d = new Date();
@@ -84,7 +84,7 @@ ${contextLines.join('\n')}`;
   let replyText: string;
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-5',
+      model: AI_MODEL,
       max_tokens: 500,
       system: systemPrompt,
       messages: history.map((m) => ({
