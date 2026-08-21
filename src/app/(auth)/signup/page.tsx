@@ -43,10 +43,11 @@ export default function SignupPage() {
     });
 
     setLoading(false);
-    // TODO(Phase 3): send new signups into /onboarding/plan once the
-    // plan → payment → contract → intake flow is built. For now, straight
-    // to the dashboard shell so Phase 1 can be tested end to end.
-    router.push('/today');
+    // Straight into intake. A client who lands on /today first almost never
+    // comes back to fill this in, and then the coach is programming blind —
+    // /onboarding saves section by section, so stopping halfway still leaves
+    // something useful behind.
+    router.push('/onboarding');
     router.refresh();
   }
 
