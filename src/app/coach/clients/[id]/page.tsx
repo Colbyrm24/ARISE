@@ -17,6 +17,7 @@ import { updateClientStatus, addCoachNote, toggleCoachNotePin } from './actions'
 import { createPaymentLink, markPaymentLinkPaid } from './payment-actions';
 import { assignProgram, unassignProgram } from './program-actions';
 import { setNutritionTarget } from './nutrition-actions';
+import { HabitCard } from '@/components/coach/habit-card';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -390,6 +391,7 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   </form>
 </CardContent>
 </Card>
+        <HabitCard clientId={client.userId} />
         <ClientProgressCard clientId={client.userId} />
         <IntakeCard clientId={client.userId} />
       </div>
