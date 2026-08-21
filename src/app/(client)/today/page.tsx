@@ -4,14 +4,37 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { ProgressRing } from '@/components/ui/progress-ring';
 import { Button } from '@/components/ui/button';
+import {
+  SystemWindow,
+  SystemWindowContent,
+  Count,
+  Cell,
+} from '@/components/ui/system-window';
 
 function todayDateOnly() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
 }
+
+/** Time-aware greeting. It said "Good morning" at 11pm before. */
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const GOAL_LABELS: Record<string, string> = {
+  workout: 'Workout',
+  steps: 'Steps',
+  protein: 'Protein',
+  calories: 'Calories',
+  water: 'Water',
+  sleep: 'Sleep',
+  photo: 'Progress photo',
+};
 
 export default async function TodayPage() {
   const user = await getCurrentUser();
@@ -62,12 +85,8 @@ export default async function TodayPage() {
     ? await prisma.notification.count({ where: { userId: user.id, readAt: null } })
     : 0;
 
-  const completedCount = goalLogs.filter((g) => g.completed).length;
-  const totalGoals = goals.length;
-  const ringProgress = totalGoals > 0 ? completedCount / totalGoals : 0;
-
   const caloriesEaten = nutritionLogs.reduce((sum, l) => sum + l.calories, 0);
-  const proteinEaten = nutritionLogs.reduce((sum, l) => sum + Number(l.protein), 0);
+  const proteinEaten = Math.round(nutritionLogs.reduce((sum, l) => sum + Number(l.protein), 0));
 
   // Rotate through the assigned program's days based on how many days have
   // passed since it was assigned — a simple, predictable cadence with no
@@ -86,67 +105,123 @@ export default async function TodayPage() {
         })
       : null;
 
+  const workoutDone = Boolean(todaysLog?.completedAt);
+
+  /*
+    Each daily goal becomes a row in the goal window. Where the app already
+    tracks the underlying number — steps, protein, calories — the row carries
+    real progress rather than just a checkbox, so the client can see how far
+    into it they are without opening anything. A goal is complete when it was
+    logged complete OR when the tracked number has caught up to the target.
+  */
+  const loggedDone = new Set(goalLogs.filter((g) => g.completed).map((g) => g.dailyGoalId));
+
+  const rows = goals.map((goal) => {
+    const label = GOAL_LABELS[goal.goalType] ?? goal.targetValue ?? 'Goal';
+    let value: number | undefined;
+    let total: number | undefined;
+    let unit = '';
+
+    if (goal.goalType === 'steps') {
+      value = stepLog?.steps ?? 0;
+      total = Number(goal.targetValue) || undefined;
+    } else if (goal.goalType === 'protein') {
+      value = proteinEaten;
+      total = target ? Math.round(Number(target.protein)) : Number(goal.targetValue) || undefined;
+      unit = 'g';
+    } else if (goal.goalType === 'calories') {
+      value = caloriesEaten;
+      total = target?.calories ?? (Number(goal.targetValue) || undefined);
+    } else if (goal.goalType === 'workout') {
+      value = workoutDone ? 1 : 0;
+      total = 1;
+    }
+
+    const hit = value !== undefined && total !== undefined && value >= total;
+    return { id: goal.id, label, value, total, unit, done: loggedDone.has(goal.id) || hit };
+  });
+
+  const completedCount = rows.filter((r) => r.done).length;
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <header>
-        <p className="text-sm text-muted-foreground">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        <p className="readout text-[11px] uppercase text-muted-foreground">
+          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </p>
-        <div className="mt-1 flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold">Good morning, {firstName}.</h1>
+        <div className="mt-1.5 flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold">
+            {greeting()}, {firstName}.
+          </h1>
           {unreadUpdates > 0 && (
             <Link
               href="/notifications"
-              className="shrink-0 rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground"
+              className="readout shrink-0 border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] uppercase text-accent"
             >
-              {unreadUpdates} new
+              [{unreadUpdates}] new
             </Link>
           )}
         </div>
       </header>
 
-      {/* Daily progress ring */}
-      <Card>
-        <CardContent className="flex items-center gap-5 pt-6">
-          <ProgressRing progress={ringProgress} size={84} strokeWidth={7}>
-            <span className="text-lg font-semibold">
-              {totalGoals > 0 ? `${completedCount}/${totalGoals}` : '—'}
-            </span>
-          </ProgressRing>
-          <div>
-            <p className="text-sm font-medium">Daily Progress</p>
-            <p className="text-sm text-muted-foreground">
-              {totalGoals > 0
-                ? `${completedCount} of ${totalGoals} goals complete`
-                : 'Your coach hasn’t set your daily goals yet.'}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Daily goals — the core screen. Real numbers, not just checkboxes. */}
+      {rows.length > 0 ? (
+        <SystemWindow title="Goal" meta={`[${completedCount}/${rows.length}]`}>
+          <SystemWindowContent className="pt-4">
+            <ul className="flex flex-col">
+              {rows.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-4 border-b border-border/60 py-3 last:border-b-0"
+                >
+                  <span className="text-[15px]">{r.label}</span>
+                  <span className="flex items-center gap-3">
+                    {r.value !== undefined && r.total !== undefined ? (
+                      <Count value={r.value} total={`${r.total}${r.unit}`} />
+                    ) : (
+                      <span className="readout text-sm text-muted-foreground">[—]</span>
+                    )}
+                    <Cell on={r.done} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </SystemWindowContent>
+        </SystemWindow>
+      ) : (
+        <SystemWindow title="Goal">
+          <SystemWindowContent className="pt-4 text-sm text-muted-foreground">
+            Your coach hasn’t set your daily goals yet.
+          </SystemWindowContent>
+        </SystemWindow>
+      )}
 
       {/* Today's workout */}
-      <Card>
-        <CardContent className="flex items-center justify-between pt-6">
+      <SystemWindow
+        title={todaysWorkout ? `Session ${String(todaysWorkout.dayOrder).padStart(2, '0')}` : 'Session'}
+      >
+        <SystemWindowContent className="flex items-center justify-between gap-4 pt-4">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Workout</p>
             {todaysWorkout ? (
               <>
-                <p className="mt-1 text-base font-medium">{todaysWorkout.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {todaysLog?.completedAt ? 'Completed today' : `Day ${todaysWorkout.dayOrder}`}
+                <p className="text-base font-medium">{todaysWorkout.name}</p>
+                <p className="readout mt-1 text-[11px] uppercase text-muted-foreground">
+                  {workoutDone ? 'Complete' : todaysLog ? 'In progress' : 'Not started'}
                 </p>
               </>
             ) : (
               <>
-                <p className="mt-1 text-base font-medium">No workout assigned yet</p>
-                <p className="text-sm text-muted-foreground">Your coach will add your program soon.</p>
+                <p className="text-base font-medium">No workout assigned yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Your coach will add your program soon.
+                </p>
               </>
             )}
           </div>
           {todaysWorkout ? (
             <Link href={`/workouts/${todaysWorkout.id}`}>
-              <Button variant="outline" size="sm">
-                {todaysLog?.completedAt ? 'View' : todaysLog ? 'Continue' : 'Start'}
+              <Button variant={workoutDone ? 'outline' : 'primary'} size="sm">
+                {workoutDone ? 'View' : todaysLog ? 'Continue' : 'Start'}
               </Button>
             </Link>
           ) : (
@@ -154,100 +229,101 @@ export default async function TodayPage() {
               Start
             </Button>
           )}
-        </CardContent>
-      </Card>
+        </SystemWindowContent>
+      </SystemWindow>
 
       {/* Nutrition */}
       <Link href="/nutrition">
-              <Card className="transition-colors hover:bg-secondary/40">
-        <CardContent className="flex flex-col gap-4 pt-6">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Nutrition</p>
-          {target ? (
-            <>
-              <div>
-                <div className="mb-1.5 flex items-baseline justify-between text-sm">
-                  <span>Calories</span>
-                  <span className="text-muted-foreground">
-                    {caloriesEaten} / {target.calories}
-                  </span>
+        <SystemWindow title="Nutrition" interactive>
+          <SystemWindowContent className="flex flex-col gap-4 pt-4">
+            {target ? (
+              <>
+                <div>
+                  <div className="mb-2 flex items-baseline justify-between text-sm">
+                    <span>Calories</span>
+                    <Count value={caloriesEaten} total={target.calories} />
+                  </div>
+                  <Progress value={Math.min((caloriesEaten / target.calories) * 100, 100)} />
                 </div>
-                <Progress value={Math.min((caloriesEaten / target.calories) * 100, 100)} />
-              </div>
-              <div>
-                <div className="mb-1.5 flex items-baseline justify-between text-sm">
-                  <span>Protein</span>
-                  <span className="text-muted-foreground">
-                    {proteinEaten}g / {Number(target.protein)}g
-                  </span>
+                <div>
+                  <div className="mb-2 flex items-baseline justify-between text-sm">
+                    <span>Protein</span>
+                    <Count
+                      value={proteinEaten}
+                      total={`${Math.round(Number(target.protein))}g`}
+                    />
+                  </div>
+                  <Progress
+                    value={Math.min((proteinEaten / Number(target.protein)) * 100, 100)}
+                  />
                 </div>
-                <Progress value={Math.min((proteinEaten / Number(target.protein)) * 100, 100)} />
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">Your coach hasn’t set your targets yet.</p>
-          )}
-        </CardContent>
-      </Card>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">Your coach hasn’t set your targets yet.</p>
+            )}
+          </SystemWindowContent>
+        </SystemWindow>
       </Link>
 
-      {/* Steps */}
-      <Card>
-        <CardContent className="flex items-center justify-between pt-6">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Steps</p>
-            <p className="mt-1 text-base font-medium">{stepLog ? stepLog.steps.toLocaleString() : '0'}</p>
-          </div>
-          <Button variant="outline" size="sm">
-            Log Steps
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Weight */}
-      <Link href="/progress">
-        <Card className="transition-colors hover:bg-secondary/40">
-          <CardContent className="flex items-center justify-between pt-6">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Weight
-              </p>
-              <p className="mt-1 text-base font-medium">
-                {latestWeight ? `${Number(latestWeight.weight).toFixed(1)} lb` : 'Not logged yet'}
-              </p>
-            </div>
-            <span className="flex items-center gap-1 text-sm text-muted-foreground">
-              {weighedInToday ? 'Progress' : 'Weigh in'}
-              <ChevronRight size={16} />
-            </span>
+      {/* Steps + weight sit side by side — both are single figures, not
+          progressions, so they read as a readout pair rather than two cards. */}
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-5">
+            <p className="readout text-[10px] uppercase text-muted-foreground">Steps</p>
+            <p className="readout mt-2 text-xl text-accent glow-soft">
+              {stepLog ? stepLog.steps.toLocaleString() : '0'}
+            </p>
+            <Button variant="ghost" size="sm" className="mt-3 -ml-4">
+              Log steps
+            </Button>
           </CardContent>
         </Card>
-      </Link>
+
+        <Link href="/progress">
+          <Card interactive className="h-full">
+            <CardContent className="pt-5">
+              <p className="readout text-[10px] uppercase text-muted-foreground">Weight</p>
+              <p className="readout mt-2 text-xl text-accent glow-soft">
+                {latestWeight ? `${Number(latestWeight.weight).toFixed(1)}` : '—'}
+                {latestWeight && <span className="ml-1 text-xs text-muted-foreground">lb</span>}
+              </p>
+              <span className="readout mt-3 flex items-center gap-1 text-[10px] uppercase text-muted-foreground">
+                {weighedInToday ? 'Progress' : 'Weigh in'}
+                <ChevronRight size={12} />
+              </span>
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
 
       {/* Message preview */}
       <Link href="/messages">
-        <Card className="transition-colors hover:bg-secondary/40">
-          <CardContent className="flex items-center justify-between pt-6">
+        <Card interactive>
+          <CardContent className="flex items-center justify-between pt-5">
             <div className="flex items-center gap-3">
-              <MessageCircle size={20} className="text-accent" />
-              <div>
+              <MessageCircle size={18} className="shrink-0 text-accent" />
+              <div className="min-w-0">
                 <p className="text-sm font-medium">
-                  {latestMessage ? `Message from ${latestMessage.sender.profile?.fullName ?? 'your coach'}` : 'Messages'}
+                  {latestMessage
+                    ? `Message from ${latestMessage.sender.profile?.fullName ?? 'your coach'}`
+                    : 'Messages'}
                 </p>
-                <p className="text-sm text-muted-foreground">
+                <p className="truncate text-sm text-muted-foreground">
                   {latestMessage ? latestMessage.body ?? 'Sent an attachment' : 'No messages yet'}
                 </p>
               </div>
             </div>
-            <ChevronRight size={18} className="text-muted-foreground" />
+            <ChevronRight size={18} className="shrink-0 text-muted-foreground" />
           </CardContent>
         </Card>
       </Link>
 
       {/* AI Coach */}
       <Link href="/ai">
-        <Card className="border-accent/30 bg-accent/5 transition-colors hover:bg-accent/10">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <Sparkles size={20} className="text-accent" />
+        <Card interactive className="border-accent/30 bg-accent/[0.06]">
+          <CardContent className="flex items-center gap-3 pt-5">
+            <Sparkles size={18} className="text-accent" />
             <div>
               <p className="text-sm font-medium">AI Coach</p>
               <p className="text-sm text-muted-foreground">Ask me anything</p>
