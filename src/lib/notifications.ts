@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { sendPush } from '@/lib/push';
 
-export const NOTIFICATION_TYPES = ['message', 'check_in', 'progress_photo'] as const;
+export const NOTIFICATION_TYPES = ['message', 'check_in', 'progress_photo', 'nutrition'] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 /**
@@ -13,7 +13,12 @@ export function notificationHref(
   role: 'coach' | 'client',
   clientId?: string | null
 ) {
-  if (role === 'client') return type === 'message' ? '/messages' : '/progress';
+  if (role === 'client') {
+    if (type === 'message') return '/messages';
+    // A confirmed meal is only meaningful next to the day's totals.
+    if (type === 'nutrition') return '/nutrition';
+    return '/progress';
+  }
   if (!clientId) return '/coach/inbox';
 
   switch (type) {
@@ -22,6 +27,8 @@ export function notificationHref(
     case 'check_in':
     case 'progress_photo':
       return `/coach/clients/${clientId}`;
+    case 'nutrition':
+      return '/coach/meals';
     default:
       return '/coach/inbox';
   }
@@ -37,6 +44,7 @@ const PUSH_TITLES: Record<NotificationType, string> = {
   message: 'New message',
   check_in: 'Check-in submitted',
   progress_photo: 'New progress photo',
+  nutrition: 'Meal confirmed',
 };
 
 export async function notify(
