@@ -3,6 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import {
+  isAllowedMealPhoto,
+  mealPhotoPath,
+  uploadMealPhoto,
+  removeMealPhoto,
+} from '@/lib/meal-photos';
 
 function todayDateOnly() {
   const d = new Date();
@@ -90,6 +96,10 @@ export async function logFood(formData: FormData) {
  * them. Without this the whole screen only works for food we happened to
  * think of. `save` optionally keeps it as a custom food so a regular meal
  * only has to be entered once.
+ *
+ * An optional photo rides along. That's the part that mirrors what already
+ * happens over text every day — the client's guess is the starting point and
+ * the photo is what lets the coach correct it.
  */
 export async function quickAddFood(formData: FormData) {
   const user = await requireClient();
@@ -125,6 +135,17 @@ export async function quickAddFood(formData: FormData) {
     foodId = created.id;
   }
 
+  // Uploaded before the row is written so a storage failure doesn't leave a
+  // log pointing at a photo that isn't there. A failed upload is not worth
+  // losing the client's numbers over, so it degrades to a log with no photo.
+  let photoPath: string | null = null;
+  const photo = formData.get('photo');
+  if (photo instanceof File && photo.size > 0 && !isAllowedMealPhoto(photo)) {
+    const path = mealPhotoPath(user.id, photo.name);
+    const err = await uploadMealPhoto(path, photo);
+    if (!err) photoPath = path;
+  }
+
   await prisma.nutritionLog.create({
     data: {
       clientId: user.id,
@@ -136,6 +157,7 @@ export async function quickAddFood(formData: FormData) {
       protein,
       carbs,
       fat,
+      photoPath,
     },
   });
   refresh();
@@ -150,5 +172,8 @@ export async function removeMealLog(formData: FormData) {
   if (!log || log.clientId !== user.id) return;
 
   await prisma.nutritionLog.delete({ where: { id: logId } });
+  // Storage is cleaned after the row is gone. An orphaned object costs a few
+  // cents; a log pointing at a deleted file renders as a broken image.
+  if (log.photoPath) await removeMealPhoto(log.photoPath);
   refresh();
 }

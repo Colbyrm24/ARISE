@@ -10,6 +10,7 @@ import {
   SystemWindowContent,
   Count,
 } from '@/components/ui/system-window';
+import { signMealPhotoUrls } from '@/lib/meal-photos';
 import { logMeal, logFood, quickAddFood, removeMealLog } from './actions';
 
 function todayDateOnly() {
@@ -76,6 +77,10 @@ export default async function NutritionPage({
     }),
   ]);
 
+  const photoUrls = await signMealPhotoUrls(
+    todayLogs.map((l) => l.photoPath).filter((p): p is string => Boolean(p))
+  );
+
   const caloriesEaten = todayLogs.reduce((sum, l) => sum + l.calories, 0);
   const proteinEaten = todayLogs.reduce((sum, l) => sum + Number(l.protein), 0);
   const carbsEaten = todayLogs.reduce((sum, l) => sum + Number(l.carbs), 0);
@@ -128,7 +133,15 @@ export default async function NutritionPage({
                 key={log.id}
                 className="flex items-center justify-between gap-3 border-b border-border/50 py-3 last:border-b-0"
               >
-                <div className="min-w-0">
+                {log.photoPath && photoUrls.get(log.photoPath) && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={photoUrls.get(log.photoPath)}
+                    alt=""
+                    className="h-12 w-12 shrink-0 border border-border object-cover"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">
                     {log.recipe?.title ?? log.food?.name ?? log.name ?? 'Meal'}
                   </p>
@@ -248,7 +261,7 @@ export default async function NutritionPage({
       */}
       <SystemWindow title="Quick add">
         <SystemWindowContent className="pt-4">
-          <form action={quickAddFood} className="flex flex-col gap-3">
+          <form action={quickAddFood} encType="multipart/form-data" className="flex flex-col gap-3">
             <Input name="name" required maxLength={120} placeholder="What did you eat?" />
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[
@@ -271,6 +284,19 @@ export default async function NutritionPage({
                 </label>
               ))}
             </div>
+            <label className="flex flex-col gap-1">
+              <span className="readout text-[10px] uppercase text-muted-foreground">
+                Photo (optional)
+              </span>
+              <input
+                type="file"
+                name="photo"
+                accept="image/*"
+                capture="environment"
+                className="readout w-full rounded-none border border-input bg-secondary/40 p-2 text-[11px] file:mr-3 file:rounded-none file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:text-foreground"
+              />
+            </label>
+
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <select name="meal" defaultValue="snack" aria-label="Meal" className={selectClass}>
