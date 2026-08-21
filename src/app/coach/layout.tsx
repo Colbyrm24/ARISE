@@ -1,14 +1,19 @@
 import { requireCoach } from '@/lib/auth';
 import { Sidebar } from '@/components/coach/sidebar';
+import { countPendingMeals } from '@/lib/meal-review';
 
 export default async function CoachLayout({ children }: { children: React.ReactNode }) {
   // Server-side check — a client account can never render this layout,
   // no matter what URL they type in.
   await requireCoach();
 
+  // Read here rather than in the page so the badge is right on every screen,
+  // not only the one it links to.
+  const pendingMeals = await countPendingMeals().catch(() => 0);
+
   return (
     <div className="min-h-screen">
-      <Sidebar />
+      <Sidebar pendingMeals={pendingMeals} />
       <div className="flex h-16 items-center border-b border-border px-6 md:hidden">
         <span className="text-lg font-semibold tracking-[0.2em]">ARISE</span>
       </div>
