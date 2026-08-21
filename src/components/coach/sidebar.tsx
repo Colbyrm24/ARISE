@@ -10,6 +10,7 @@ import {
   Dumbbell,
   UtensilsCrossed,
   CreditCard,
+  Camera,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -18,6 +19,7 @@ const items = [
   { href: '/coach/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/coach/clients', label: 'Clients', icon: Users },
   { href: '/coach/inbox', label: 'Inbox', icon: Inbox },
+  { href: '/coach/meals', label: 'Meals', icon: Camera, badge: 'pendingMeals' },
   { href: '/coach/programs', label: 'Programs', icon: ClipboardList },
   { href: '/coach/exercises', label: 'Exercises', icon: Dumbbell },
   { href: '/coach/recipes', label: 'Recipes', icon: UtensilsCrossed },
@@ -25,7 +27,7 @@ const items = [
   { href: '/coach/settings', label: 'Settings', icon: Settings },
 ] as const;
 
-export function Sidebar() {
+export function Sidebar({ pendingMeals = 0 }: { pendingMeals?: number }) {
   const pathname = usePathname();
 
   return (
@@ -37,8 +39,12 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 px-3 py-2">
         <ul className="flex flex-col gap-1">
-          {items.map(({ href, label, icon: Icon }) => {
+          {items.map((item) => {
+            const { href, label, icon: Icon } = item;
             const active = pathname.startsWith(href);
+            // Only ever a count of things waiting on him. A badge that shows a
+            // total rather than a backlog is one he learns to ignore.
+            const count = 'badge' in item && item.badge === 'pendingMeals' ? pendingMeals : 0;
             return (
               <li key={href}>
                 <Link
@@ -58,7 +64,12 @@ export function Sidebar() {
                     strokeWidth={active ? 2.25 : 1.75}
                     className={active ? 'text-accent' : undefined}
                   />
-                  {label}
+                  <span className="flex-1">{label}</span>
+                  {count > 0 && (
+                    <span className="readout border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[10px] leading-none text-accent">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
                 </Link>
               </li>
             );
