@@ -11,6 +11,7 @@ import {
   Count,
 } from '@/components/ui/system-window';
 import { signMealPhotoUrls } from '@/lib/meal-photos';
+import { MealPhotoLogger } from '@/components/meal-photo-logger';
 import { logMeal, logFood, quickAddFood, removeMealLog } from './actions';
 
 function todayDateOnly() {
@@ -172,6 +173,18 @@ export default async function NutritionPage({
         doesn't browses a category. Plain GET form so it works with no JS and
         the result is a linkable URL.
       */}
+      {/*
+        First, because it's the way most meals actually get logged. Searching a
+        library assumes you already know what a portion weighs; a photo doesn't
+        assume anything, which is why this is the one clients will use standing
+        at a table with the food in front of them.
+      */}
+      <SystemWindow title="Log from a photo">
+        <SystemWindowContent className="pt-4">
+          <MealPhotoLogger />
+        </SystemWindowContent>
+      </SystemWindow>
+
       <SystemWindow title="Add food">
         <SystemWindowContent className="flex flex-col gap-4 pt-4">
           <form method="GET" className="flex gap-2">
@@ -255,9 +268,8 @@ export default async function NutritionPage({
       </SystemWindow>
 
       {/*
-        The escape hatch, and the most important thing on this page. Anything
-        not in the library — a restaurant meal, something a coach macro'd from
-        a photo — gets logged here with real numbers instead of not at all.
+        The escape hatch, for when the numbers are already known — a label, a
+        chain restaurant, something the coach macro'd earlier.
       */}
       <SystemWindow title="Quick add">
         <SystemWindowContent className="pt-4">
