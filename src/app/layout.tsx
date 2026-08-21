@@ -1,10 +1,27 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Archivo, DM_Mono } from 'next/font/google';
 import './globals.css';
 
-const inter = Inter({
+/*
+  Two faces, strictly divided.
+
+  Archivo carries everything a person reads — and at its widest weight and
+  width it's also the display face, so headlines and body share one family.
+  DM Mono carries everything the *system* says about itself: counts,
+  timestamps, statuses, labels. That split is what makes the interface read
+  as a readout instead of a webpage, so don't blur it.
+*/
+const archivo = Archivo({
   subsets: ['latin'],
   variable: '--font-sans',
+  display: 'swap',
+  axes: ['wdth'],
+});
+
+const dmMono = DM_Mono({
+  subsets: ['latin'],
+  weight: ['300', '400', '500'],
+  variable: '--font-mono',
   display: 'swap',
 });
 
@@ -19,7 +36,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0b0b0c',
+  themeColor: '#03060e',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -31,7 +48,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${archivo.variable} ${dmMono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground">
         {children}
       </body>

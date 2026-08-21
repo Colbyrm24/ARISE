@@ -3,42 +3,58 @@
 @tailwind utilities;
 
 /*
-  ARISE design tokens.
-  Dark, minimal, premium, masculine. One restrained accent color.
-  Everything else in the app should pull from these variables —
-  never hard-code a color in a component.
+  ARISE design tokens — "System" build.
+
+  Near-black blue ground, one accent that behaves like light rather than
+  paint, green reserved exclusively for completion, red spent maybe twice
+  in the whole product. Nothing is rounded past 2px.
+
+  Never hard-code a color in a component — pull from these variables.
 */
 @layer base {
   :root {
-    --background: 240 6% 6%;
-    --foreground: 40 10% 95%;
+    /* void — the page ground. blue-black, never grey. */
+    --background: 224 65% 3%;
+    /* ice */
+    --foreground: 216 100% 93%;
 
-    --card: 240 5% 9%;
-    --card-foreground: 40 10% 95%;
+    /* panel — window fill */
+    --card: 221 67% 8%;
+    --card-foreground: 216 100% 93%;
 
-    --primary: 40 10% 95%;
-    --primary-foreground: 240 6% 6%;
+    /* beam — primary action. reads as lit, not painted. */
+    --primary: 211 100% 72%;
+    --primary-foreground: 224 65% 3%;
 
-    --secondary: 240 5% 13%;
-    --secondary-foreground: 40 10% 95%;
+    /* raise — the surface above panel */
+    --secondary: 219 63% 12%;
+    --secondary-foreground: 216 100% 93%;
 
-    --muted: 240 4% 14%;
-    --muted-foreground: 240 5% 62%;
+    --muted: 219 63% 12%;
+    /* ash — labels, secondary ink */
+    --muted-foreground: 215 25% 53%;
 
-    --accent: 38 46% 58%;
-    --accent-foreground: 240 6% 6%;
+    /* beam again: one accent, no second hue */
+    --accent: 211 100% 72%;
+    --accent-foreground: 224 65% 3%;
 
-    --destructive: 4 62% 48%;
-    --destructive-foreground: 40 10% 95%;
+    /* alert — overdue, dropped, missed. rare on purpose. */
+    --destructive: 4 100% 56%;
+    --destructive-foreground: 216 100% 93%;
 
-    --success: 142 40% 45%;
-    --success-foreground: 40 10% 95%;
+    /* gain — complete. only complete. */
+    --success: 154 69% 55%;
+    --success-foreground: 224 65% 3%;
 
-    --border: 240 4% 17%;
-    --input: 240 4% 17%;
-    --ring: 38 46% 58%;
+    /* edge — every 1px border in the app */
+    --border: 217 69% 23%;
+    --input: 217 69% 23%;
+    --ring: 211 100% 72%;
 
-    --radius: 14px;
+    /* system blue — the glow source. used in shadows and fills, not text. */
+    --system: 216 100% 58%;
+
+    --radius: 2px;
   }
 }
 
@@ -51,12 +67,11 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: 'ss01', 'ss02';
-    /* A quiet, fixed glow instead of a flat fill — still reads as "dark",
-       just less like an empty void. Very low opacity on purpose. */
+    /* Light pooling up from the bottom of the plate, the way a system
+       window lights the ground it opens over. */
     background-image:
-      radial-gradient(ellipse 70% 45% at 15% -10%, hsl(var(--accent) / 0.07), transparent 60%),
-      radial-gradient(ellipse 55% 40% at 100% 0%, hsl(var(--accent) / 0.045), transparent 60%);
+      radial-gradient(ellipse 110% 60% at 50% 108%, hsl(var(--system) / 0.13), transparent 62%),
+      radial-gradient(ellipse 70% 45% at 50% -8%, hsl(var(--system) / 0.07), transparent 68%);
     background-attachment: fixed;
     background-repeat: no-repeat;
   }
@@ -65,7 +80,36 @@
   }
 }
 
-/* Thin, quiet scrollbars — matches the "minimal borders, minimal clutter" brief */
+/*
+  Two fixed overlays that sit above everything and take no clicks. The grain
+  is what stops the flat fills reading as "rendered"; the rake is the light
+  falling across the plate at 74deg. Both are deliberately near-invisible
+  individually — the effect is cumulative.
+*/
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+}
+body::before {
+  inset: -50%;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='220' height='220' filter='url(%23n)' opacity='0.42'/></svg>");
+  opacity: 0.3;
+  mix-blend-mode: overlay;
+}
+body::after {
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    74deg,
+    transparent 0 3px,
+    hsl(var(--accent) / 0.035) 3px 4px,
+    transparent 4px 9px
+  );
+}
+
+/* Thin, quiet scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -74,15 +118,80 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted));
-  border-radius: 999px;
+  background: hsl(var(--border));
+}
+
+::selection {
+  background: hsl(var(--system));
+  color: hsl(var(--background));
 }
 
 @layer utilities {
-  /* One shared "surface catches a little light" treatment, used by Card
-     and anywhere else that wants the same premium depth without repeating
-     the gradient/shadow combo inline. */
+  /*
+    The system-window language, as three composable utilities. Everything
+    in the product that needs to feel "opened in front of you" uses these
+    rather than re-declaring gradients inline.
+  */
+
+  /* Panel fill: light concentrated at the top edge, falling off downward. */
   .surface-sheen {
-    background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.035), transparent 40%);
+    background-image: linear-gradient(
+      180deg,
+      hsl(var(--system) / 0.11) 0%,
+      hsl(var(--card) / 0.7) 46%,
+      hsl(var(--background) / 0.85) 100%
+    );
+    box-shadow: inset 0 0 60px hsl(var(--system) / 0.07);
+  }
+
+  /* The lit top edge. This IS the title bar — nothing else marks it. */
+  .lit-edge::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    top: -1px;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--accent)) 12%,
+      hsl(var(--foreground)) 50%,
+      hsl(var(--accent)) 88%,
+      transparent
+    );
+    box-shadow:
+      0 0 14px 2px hsl(var(--accent) / 0.7),
+      0 0 46px 10px hsl(var(--system) / 0.4);
+    pointer-events: none;
+  }
+
+  /* Text that emits rather than reflects. Used on figures and titles. */
+  .glow {
+    text-shadow:
+      0 0 14px hsl(var(--accent) / 0.55),
+      0 0 34px hsl(var(--system) / 0.35);
+  }
+  .glow-soft {
+    text-shadow: 0 0 18px hsl(var(--accent) / 0.3);
+  }
+
+  /* Counts, timestamps, statuses — anything the system says about itself. */
+  .readout {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.08em;
+  }
+
+  /* Display type: Archivo pushed to its widest. Headlines and marks only. */
+  .display {
+    font-variation-settings: 'wdth' 118, 'wght' 900;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+  .display-wide {
+    font-variation-settings: 'wdth' 125, 'wght' 900;
+    letter-spacing: -0.035em;
+    text-transform: uppercase;
   }
 }
