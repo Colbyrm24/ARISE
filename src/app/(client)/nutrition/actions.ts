@@ -306,6 +306,45 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
   };
 }
 
+/**
+ * Logs one line of the client's plan in a single tap.
+ *
+ * The macros come off the plan row, not the recipe behind it. A recipe edited
+ * since the plan was written must not change what the client is credited with
+ * eating, and the line has to keep working when its recipe is gone.
+ */
+export async function logPlanItem(formData: FormData) {
+  const user = await requireClient();
+  const itemId = formData.get('itemId') as string | null;
+  if (!itemId) return;
+
+  const item = await prisma.mealPlanItem.findUnique({
+    where: { id: itemId },
+    include: { plan: { select: { clientId: true, active: true } } },
+  });
+  // Scoped to the caller, and to a live plan — a retired plan's ids should
+  // not still be loggable.
+  if (!item || item.plan.clientId !== user.id || !item.plan.active) return;
+
+  await prisma.nutritionLog.create({
+    data: {
+      clientId: user.id,
+      date: todayDateOnly(),
+      meal: item.meal,
+      recipeId: item.recipeId,
+      foodId: item.foodId,
+      name: item.name,
+      source: 'recipe',
+      quantity: item.quantity,
+      calories: item.calories,
+      protein: item.protein,
+      carbs: item.carbs,
+      fat: item.fat,
+    },
+  });
+  refresh();
+}
+
 export async function removeMealLog(formData: FormData) {
   const user = await requireClient();
   const logId = formData.get('logId') as string | null;
