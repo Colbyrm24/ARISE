@@ -41,6 +41,7 @@ model User {
   auditLogEntries        AuditLog[]                 @relation("AuditActor")
   pushSubscriptions      PushSubscription[]
   mealLogsReviewed       NutritionLog[]             @relation("MealReviewer")
+  mealPlansWritten       MealPlan[]                 @relation("MealPlanCoach")
   workoutTemplatesOwned  WorkoutTemplate[]           @relation("TemplateCoach")
   recipesCreated         Recipe[]                    @relation("RecipeCoach")
 
@@ -121,6 +122,7 @@ model Client {
   measurements        Measurement[]
   progressPhotos      ProgressPhoto[]
   checkIns            CheckIn[]
+  mealPlans           MealPlan[]
 
   @@index([coachId])
   @@index([status])
@@ -528,6 +530,7 @@ model Food {
   createdAt   DateTime @default(now()) @map("created_at")
 
   nutritionLogs NutritionLog[]
+  mealPlanItems MealPlanItem[]
 
   @@map("foods")
 }
@@ -551,6 +554,7 @@ model Recipe {
 
   coach         User?          @relation("RecipeCoach", fields: [coachId], references: [id])
   nutritionLogs NutritionLog[]
+  mealPlanItems MealPlanItem[]
 
   @@index([calories])
   @@map("recipes")
@@ -821,6 +825,68 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+// A day of meals a coach has written for one client.
+//
+// This is the thing coaches do over text constantly — "go with the pollo
+// asado", "chicken burrito bowl with double rice at lunch" — and the app had
+// nowhere to put it. Without a plan the nutrition screen opens on a search
+// box, which only helps somebody who already knows what they should be
+// eating.
+//
+// One active plan per client at a time. A history of superseded plans is
+// worth keeping (it shows what was asked of somebody in the weeks a change
+// actually happened), so replacing a plan deactivates the old one instead of
+// deleting it.
+model MealPlan {
+  id        String   @id @default(uuid())
+  clientId  String   @map("client_id")
+  coachId   String?  @map("coach_id")
+  name      String
+  note      String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  client Client         @relation(fields: [clientId], references: [userId], onDelete: Cascade)
+  coach  User?          @relation("MealPlanCoach", fields: [coachId], references: [id])
+  items  MealPlanItem[]
+
+  @@index([clientId, active])
+  @@map("meal_plans")
+}
+
+// One line of a plan.
+//
+// The macros are copied onto the row rather than read through recipeId at
+// display time. A recipe edited in November must not silently rewrite what a
+// client was told to eat in September, and a plan line has to keep working
+// when the recipe behind it is deleted.
+model MealPlanItem {
+  id       String  @id @default(uuid())
+  planId   String  @map("plan_id")
+  meal     String // breakfast | lunch | dinner | snack
+  position Int     @default(0)
+
+  // Set when the line came from the library, so the client can open the full
+  // recipe. Null for a line the coach typed straight in.
+  recipeId String? @map("recipe_id")
+  foodId   String? @map("food_id")
+
+  name     String
+  quantity Decimal @default(1) @db.Decimal(6, 2)
+  calories Int
+  protein  Decimal @db.Decimal(6, 2)
+  carbs    Decimal @db.Decimal(6, 2)
+  fat      Decimal @db.Decimal(6, 2)
+  note     String?
+
+  plan   MealPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  recipe Recipe?  @relation(fields: [recipeId], references: [id])
+  food   Food?    @relation(fields: [foodId], references: [id])
+
+  @@index([planId])
+  @@map("meal_plan_items")
 }
 
 model Notification {
