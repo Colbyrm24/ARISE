@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { sendPush } from '@/lib/push';
 
 export const NOTIFICATION_TYPES = ['message', 'check_in', 'progress_photo'] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -32,6 +33,12 @@ export function notificationHref(
  * and the user should not see an error — so every failure is swallowed here
  * rather than bubbling into the action.
  */
+const PUSH_TITLES: Record<NotificationType, string> = {
+  message: 'New message',
+  check_in: 'Check-in submitted',
+  progress_photo: 'New progress photo',
+};
+
 export async function notify(
   userId: string,
   type: NotificationType,
@@ -50,6 +57,29 @@ export async function notify(
     });
   } catch {
     // Intentionally silent — see the note above.
+  }
+
+  // Push is deliberately after the row is written and separately guarded: the
+  // in-app notification is the source of truth, the push is a nudge toward it.
+  // Losing the nudge is survivable; losing the record is not.
+  try {
+    const recipient = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    if (!recipient) return;
+
+    const role = recipient.role === 'client' ? 'client' : 'coach';
+    await sendPush(userId, {
+      title: PUSH_TITLES[type] ?? 'ARISE',
+      body: body.slice(0, 160),
+      url: notificationHref(type, role, meta?.clientId ?? null),
+      // One tag per type, so three messages while the phone is in a pocket
+      // collapse into one line instead of three.
+      tag: type,
+    });
+  } catch {
+    // Same contract as above — never let a nudge break the thing it announces.
   }
 }
 
