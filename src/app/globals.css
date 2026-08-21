@@ -78,6 +78,16 @@
   h1, h2, h3, h4 {
     @apply tracking-tight;
   }
+  /*
+    Page titles take Archivo's widest, heaviest cut automatically. Doing it
+    here rather than stamping a class on every heading means a new page is
+    on-brand by default, and it deliberately stops short of uppercase —
+    "Good evening, Colby." should not shout.
+  */
+  h1 {
+    font-variation-settings: 'wdth' 118, 'wght' 900;
+    letter-spacing: -0.02em;
+  }
 }
 
 /*
