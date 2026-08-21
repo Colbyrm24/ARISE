@@ -72,7 +72,7 @@ export async function ClientProgressCard({ clientId }: { clientId: string }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex items-baseline gap-3">
-          <span className="text-2xl font-semibold tabular-nums">
+          <span className="readout text-2xl text-accent glow-soft">
             {latest ? latest.weight.toFixed(1) : '—'}
           </span>
           <span className="text-sm text-muted-foreground">lb</span>
