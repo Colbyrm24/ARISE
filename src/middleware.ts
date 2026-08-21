@@ -92,8 +92,12 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+// Static files never need a session. Letting them through the matcher costs a
+// Supabase getUser() round-trip per request, and sw.js is the one that hurts:
+// the browser re-checks the service worker on every navigation, so an
+// unexcluded worker file adds an auth call to every page load in the app.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icon.png|apple-icon.png).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|robots.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?)$).*)',
   ],
 };
