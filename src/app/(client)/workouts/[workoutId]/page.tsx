@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Play } from 'lucide-react';
 import { requireClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import {
   Count,
   Cell,
 } from '@/components/ui/system-window';
+import { watchUrlFor } from '@/lib/exercise-video';
 import { logSet, completeWorkout } from './actions';
 
 function todayDateOnly() {
@@ -27,7 +28,10 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
     include: {
       workoutExercises: {
         orderBy: { order: 'asc' },
-        include: { exercise: true, sets: { orderBy: { setNumber: 'asc' } } },
+        include: {
+          exercise: { include: { video: true } },
+          sets: { orderBy: { setNumber: 'asc' } },
+        },
       },
     },
   });
@@ -100,6 +104,9 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
       <div className="flex flex-col gap-4">
         {workout.workoutExercises.map((we) => {
           const done = we.sets.filter((s) => loggedBySetId.has(s.id)).length;
+          const demo = we.exercise.video
+            ? watchUrlFor(we.exercise.video.storageProvider, we.exercise.video.externalId)
+            : null;
           return (
             <SystemWindow
               key={we.id}
@@ -108,6 +115,19 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
               meta={<Count value={done} total={we.sets.length} />}
             >
               <SystemWindowContent className="pt-4">
+                {/* Sits above the sets on purpose — if you don't know the
+                    movement, you need it before the first rep, not after. */}
+                {demo && (
+                  <a
+                    href={demo}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="readout mb-2 inline-flex items-center gap-1.5 border border-accent/40 bg-accent/[0.07] px-2 py-1 text-[10px] uppercase text-accent transition-colors hover:bg-accent/15"
+                  >
+                    <Play size={11} />
+                    Watch demo
+                  </a>
+                )}
                 <ul className="flex flex-col">
                   {we.sets.map((set, i) => {
                     const logged = loggedBySetId.get(set.id);
