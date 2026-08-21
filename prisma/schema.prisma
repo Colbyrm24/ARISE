@@ -513,12 +513,16 @@ model WorkoutLogSet {
 model Food {
   id          String   @id @default(uuid())
   name        String
-  source      String   @default("custom") // custom | recipe | external (future)
+  source      String   @default("custom") // library | custom | recipe
   calories    Int
   protein     Decimal  @db.Decimal(6, 2)
   carbs       Decimal  @db.Decimal(6, 2)
   fat         Decimal  @db.Decimal(6, 2)
   servingSize String?  @map("serving_size")
+  // Protein | Carbs | Fats | Veg | Fruit | Dairy | Meals | Snacks | Drinks |
+  // Alcohol | Condiments. Only used for browsing when there's no search term —
+  // a client who doesn't know what to type still needs a way in.
+  category    String?
   createdAt   DateTime @default(now()) @map("created_at")
 
   nutritionLogs NutritionLog[]
@@ -558,6 +562,9 @@ model NutritionLog {
   foodId    String?  @map("food_id")
   recipeId  String?  @map("recipe_id")
   quantity  Decimal  @default(1) @db.Decimal(6, 2)
+  // Set only for quick-added entries the client chose not to save as a food.
+  // Without it a one-off restaurant meal logs as an anonymous row.
+  name      String?
   calories  Int
   protein   Decimal  @db.Decimal(6, 2)
   carbs     Decimal  @db.Decimal(6, 2)
