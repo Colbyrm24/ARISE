@@ -11,6 +11,8 @@ import {
   Count,
   Cell,
 } from '@/components/ui/system-window';
+import { habitLabel, isTracked } from '@/lib/habits';
+import { toggleHabit, logSteps } from './actions';
 
 function todayDateOnly() {
   const d = new Date();
@@ -25,16 +27,6 @@ function greeting() {
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
 }
-
-const GOAL_LABELS: Record<string, string> = {
-  workout: 'Workout',
-  steps: 'Steps',
-  protein: 'Protein',
-  calories: 'Calories',
-  water: 'Water',
-  sleep: 'Sleep',
-  photo: 'Progress photo',
-};
 
 export default async function TodayPage() {
   const user = await getCurrentUser();
@@ -117,7 +109,7 @@ export default async function TodayPage() {
   const loggedDone = new Set(goalLogs.filter((g) => g.completed).map((g) => g.dailyGoalId));
 
   const rows = goals.map((goal) => {
-    const label = GOAL_LABELS[goal.goalType] ?? goal.targetValue ?? 'Goal';
+    const label = habitLabel(goal.goalType, goal.targetValue);
     let value: number | undefined;
     let total: number | undefined;
     let unit = '';
@@ -138,10 +130,22 @@ export default async function TodayPage() {
     }
 
     const hit = value !== undefined && total !== undefined && value >= total;
-    return { id: goal.id, label, value, total, unit, done: loggedDone.has(goal.id) || hit };
+    return {
+      id: goal.id,
+      label,
+      value,
+      total,
+      unit,
+      done: loggedDone.has(goal.id) || hit,
+      // Only manual habits get a checkbox. A tracked one completes off the
+      // number the app already holds, and letting it be hand-ticked would
+      // mean protein could read done on a day someone ate 40g.
+      tickable: !isTracked(goal.goalType),
+    };
   });
 
   const completedCount = rows.filter((r) => r.done).length;
+  const stepsHabit = goals.find((g) => g.goalType === 'steps') ?? null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -174,14 +178,36 @@ export default async function TodayPage() {
                   key={r.id}
                   className="flex items-center justify-between gap-4 border-b border-border/60 py-3 last:border-b-0"
                 >
-                  <span className="text-[15px]">{r.label}</span>
-                  <span className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1 text-[15px]">{r.label}</span>
+                  <span className="flex shrink-0 items-center gap-3">
                     {r.value !== undefined && r.total !== undefined ? (
                       <Count value={r.value} total={`${r.total}${r.unit}`} />
                     ) : (
                       <span className="readout text-sm text-muted-foreground">[—]</span>
                     )}
-                    <Cell on={r.done} />
+                    {/*
+                      A tickable habit has to look different from a tracked
+                      one. Rendered side by side they were identical, so the
+                      first thing a client would do is tap Steps and get
+                      nothing — the box has a pressable border, the readout
+                      does not, and the tap target is bigger than the 16px
+                      cell inside it.
+                    */}
+                    {r.tickable ? (
+                      <form action={toggleHabit} className="flex">
+                        <input type="hidden" name="goalId" value={r.id} />
+                        <button
+                          type="submit"
+                          aria-label={r.done ? `Undo ${r.label}` : `Mark ${r.label} done`}
+                          aria-pressed={r.done}
+                          className="-my-2 border border-border/70 p-2 transition-colors hover:border-accent/60 focus-visible:border-accent focus-visible:outline-none"
+                        >
+                          <Cell on={r.done} />
+                        </button>
+                      </form>
+                    ) : (
+                      <Cell on={r.done} className="opacity-60" />
+                    )}
                   </span>
                 </li>
               ))}
@@ -191,7 +217,41 @@ export default async function TodayPage() {
       ) : (
         <SystemWindow title="Goal">
           <SystemWindowContent className="pt-4 text-sm text-muted-foreground">
-            Your coach hasn’t set your daily goals yet.
+            Your coach hasn’t set your daily habits yet.
+          </SystemWindowContent>
+        </SystemWindow>
+      )}
+
+      {/*
+        Steps are typed in. There's no native app and no Health permission to
+        read from, so this is the honest version: a number copied off the
+        phone once a day. Shown whenever a steps habit exists, because without
+        it that habit can never complete.
+      */}
+      {stepsHabit && (
+        <SystemWindow title="Steps" plain>
+          <SystemWindowContent className="pt-3">
+            <form action={logSteps} className="flex flex-wrap items-center gap-3">
+              <input
+                type="number"
+                name="steps"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                defaultValue={stepLog?.steps ?? undefined}
+                placeholder="Today's steps"
+                aria-label="Today's steps"
+                className="readout h-10 w-32 rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+              />
+              <Button type="submit" size="sm" variant="outline">
+                {stepLog ? 'Update' : 'Log'}
+              </Button>
+              {stepsHabit.targetValue && (
+                <span className="readout text-[10px] uppercase text-muted-foreground">
+                  Target {Number(stepsHabit.targetValue).toLocaleString()}
+                </span>
+              )}
+            </form>
           </SystemWindowContent>
         </SystemWindow>
       )}
