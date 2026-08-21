@@ -54,7 +54,7 @@ export default async function CoachInboxPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+      <h1 className="display text-2xl">Inbox</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         {rows.filter((r) => r.unread > 0).length} conversation
         {rows.filter((r) => r.unread > 0).length === 1 ? '' : 's'} need a reply
@@ -86,8 +86,8 @@ export default async function CoachInboxPage() {
                       </p>
                     </div>
                     {unread > 0 && (
-                      <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                        {unread}
+                      <span className="readout text-[11px] text-accent glow-soft">
+                        [{unread}]
                       </span>
                     )}
                   </Link>
