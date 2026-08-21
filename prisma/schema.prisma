@@ -565,6 +565,8 @@ model NutritionLog {
   // Set only for quick-added entries the client chose not to save as a food.
   // Without it a one-off restaurant meal logs as an anonymous row.
   name      String?
+  // Private bucket path, never a public URL — see lib/meal-photos.ts.
+  photoPath String?  @map("photo_path")
   calories  Int
   protein   Decimal  @db.Decimal(6, 2)
   carbs     Decimal  @db.Decimal(6, 2)
