@@ -16,6 +16,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
         border: 'hsl(var(--border))',
@@ -52,11 +53,23 @@ const config: Config = {
           foreground: 'hsl(var(--card-foreground))',
         },
       },
+      /*
+        Nothing in this product is rounded past 2px — including pills, dots
+        and avatars, which is why `full` is overridden too. Collapsing the
+        whole scale here squares the entire app without editing the ~60
+        existing `rounded-*` class usages. If a genuinely circular element
+        is ever needed, use an explicit `[border-radius:9999px]`.
+      */
       borderRadius: {
+        none: '0px',
+        sm: 'var(--radius)',
+        DEFAULT: 'var(--radius)',
+        md: 'var(--radius)',
         lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 4px)',
-        sm: 'calc(var(--radius) - 8px)',
-        xl: 'calc(var(--radius) + 6px)',
+        xl: 'var(--radius)',
+        '2xl': 'var(--radius)',
+        '3xl': 'var(--radius)',
+        full: 'var(--radius)',
       },
       keyframes: {
         'accordion-down': {
