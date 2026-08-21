@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/system-window';
 import { signMealPhotoUrls } from '@/lib/meal-photos';
 import { MealPhotoLogger } from '@/components/meal-photo-logger';
+import { MealPlanCard } from '@/components/meal-plan-card';
+import { getActivePlan } from '@/lib/meal-plans';
 import { logMeal, logFood, quickAddFood, removeMealLog } from './actions';
 
 function todayDateOnly() {
@@ -52,7 +54,7 @@ export default async function NutritionPage({
   const q = (searchParams.q ?? '').trim();
   const cat = searchParams.cat ?? '';
 
-  const [target, todayLogs, recipes, foods] = await Promise.all([
+  const [target, todayLogs, recipes, foods, plan] = await Promise.all([
     prisma.nutritionTarget.findFirst({
       where: { clientId: user.id, effectiveDate: { lte: today } },
       orderBy: { effectiveDate: 'desc' },
@@ -76,10 +78,18 @@ export default async function NutritionPage({
       orderBy: [{ name: 'asc' }],
       take: q || cat ? 60 : 12,
     }),
+    getActivePlan(user.id),
   ]);
 
   const photoUrls = await signMealPhotoUrls(
     todayLogs.map((l) => l.photoPath).filter((p): p is string => Boolean(p))
+  );
+
+  // Matched on name because a plan line and the log it produced carry the
+  // same one. Not an id join: a client who logs the same meal from the photo
+  // logger or the food search should still see that line come off the plan.
+  const loggedNames = new Set(
+    todayLogs.map((l) => (l.name ?? l.recipe?.title ?? l.food?.name ?? '').toLowerCase()).filter(Boolean)
   );
 
   const caloriesEaten = todayLogs.reduce((sum, l) => sum + l.calories, 0);
@@ -173,6 +183,15 @@ export default async function NutritionPage({
         doesn't browses a category. Plain GET form so it works with no JS and
         the result is a linkable URL.
       */}
+      {/*
+        The plan comes before every logging control on this page. Somebody
+        opening the nutrition screen at 11am is asking what to eat, not
+        recording what they already ate — and until now the first thing they
+        met was a search box, which only helps a person who already knows the
+        answer.
+      */}
+      {plan && <MealPlanCard plan={plan} loggedNames={loggedNames} />}
+
       {/*
         First, because it's the way most meals actually get logged. Searching a
         library assumes you already know what a portion weighs; a photo doesn't
