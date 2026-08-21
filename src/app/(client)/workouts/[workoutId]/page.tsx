@@ -1,11 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { requireClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  SystemWindow,
+  SystemWindowContent,
+  Count,
+  Cell,
+} from '@/components/ui/system-window';
 import { logSet, completeWorkout } from './actions';
 
 function todayDateOnly() {
@@ -45,80 +50,119 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
   const loggedBySetId = new Map(todayLog?.sets.map((s) => [s.workoutSetId, s]) ?? []);
   const isComplete = Boolean(todayLog?.completedAt);
 
+  // Session-level progress, so the client can see how much is left without
+  // counting rows themselves.
+  const totalSets = workout.workoutExercises.reduce((n, we) => n + we.sets.length, 0);
+  const doneSets = workout.workoutExercises.reduce(
+    (n, we) => n + we.sets.filter((s) => loggedBySetId.has(s.id)).length,
+    0
+  );
+
+  /*
+    Narrow on purpose. This row has to fit a set number, the target, two
+    inputs, the log button and the completion cell inside a phone's width —
+    at w-20 the cell was pushed outside the panel border.
+  */
+  const field =
+    'readout h-9 w-14 shrink-0 rounded-none border border-input bg-secondary/40 px-2 text-sm ' +
+    'transition-colors focus-visible:border-accent/60 focus-visible:outline-none ' +
+    'focus-visible:ring-1 focus-visible:ring-accent/50 disabled:opacity-50';
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Link
         href="/workouts"
-        className="inline-flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="readout inline-flex w-fit items-center gap-1.5 text-[11px] uppercase text-muted-foreground transition-colors hover:text-accent"
       >
-        <ArrowLeft size={15} />
+        <ArrowLeft size={14} />
         Workouts
       </Link>
 
-      <header className="flex items-center justify-between">
+      <header className="flex items-end justify-between gap-3 border-b border-border pb-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Day {workout.dayOrder}
+          <p className="readout text-[11px] uppercase text-muted-foreground">
+            Session {String(workout.dayOrder).padStart(2, '0')}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold">{workout.name}</h1>
+          <h1 className="display mt-1.5 text-2xl">{workout.name}</h1>
         </div>
-        {isComplete && <Badge variant="success">Completed</Badge>}
+        {isComplete ? (
+          <Badge variant="success">Complete</Badge>
+        ) : (
+          <Count value={doneSets} total={totalSets} className="text-base" />
+        )}
       </header>
 
+      {/*
+        One window per exercise. Stacking the lit edges is deliberate — a
+        session reads as a column of panels, each one closing out as its sets
+        fill in.
+      */}
       <div className="flex flex-col gap-4">
-        {workout.workoutExercises.map((we) => (
-          <Card key={we.id}>
-            <CardContent className="flex flex-col gap-3 pt-6">
-              <p className="text-sm font-medium">{we.exercise.name}</p>
-              <ul className="flex flex-col gap-2">
-                {we.sets.map((set, i) => {
-                  const logged = loggedBySetId.get(set.id);
-                  return (
-                    <li key={set.id} className="flex items-center gap-3">
-                      <span className="w-14 shrink-0 text-xs text-muted-foreground">Set {i + 1}</span>
-                      <span className="w-24 shrink-0 text-xs text-muted-foreground">
-                        Target: {set.targetReps ?? '—'}
-                        {set.targetWeight ? ` @ ${Number(set.targetWeight)}lb` : ''}
-                      </span>
-                      <form action={logSet} className="flex flex-1 items-center gap-2">
-                        <input type="hidden" name="workoutId" value={workout.id} />
-                        <input type="hidden" name="workoutSetId" value={set.id} />
-                        <input
-                          type="number"
-                          step="0.5"
-                          name="actualWeight"
-                          placeholder="lb"
-                          disabled={isComplete}
-                          defaultValue={logged?.actualWeight ? Number(logged.actualWeight) : undefined}
-                          className="h-9 w-20 rounded-lg border border-input bg-secondary/40 px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                        />
-                        <input
-                          type="number"
-                          name="actualReps"
-                          placeholder="reps"
-                          disabled={isComplete}
-                          defaultValue={logged?.actualReps ?? undefined}
-                          className="h-9 w-20 rounded-lg border border-input bg-secondary/40 px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                        />
-                        {!isComplete && (
-                          <button
-                            type="submit"
-                            className="text-xs font-medium text-accent hover:underline"
-                          >
-                            Log
-                          </button>
-                        )}
-                        {logged && (
-                          <CheckCircle2 size={15} className="text-success" />
-                        )}
-                      </form>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
-        ))}
+        {workout.workoutExercises.map((we) => {
+          const done = we.sets.filter((s) => loggedBySetId.has(s.id)).length;
+          return (
+            <SystemWindow
+              key={we.id}
+              plain
+              title={we.exercise.name}
+              meta={<Count value={done} total={we.sets.length} />}
+            >
+              <SystemWindowContent className="pt-4">
+                <ul className="flex flex-col">
+                  {we.sets.map((set, i) => {
+                    const logged = loggedBySetId.get(set.id);
+                    return (
+                      <li
+                        key={set.id}
+                        className="flex items-center gap-2 border-b border-border/50 py-2.5 last:border-b-0"
+                      >
+                        <span className="readout w-7 shrink-0 text-[11px] uppercase text-muted-foreground">
+                          {String(i + 1).padStart(2, '0')}
+                        </span>
+                        <span className="readout min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                          {set.targetReps ?? '—'}
+                          {set.targetWeight ? ` × ${Number(set.targetWeight)}` : ''}
+                        </span>
+                        <form action={logSet} className="flex shrink-0 items-center gap-1.5">
+                          <input type="hidden" name="workoutId" value={workout.id} />
+                          <input type="hidden" name="workoutSetId" value={set.id} />
+                          <input
+                            type="number"
+                            step="0.5"
+                            name="actualWeight"
+                            placeholder="lb"
+                            disabled={isComplete}
+                            defaultValue={
+                              logged?.actualWeight ? Number(logged.actualWeight) : undefined
+                            }
+                            className={field}
+                          />
+                          <input
+                            type="number"
+                            name="actualReps"
+                            placeholder="reps"
+                            disabled={isComplete}
+                            defaultValue={logged?.actualReps ?? undefined}
+                            className={field}
+                          />
+                          {!isComplete && (
+                            <button
+                              type="submit"
+                              className="readout shrink-0 px-0.5 text-[11px] uppercase text-accent transition-opacity hover:opacity-70"
+                            >
+                              Log
+                            </button>
+                          )}
+                          <Cell on={Boolean(logged)} />
+                        </form>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </SystemWindowContent>
+            </SystemWindow>
+          );
+        })}
       </div>
 
       {!isComplete && todayLog && (
@@ -126,7 +170,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
           <input type="hidden" name="workoutLogId" value={todayLog.id} />
           <input type="hidden" name="workoutId" value={workout.id} />
           <Button type="submit" className="w-full">
-            Finish Workout
+            Finish workout
           </Button>
         </form>
       )}
