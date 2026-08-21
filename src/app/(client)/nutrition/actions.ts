@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
 import {
@@ -9,6 +10,35 @@ import {
   uploadMealPhoto,
   removeMealPhoto,
 } from '@/lib/meal-photos';
+import { estimateMealFromPhoto } from '@/lib/meal-estimate';
+
+/** What the photo logger tells the client, so the screen can say something real. */
+export type PhotoLogResult =
+  | {
+      ok: true;
+      name: string;
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+      confidence: 'high' | 'medium' | 'low';
+    }
+  /** `saved` distinguishes "we kept your photo, just no numbers" from "nothing happened". */
+  | { ok: false; error: string; saved?: boolean };
+
+/**
+ * The photo input converts everything to JPEG in the browser before upload,
+ * which is what makes an iPhone HEIC readable at all. This maps whatever
+ * arrives to a type the vision API accepts, defaulting to JPEG rather than
+ * refusing — a mislabelled JPEG is far more likely than a genuinely exotic
+ * format getting this far past isAllowedMealPhoto().
+ */
+function mediaTypeFor(type: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
+  if (type === 'image/png') return 'image/png';
+  if (type === 'image/webp') return 'image/webp';
+  if (type === 'image/gif') return 'image/gif';
+  return 'image/jpeg';
+}
 
 function todayDateOnly() {
   const d = new Date();
@@ -52,6 +82,7 @@ export async function logMeal(formData: FormData) {
       date: todayDateOnly(),
       meal: mealOf(formData),
       recipeId: recipe.id,
+      source: 'recipe',
       quantity,
       calories: Math.round(recipe.calories * quantity),
       protein: Number(recipe.protein) * quantity,
@@ -78,6 +109,7 @@ export async function logFood(formData: FormData) {
       date: todayDateOnly(),
       meal: mealOf(formData),
       foodId: food.id,
+      source: 'library',
       quantity,
       calories: Math.round(food.calories * quantity),
       protein: Number(food.protein) * quantity,
@@ -140,9 +172,11 @@ export async function quickAddFood(formData: FormData) {
   // losing the client's numbers over, so it degrades to a log with no photo.
   let photoPath: string | null = null;
   const photo = formData.get('photo');
-  if (photo instanceof File && photo.size > 0 && !isAllowedMealPhoto(photo)) {
-    const path = mealPhotoPath(user.id, photo.name);
-    const err = await uploadMealPhoto(path, photo);
+  const photoUsable =
+    photo instanceof File && photo.size > 0 && isAllowedMealPhoto(photo) === null;
+  if (photoUsable) {
+    const path = mealPhotoPath(user.id, (photo as File).name);
+    const err = await uploadMealPhoto(path, photo as File);
     if (!err) photoPath = path;
   }
 
@@ -161,6 +195,115 @@ export async function quickAddFood(formData: FormData) {
     },
   });
   refresh();
+}
+
+/**
+ * Log a meal from a photograph, with the numbers read off the photo.
+ *
+ * This is the flow the whole app was missing. Every other logging path asks
+ * the client to already know what they ate in grams, which is exactly the
+ * thing they're paying a coach to work out for them — so in practice they
+ * skipped the app and texted a photo instead.
+ *
+ * Two rules shape the error handling here:
+ *
+ *  - The log always saves. A read that fails, a model that's down, a photo of
+ *    a dog: none of those are allowed to cost the client the entry, because
+ *    the photo itself is still evidence the coach can use.
+ *  - Nothing is presented as final. The row lands as `estimated` and shows up
+ *    in the coach's queue. A number nobody has checked is a starting point,
+ *    and the client can tell the difference between a guess and their coach.
+ */
+export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResult> {
+  const user = await requireClient();
+
+  const photo = formData.get('photo');
+  if (!(photo instanceof File) || photo.size === 0) {
+    return { ok: false, error: 'Pick a photo first.' };
+  }
+  // Previously an invalid file was skipped in silence and the log saved with
+  // no photo attached. That was survivable when the photo was decoration; now
+  // the photo is where the numbers come from, so it has to be said out loud.
+  const badPhoto = isAllowedMealPhoto(photo);
+  if (badPhoto) return { ok: false, error: badPhoto };
+
+  const description = ((formData.get('description') as string | null) ?? '').trim().slice(0, 300);
+
+  // A read costs money and a stuck loop could run all night. This is not a
+  // security boundary, just a ceiling far above anything a person eats.
+  const today = todayDateOnly();
+  const readsToday = await prisma.nutritionLog.count({
+    where: { clientId: user.id, date: today, source: 'photo' },
+  });
+  if (readsToday >= 30) {
+    return { ok: false, error: "That's a lot of photos for one day — log the rest by hand." };
+  }
+
+  const path = mealPhotoPath(user.id, photo.name);
+  const uploadError = await uploadMealPhoto(path, photo);
+  if (uploadError) return { ok: false, error: "Couldn't upload that photo. Try again." };
+
+  const bytes = Buffer.from(await photo.arrayBuffer());
+  const result = await estimateMealFromPhoto({
+    base64: bytes.toString('base64'),
+    mediaType: mediaTypeFor(photo.type),
+    description: description || null,
+  });
+
+  // The read failed. Keep the photo and the row so the coach still sees the
+  // meal, and leave the numbers at zero rather than inventing any — a wrong
+  // number in a day's total is worse than a visible gap.
+  if (!result.ok) {
+    await prisma.nutritionLog.create({
+      data: {
+        clientId: user.id,
+        date: today,
+        meal: mealOf(formData),
+        name: description || 'Meal photo',
+        quantity: 1,
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        photoPath: path,
+        source: 'photo',
+        reviewState: 'failed',
+        estimate: { failed: result.reason, message: result.message },
+      },
+    });
+    refresh();
+    return { ok: false, error: result.message, saved: true };
+  }
+
+  const e = result.estimate;
+  await prisma.nutritionLog.create({
+    data: {
+      clientId: user.id,
+      date: today,
+      meal: mealOf(formData),
+      name: e.name,
+      quantity: 1,
+      calories: e.calories,
+      protein: e.protein,
+      carbs: e.carbs,
+      fat: e.fat,
+      photoPath: path,
+      source: 'photo',
+      reviewState: 'estimated',
+      estimate: e as unknown as Prisma.InputJsonValue,
+    },
+  });
+  refresh();
+
+  return {
+    ok: true,
+    name: e.name,
+    calories: e.calories,
+    protein: e.protein,
+    carbs: e.carbs,
+    fat: e.fat,
+    confidence: e.confidence,
+  };
 }
 
 export async function removeMealLog(formData: FormData) {
