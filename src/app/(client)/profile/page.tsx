@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton } from '@/components/client/sign-out-button';
+import { PushToggle } from '@/components/push-toggle';
 
 const statusLabels: Record<string, string> = {
   lead: 'Lead',
@@ -31,6 +32,12 @@ export default async function ProfilePage() {
       <header>
         <h1 className="text-2xl font-semibold">Profile</h1>
       </header>
+
+      <Card>
+        <CardContent className="pt-6">
+          <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="flex items-center gap-4 pt-6">
