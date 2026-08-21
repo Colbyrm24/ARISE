@@ -1,10 +1,11 @@
-import { Dumbbell, Trash2 } from 'lucide-react';
+import { Dumbbell, Trash2, Video } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { createExercise, deleteExercise } from './actions';
+import { watchUrlFor } from '@/lib/exercise-video';
+import { createExercise, deleteExercise, setExerciseVideo } from './actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -31,6 +32,7 @@ export default async function CoachExercisesPage({
     },
     orderBy: [{ musclePrimary: 'asc' }, { name: 'asc' }],
     take: 200,
+    include: { video: true },
   });
 
   const [allMuscles, allEquipment, total] = await Promise.all([
@@ -168,7 +170,11 @@ export default async function CoachExercisesPage({
         </Card>
       ) : (
         <ul className="flex flex-col gap-3">
-          {exercises.map((ex) => (
+          {exercises.map((ex) => {
+            const videoUrl = ex.video
+              ? watchUrlFor(ex.video.storageProvider, ex.video.externalId)
+              : null;
+            return (
             <li key={ex.id}>
               <Card>
                 <CardContent className="flex items-start justify-between gap-4 pt-6">
@@ -187,6 +193,32 @@ export default async function CoachExercisesPage({
                     {ex.instructions && (
                       <p className="text-xs text-muted-foreground">{ex.instructions}</p>
                     )}
+
+                    {/* One demo link per exercise. Paste a YouTube, Vimeo or
+                        direct video URL; submitting it empty clears it. */}
+                    <form action={setExerciseVideo} className="mt-1 flex items-center gap-2">
+                      <input type="hidden" name="exerciseId" value={ex.id} />
+                      <Video size={14} className={videoUrl ? 'text-accent' : 'text-muted-foreground'} />
+                      <input
+                        name="videoUrl"
+                        defaultValue={videoUrl ?? ''}
+                        placeholder="Demo video URL"
+                        className="readout h-8 w-full max-w-xs rounded-none border border-input bg-secondary/40 px-2 text-[11px] focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                      />
+                      <Button type="submit" variant="ghost" size="sm">
+                        Save
+                      </Button>
+                      {videoUrl && (
+                        <a
+                          href={videoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="readout shrink-0 text-[10px] uppercase text-accent hover:underline"
+                        >
+                          Watch
+                        </a>
+                      )}
+                    </form>
                   </div>
                   <form action={deleteExercise}>
                     <input type="hidden" name="id" value={ex.id} />
@@ -201,7 +233,8 @@ export default async function CoachExercisesPage({
                 </CardContent>
               </Card>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </div>
