@@ -76,7 +76,7 @@ export default async function ProgressPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <h1 className="text-2xl font-semibold">Progress</h1>
+        <h1 className="display text-2xl">Progress</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Weigh in first thing, same conditions every day.
         </p>
@@ -85,7 +85,7 @@ export default async function ProgressPage() {
       <Card>
         <CardContent className="flex flex-col gap-4 pt-6">
           <div className="flex items-baseline gap-3">
-            <span className="text-3xl font-semibold tabular-nums">
+            <span className="readout text-3xl text-accent glow-soft">
               {latest ? latest.weight.toFixed(1) : '—'}
             </span>
             <span className="text-sm text-muted-foreground">lb</span>
