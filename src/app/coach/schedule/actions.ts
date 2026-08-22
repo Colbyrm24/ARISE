@@ -78,7 +78,7 @@ export async function cancelBookingAsCoach(formData: FormData) {
   const profile = await prisma.profile.findUnique({ where: { userId: booking.clientId } });
   await notify(
     booking.clientId,
-    'check_in',
+    'booking',
     `Your call on ${formatSlotFull(booking.startsAt, timeZoneOf(profile))} was cancelled.`
   );
   refresh();

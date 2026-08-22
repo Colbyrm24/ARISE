@@ -49,7 +49,7 @@ export default async function CoachSchedulePage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1>Schedule</h1>
+        <h1 className="display text-2xl">Schedule</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           When you&apos;re open, and who&apos;s booked in.
         </p>
