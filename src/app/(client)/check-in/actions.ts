@@ -3,12 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { CHECK_IN_QUESTIONS, weekOf, formatWeek, type CheckInAnswers } from '@/lib/check-in';
 import { notifyCoach, displayName } from '@/lib/notifications';
 
 export async function submitCheckIn(formData: FormData) {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
   const answers: CheckInAnswers = {};
 
   for (const q of CHECK_IN_QUESTIONS) {

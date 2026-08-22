@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system-window';
@@ -12,7 +12,7 @@ export default async function CheckInPage({
 }: {
   searchParams: { saved?: string };
 }) {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
   const week = weekOf();
 
   const [current, previous] = await Promise.all([
