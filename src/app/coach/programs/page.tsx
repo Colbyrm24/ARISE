@@ -1,11 +1,11 @@
 import Link from 'next/link';
-import { ClipboardList, ChevronRight, Trash2 } from 'lucide-react';
+import { ClipboardList, ChevronRight, Trash2, Download } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { createTemplate, deleteTemplate } from './actions';
+import { createTemplate, deleteTemplate, loadCoachProgram } from './actions';
 
 export default async function CoachProgramsPage() {
   const templates = await prisma.workoutTemplate.findMany({
@@ -24,6 +24,30 @@ export default async function CoachProgramsPage() {
           client — either way it starts here.
         </p>
       </header>
+
+      {/* One press builds the real split — four sessions, every movement,
+          rest, notes, the cardio types and the rest-day messages. It exists so
+          a program that took an afternoon in another tool takes a click here.
+          Safe to press twice: nothing is duplicated or overwritten. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Start from your program</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Builds Transformation Program exactly as you run it — the four sessions with every
+            movement, set and rest, your notes on each one, walking and the other cardio types, and
+            the rest-day messages. Pressing it again repairs anything missing and changes nothing
+            else.
+          </p>
+          <form action={loadCoachProgram}>
+            <Button type="submit" size="sm" className="w-full shrink-0 sm:w-auto">
+              <Download size={15} />
+              Load my program
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

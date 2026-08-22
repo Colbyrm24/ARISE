@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { seedCoachProgram } from '@/lib/program-seed';
 
 /**
  * Server Actions for the top-level Programs list. A "template" here covers
@@ -45,4 +46,20 @@ export async function deleteTemplate(formData: FormData) {
   }
 
   revalidatePath('/coach/programs');
+}
+
+/**
+ * Builds Colby's real program into the database — the four sessions with
+ * every movement, rest and note, the cardio types, the rest-day messages and
+ * the repeating week.
+ *
+ * Idempotent, so the button can be pressed twice with no consequence, and it
+ * never overwrites a video link or a week the coach has since rearranged.
+ */
+export async function loadCoachProgram() {
+  const coach = await requireCoach();
+  const result = await seedCoachProgram(coach.id);
+  revalidatePath('/coach/programs');
+  revalidatePath('/coach/exercises');
+  redirect(`/coach/programs/${result.templateId}`);
 }
