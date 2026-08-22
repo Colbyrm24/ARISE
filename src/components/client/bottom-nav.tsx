@@ -21,7 +21,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 backdrop-blur">
+    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-accent/25 bg-background/95 shadow-[0_-1px_0_hsl(var(--accent)/0.35),0_-14px_46px_-10px_hsl(var(--system)/0.7)] backdrop-blur">
       <ul className="mx-auto flex max-w-md items-stretch justify-between px-2 pb-[env(safe-area-inset-bottom)]">
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
@@ -31,13 +31,20 @@ export function BottomNav() {
                 href={href}
                 className={cn(
                   'relative flex flex-col items-center gap-1 py-3 text-[11px] font-medium transition-colors',
-                  active ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
+                  active ? 'glow-soft text-accent' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 {active && (
-                  <span className="absolute top-1.5 h-1 w-1 rounded-full bg-accent shadow-[0_0_6px_hsl(var(--accent)/0.8)]" />
+                  <>
+                    {/* The lit tick, plus the pool of light it sits in. */}
+                    <span className="absolute top-1.5 h-1 w-1 rounded-full bg-accent shadow-[0_0_8px_2px_hsl(var(--accent)),0_0_22px_5px_hsl(var(--system)/0.8)]" />
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-x-1 bottom-0 top-0 bg-[radial-gradient(ellipse_80%_70%_at_50%_0%,hsl(var(--accent)/0.22),transparent_72%)]"
+                    />
+                  </>
                 )}
-                <Icon size={22} strokeWidth={active ? 2.25 : 1.75} />
+                <Icon size={22} strokeWidth={active ? 2.25 : 1.75} className={active ? 'glow-ink' : undefined} />
                 {label}
               </Link>
             </li>
