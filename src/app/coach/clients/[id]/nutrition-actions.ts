@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { coachOwnsClient } from '@/lib/coach-guard';
 
 function todayDateOnly() {
   const d = new Date();
@@ -12,7 +13,7 @@ function todayDateOnly() {
 
 /** Sets a new calorie/macro target for a client, effective today. */
 export async function setNutritionTarget(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const clientId = formData.get('clientId') as string | null;
   const calories = Number(formData.get('calories'));
@@ -28,6 +29,7 @@ export async function setNutritionTarget(formData: FormData) {
   ) {
     return;
   }
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   await prisma.nutritionTarget.create({
     data: { clientId, calories, protein, carbs, fat, effectiveDate: todayDateOnly() },

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { coachOwnsClient } from '@/lib/coach-guard';
 import { isHabitType } from '@/lib/habits';
 import { notify } from '@/lib/notifications';
 
@@ -19,12 +20,13 @@ function refresh(clientId: string) {
 }
 
 export async function addHabit(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const clientId = formData.get('clientId') as string | null;
   const goalType = ((formData.get('goalType') as string | null) ?? '').trim();
   const rawTarget = ((formData.get('targetValue') as string | null) ?? '').trim().slice(0, 80);
   if (!clientId || !isHabitType(goalType)) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   // A custom habit with no description would render as the word "Habit" and
   // tell the client nothing, so it isn't worth creating.
@@ -50,7 +52,7 @@ export async function addHabit(formData: FormData) {
     data: { clientId, goalType, targetValue: rawTarget || null, active: true },
   });
 
-  await notify(clientId, 'check_in', 'Your coach added a daily habit.');
+  await notify(clientId, 'habit', 'Your coach added a daily habit.');
   refresh(clientId);
 }
 
@@ -62,13 +64,14 @@ export async function addHabit(formData: FormData) {
  * swapped out in week five.
  */
 export async function retireHabit(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const goalId = formData.get('goalId') as string | null;
   if (!goalId) return;
 
   const goal = await prisma.dailyGoal.findUnique({ where: { id: goalId } });
   if (!goal) return;
+  if (!(await coachOwnsClient(coach.id, goal.clientId))) return;
 
   await prisma.dailyGoal.update({ where: { id: goalId }, data: { active: false } });
   refresh(goal.clientId);
@@ -83,11 +86,12 @@ export async function retireHabit(formData: FormData) {
  * written by nothing, so a steps habit could never complete.
  */
 export async function setSteps(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const clientId = formData.get('clientId') as string | null;
   const raw = (formData.get('steps') as string | null)?.trim();
   if (!clientId || !raw) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   const steps = Number(raw);
   if (!Number.isFinite(steps) || steps < 0) return;

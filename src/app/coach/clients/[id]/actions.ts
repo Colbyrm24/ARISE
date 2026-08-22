@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { coachOwnsClient } from '@/lib/coach-guard';
 import type { ClientStatus } from '@prisma/client';
 
 /**
@@ -12,11 +13,12 @@ import type { ClientStatus } from '@prisma/client';
  */
 
 export async function updateClientStatus(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const clientId = formData.get('clientId') as string | null;
   const status = formData.get('status') as ClientStatus | null;
   if (!clientId || !status) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   await prisma.client.update({
     where: { userId: clientId },
@@ -34,6 +36,7 @@ export async function addCoachNote(formData: FormData) {
   const clientId = formData.get('clientId') as string | null;
   const body = (formData.get('body') as string | null)?.trim();
   if (!clientId || !body) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   await prisma.coachNote.create({
     data: {
@@ -47,15 +50,18 @@ export async function addCoachNote(formData: FormData) {
 }
 
 export async function toggleCoachNotePin(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const noteId = formData.get('noteId') as string | null;
   const clientId = formData.get('clientId') as string | null;
   const currentlyPinned = formData.get('pinned') === 'true';
   if (!noteId || !clientId) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
-  await prisma.coachNote.update({
-    where: { id: noteId },
+  // Scoped by clientId as well as id, so a note id from another client's
+  // record can't be pinned through this client's form.
+  await prisma.coachNote.updateMany({
+    where: { id: noteId, clientId },
     data: { pinned: !currentlyPinned },
   });
 

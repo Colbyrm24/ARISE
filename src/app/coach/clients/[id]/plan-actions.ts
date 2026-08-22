@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { coachOwnsClient } from '@/lib/coach-guard';
 import { isMealSlot } from '@/lib/meal-plans';
 import { notify } from '@/lib/notifications';
 
@@ -40,6 +41,7 @@ export async function addPlanItem(formData: FormData) {
   const clientId = formData.get('clientId') as string | null;
   const meal = ((formData.get('meal') as string | null) ?? '').trim();
   if (!clientId || !isMealSlot(meal)) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   const recipeId = ((formData.get('recipeId') as string | null) ?? '').trim() || null;
   const foodId = ((formData.get('foodId') as string | null) ?? '').trim() || null;
@@ -106,7 +108,7 @@ export async function addPlanItem(formData: FormData) {
 }
 
 export async function removePlanItem(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
   const itemId = formData.get('itemId') as string | null;
   if (!itemId) return;
 
@@ -115,6 +117,7 @@ export async function removePlanItem(formData: FormData) {
     include: { plan: { select: { clientId: true } } },
   });
   if (!item) return;
+  if (!(await coachOwnsClient(coach.id, item.plan.clientId))) return;
 
   await prisma.mealPlanItem.delete({ where: { id: itemId } });
   refresh(item.plan.clientId);
@@ -122,12 +125,13 @@ export async function removePlanItem(formData: FormData) {
 
 /** Renames the plan, or leaves the client a note about how to run it. */
 export async function updatePlan(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
   const planId = formData.get('planId') as string | null;
   if (!planId) return;
 
   const plan = await prisma.mealPlan.findUnique({ where: { id: planId } });
   if (!plan) return;
+  if (!(await coachOwnsClient(coach.id, plan.clientId))) return;
 
   const name = ((formData.get('name') as string | null) ?? '').trim().slice(0, 80);
   const note = ((formData.get('note') as string | null) ?? '').trim().slice(0, 400);
@@ -147,7 +151,7 @@ export async function updatePlan(formData: FormData) {
  * for a half-built day. This is the point at which they're told.
  */
 export async function publishPlan(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
   const planId = formData.get('planId') as string | null;
   if (!planId) return;
 
@@ -156,6 +160,7 @@ export async function publishPlan(formData: FormData) {
     include: { _count: { select: { items: true } } },
   });
   if (!plan || plan._count.items === 0) return;
+  if (!(await coachOwnsClient(coach.id, plan.clientId))) return;
 
   await notify(plan.clientId, 'nutrition', `Your coach set up "${plan.name}".`);
   refresh(plan.clientId);
@@ -169,12 +174,13 @@ export async function publishPlan(formData: FormData) {
  * this becomes a DELETE.
  */
 export async function retirePlan(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
   const planId = formData.get('planId') as string | null;
   if (!planId) return;
 
   const plan = await prisma.mealPlan.findUnique({ where: { id: planId } });
   if (!plan) return;
+  if (!(await coachOwnsClient(coach.id, plan.clientId))) return;
 
   await prisma.mealPlan.update({ where: { id: planId }, data: { active: false } });
   refresh(plan.clientId);

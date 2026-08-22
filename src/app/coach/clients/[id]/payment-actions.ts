@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { coachOwnsClient } from '@/lib/coach-guard';
 import { stripe } from '@/lib/stripe';
 import { getSiteUrl } from '@/lib/site-url';
 import { finalizeManualPaymentLink } from '@/lib/payment-finalize';
@@ -21,7 +22,7 @@ const FREQUENCY_TO_INTERVAL: Record<Exclude<PaymentFrequency, 'one_time'>, { int
  * knows exactly which client, plan, and agreement template it belongs to.
  */
 export async function createPaymentLink(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const clientId = formData.get('clientId') as string | null;
   const planId = formData.get('planId') as string | null;
@@ -33,6 +34,7 @@ export async function createPaymentLink(formData: FormData) {
   const manualCheckoutUrl = (formData.get('manualCheckoutUrl') as string | null)?.trim();
 
   if (!clientId || !planId || !agreementTemplateId || !provider || !startDateRaw) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   const plan = await prisma.plan.findUnique({ where: { id: planId } });
   if (!plan) return;
@@ -120,11 +122,12 @@ export async function createPaymentLink(formData: FormData) {
 
 /** Coach-confirmed payment for providers without a live webhook yet. */
 export async function markPaymentLinkPaid(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const paymentLinkId = formData.get('paymentLinkId') as string | null;
   const clientId = formData.get('clientId') as string | null;
   if (!paymentLinkId || !clientId) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   await finalizeManualPaymentLink(paymentLinkId);
 
