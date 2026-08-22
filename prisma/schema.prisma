@@ -48,6 +48,8 @@ model User {
   healthToken            HealthToken?               @relation("HealthTokenClient")
   workoutTemplatesOwned  WorkoutTemplate[]           @relation("TemplateCoach")
   recipesCreated         Recipe[]                    @relation("RecipeCoach")
+  cardioTypes            CardioType[]                @relation("CardioCoach")
+  autoMessages           AutoMessage[]               @relation("AutoMessageCoach")
 
   @@map("users")
 }
@@ -149,6 +151,8 @@ model Client {
   progressPhotos      ProgressPhoto[]
   checkIns            CheckIn[]
   mealPlans           MealPlan[]
+  scheduledItems      ScheduledItem[]
+  cardioLogs          CardioLog[]
 
   @@index([coachId])
   @@index([status])
@@ -402,6 +406,10 @@ model Exercise {
   id               String   @id @default(uuid())
   name             String
   videoId          String?  @map("video_id")
+  // A link the coach pastes — YouTube, Vimeo, a Supabase object, anything.
+  // ExerciseVideo above is the uploaded-and-transcoded path; this is the one
+  // that gets a library of 60 movements demonstrated in an afternoon.
+  videoUrl         String?  @map("video_url")
   musclePrimary    String   @map("muscle_primary")
   muscleSecondary  String[] @map("muscle_secondary")
   equipment        String
@@ -432,6 +440,8 @@ model WorkoutTemplate {
   coach          User            @relation("TemplateCoach", fields: [coachId], references: [id])
   workouts       Workout[]
   clientPrograms ClientProgram[]
+  programDays    ProgramDay[]
+  scheduledItems ScheduledItem[]
 
   @@map("workout_templates")
 }
@@ -442,11 +452,170 @@ model Workout {
   name       String
   dayOrder   Int      @map("day_order")
 
+  // The header of a workout as a client actually reads it: how long to set
+  // aside, what they need around them, and what the coach wants out of the
+  // session. Without these the screen is a bare list of movements.
+  estMinutes   Int?     @map("est_minutes")
+  equipment    String[]
+  instructions String?
+
   template         WorkoutTemplate?  @relation(fields: [templateId], references: [id])
   workoutExercises WorkoutExercise[]
   workoutLogs      WorkoutLog[]
+  programDays      ProgramDay[]
+  scheduledItems   ScheduledItem[]
 
   @@map("workouts")
+}
+
+// ---------------------------------------------------------------------------
+// PROGRAMMING — a week described once, then stamped across months
+// ---------------------------------------------------------------------------
+
+// One weekday of a template's repeating week.
+//
+// This is the piece that turns a handful of workouts into a program. A coach
+// lays out Monday through Sunday one time — this workout here, cardio there,
+// rest on Thursday and Sunday — and every week of the assignment is a copy of
+// it. Six months stops being 180 decisions and becomes seven.
+model ProgramDay {
+  id         String  @id @default(uuid())
+  templateId String  @map("template_id")
+  // 1 = Monday .. 7 = Sunday. ISO numbering, so it lines up with date-fns and
+  // with how a person reads a calendar, rather than JS's Sunday-first.
+  weekday    Int
+  kind       String  // workout | cardio | rest
+  workoutId  String? @map("workout_id")
+  // Shown instead of a workout name — "REST DAY", "Active recovery".
+  label      String?
+  // Cardio on top of whatever else the day holds. Steps are the default and
+  // nearly always the real target, so they live on every day, not just cardio.
+  cardioTypeId String? @map("cardio_type_id")
+  cardioMinutes Int?   @map("cardio_minutes")
+  stepTarget   Int?    @map("step_target")
+
+  template WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  workout  Workout?        @relation(fields: [workoutId], references: [id])
+  cardioType CardioType?   @relation(fields: [cardioTypeId], references: [id])
+
+  @@unique([templateId, weekday])
+  @@map("program_days")
+}
+
+// A dated row on one client's calendar.
+//
+// Written by the deploy, not read live off the template — so editing next
+// month's plan can never rewrite what someone was asked to do last week, and
+// a single client's Tuesday can be changed without touching anyone else.
+model ScheduledItem {
+  id       String   @id @default(uuid())
+  clientId String   @map("client_id")
+  date     DateTime @db.Date
+  kind     String // workout | cardio | rest
+  label    String
+
+  workoutId    String? @map("workout_id")
+  cardioTypeId String? @map("cardio_type_id")
+  cardioMinutes Int?   @map("cardio_minutes")
+  stepTarget   Int?    @map("step_target")
+
+  // Which deploy put it here, so a re-deploy can clear its own rows and leave
+  // anything the coach hand-placed alone.
+  batchId    String?   @map("batch_id")
+  templateId String?   @map("template_id")
+
+  completedAt DateTime? @map("completed_at")
+
+  client     Client           @relation(fields: [clientId], references: [userId], onDelete: Cascade)
+  workout    Workout?         @relation(fields: [workoutId], references: [id])
+  cardioType CardioType?      @relation(fields: [cardioTypeId], references: [id])
+  template   WorkoutTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([clientId, date])
+  @@index([batchId])
+  @@map("scheduled_items")
+}
+
+// ---------------------------------------------------------------------------
+// CARDIO
+// ---------------------------------------------------------------------------
+
+// Walking, incline treadmill, stairmaster, bike, rower.
+//
+// A type carries its own unit because they aren't measured the same way:
+// walking is a step count, a stairmaster is minutes. Storing "cardio: 40" with
+// no unit is how a coach ends up guessing what a client meant.
+model CardioType {
+  id       String  @id @default(uuid())
+  coachId  String  @map("coach_id")
+  name     String
+  unit     String  @default("steps") // steps | minutes | distance
+  // What to ask for when this type is put on a day and no number is given.
+  defaultTarget Int? @map("default_target")
+  active   Boolean @default(true)
+  position Int     @default(0)
+
+  coach          User            @relation("CardioCoach", fields: [coachId], references: [id])
+  programDays    ProgramDay[]
+  scheduledItems ScheduledItem[]
+  logs           CardioLog[]
+
+  @@unique([coachId, name])
+  @@map("cardio_types")
+}
+
+model CardioLog {
+  id           String   @id @default(uuid())
+  clientId     String   @map("client_id")
+  cardioTypeId String   @map("cardio_type_id")
+  date         DateTime @db.Date
+  minutes      Int?
+  steps        Int?
+  distance     Decimal? @db.Decimal(6, 2)
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  client     Client     @relation(fields: [clientId], references: [userId], onDelete: Cascade)
+  cardioType CardioType @relation(fields: [cardioTypeId], references: [id])
+
+  @@index([clientId, date])
+  @@map("cardio_logs")
+}
+
+// ---------------------------------------------------------------------------
+// AUTOMATIC MESSAGES
+// ---------------------------------------------------------------------------
+
+// Coach-written lines that go out on their own.
+//
+// Several per trigger on purpose: one rest-day message sent every Thursday for
+// six months stops reading as a coach and starts reading as a cron job. The
+// sender rotates, and never sends twice in one day to one client.
+model AutoMessage {
+  id      String  @id @default(uuid())
+  coachId String  @map("coach_id")
+  trigger String // rest_day
+  body    String
+  active  Boolean @default(true)
+  position Int    @default(0)
+
+  coach User @relation("AutoMessageCoach", fields: [coachId], references: [id])
+
+  @@index([coachId, trigger])
+  @@map("auto_messages")
+}
+
+// One row per client per day an automatic message actually went out. This is
+// the thing that makes the sender safe to call as often as you like.
+model AutoMessageSend {
+  id        String   @id @default(uuid())
+  clientId  String   @map("client_id")
+  trigger   String
+  date      DateTime @db.Date
+  messageId String?  @map("message_id")
+
+  @@unique([clientId, trigger, date])
+  @@map("auto_message_sends")
 }
 
 model WorkoutExercise {
