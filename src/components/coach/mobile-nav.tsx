@@ -75,10 +75,12 @@ export function CoachMobileNav({ pendingMeals = 0 }: { pendingMeals?: number }) 
                       onClick={() => setOpen(false)}
                       className={cn(
                         'flex min-h-12 items-center gap-3 border-b border-border/40 px-2 text-sm transition-colors',
-                        active ? 'text-accent' : 'text-muted-foreground hover:text-foreground'
+                        active
+                          ? 'glow-soft text-accent'
+                          : 'text-muted-foreground hover:text-foreground'
                       )}
                     >
-                      <Icon size={17} className={active ? 'text-accent' : undefined} />
+                      <Icon size={17} className={active ? 'glow-ink text-accent' : undefined} />
                       <span className="flex-1">{item.label}</span>
                       {count > 0 && (
                         <span className="readout border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[10px] leading-none text-accent">
