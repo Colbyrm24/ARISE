@@ -6,15 +6,29 @@ import { NextResponse, type NextRequest } from 'next/server';
  *
  * Two jobs:
  * 1. Keep the Supabase session cookie fresh.
- * 2. Enforce, on the server, that clients only ever land in the client
- *    app and coaches only ever land in the coach console. This is a
- *    convenience redirect, NOT the real security boundary — every page
- *    and every API route re-checks the user's identity and role again
- *    on its own. A client should never be able to see another client's
- *    data just because a redirect was skipped.
+ * 2. Send signed-out visitors to the login page, remembering where they
+ *    were going.
+ *
+ * Deliberately does NOT decide anything from the user's role. It used to,
+ * reading `user.app_metadata.role` — a field nothing in this codebase has
+ * ever written. Every account therefore read as a client, so a coach hitting
+ * /coach/dashboard was bounced to /today, where the client layout saw role
+ * 'coach' and bounced them to /login, where this file saw a live session and
+ * bounced them back: an infinite loop that made the console unreachable.
+ *
+ * Role lives in our own users table, which the Edge runtime can't read. So
+ * role routing happens one layer in, in the layouts and in app/page.tsx,
+ * which are the real boundary anyway — every page re-checks identity on its
+ * own and always did.
  */
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({ request: { headers: request.headers } });
+  // The path, forwarded so server components can read it. Next doesn't give
+  // a page its own pathname, and auth.ts needs it to send somebody back where
+  // they were going after they log in.
+  const forwarded = new Headers(request.headers);
+  forwarded.set('x-pathname', request.nextUrl.pathname);
+
+  let response = NextResponse.next({ request: { headers: forwarded } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,12 +40,12 @@ export async function middleware(request: NextRequest) {
         },
         set(name: string, value: string, options: CookieOptions) {
           request.cookies.set({ name, value, ...options });
-          response = NextResponse.next({ request: { headers: request.headers } });
+          response = NextResponse.next({ request: { headers: forwarded } });
           response.cookies.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
           request.cookies.set({ name, value: '', ...options });
-          response = NextResponse.next({ request: { headers: request.headers } });
+          response = NextResponse.next({ request: { headers: forwarded } });
           response.cookies.set({ name, value: '', ...options });
         },
       },
@@ -59,9 +73,23 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/signup');
   const isCoachRoute = pathname.startsWith('/coach');
-  const isClientRoute = ['/today', '/workouts', '/nutrition', '/messages', '/profile', '/ai', '/onboarding', '/book'].some(
-    (p) => pathname.startsWith(p)
-  );
+  // Every signed-in-only path, so an expired session lands on login with the
+  // destination remembered rather than dumping the person on /today. The four
+  // at the end were missing, which is why a stale session on a check-in link
+  // silently lost the link.
+  const isClientRoute = [
+    '/today',
+    '/workouts',
+    '/nutrition',
+    '/messages',
+    '/profile',
+    '/ai',
+    '/onboarding',
+    '/book',
+    '/check-in',
+    '/progress',
+    '/notifications',
+  ].some((p) => pathname.startsWith(p));
 
   // Not logged in, trying to reach a protected area -> send to login.
   if (!user && (isCoachRoute || isClientRoute)) {
@@ -71,22 +99,13 @@ export async function middleware(request: NextRequest) {
     return redirectWithFreshCookies(url);
   }
 
-  // Logged in and sitting on an auth page -> send them where they belong.
+  // Logged in and sitting on an auth page -> hand off to the root, which can
+  // read the real role from the database and route accordingly.
   if (user && isAuthRoute) {
-    const role = (user.app_metadata as { role?: string })?.role ?? 'client';
     const url = request.nextUrl.clone();
-    url.pathname = role === 'coach' || role === 'admin' ? '/coach/dashboard' : '/today';
+    url.pathname = '/';
+    url.search = '';
     return redirectWithFreshCookies(url);
-  }
-
-  // Logged in as a client, trying to reach the coach console -> bounce them.
-  if (user && isCoachRoute) {
-    const role = (user.app_metadata as { role?: string })?.role ?? 'client';
-    if (role !== 'coach' && role !== 'admin') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/today';
-      return redirectWithFreshCookies(url);
-    }
   }
 
   return response;
