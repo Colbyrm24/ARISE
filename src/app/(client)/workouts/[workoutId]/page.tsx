@@ -88,6 +88,11 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             Session {String(workout.dayOrder).padStart(2, '0')}
           </p>
           <h1 className="display mt-1.5 text-2xl">{workout.name}</h1>
+          {workout.estMinutes && (
+            <p className="readout mt-1.5 text-[11px] uppercase text-muted-foreground">
+              est. {workout.estMinutes} minutes
+            </p>
+          )}
         </div>
         {isComplete ? (
           <Badge variant="success">Complete</Badge>
@@ -95,6 +100,40 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
           <Count value={doneSets} total={totalSets} className="text-base" />
         )}
       </header>
+
+      {/*
+        The header a client reads before they start: what they need around
+        them, and what the coach wants out of the session. Without this the
+        screen is a bare list of movements and every session looks the same.
+      */}
+      {(workout.equipment.length > 0 || workout.instructions) && (
+        <SystemWindow title="Before you start" plain>
+          <SystemWindowContent className="flex flex-col gap-4 pt-4">
+            {workout.equipment.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Equipment
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {workout.equipment.map((e) => (
+                    <Badge key={e} variant="outline">
+                      {e}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {workout.instructions && (
+              <div className="flex flex-col gap-2">
+                <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                  From your coach
+                </p>
+                <p className="text-sm leading-relaxed text-foreground/90">{workout.instructions}</p>
+              </div>
+            )}
+          </SystemWindowContent>
+        </SystemWindow>
+      )}
 
       {/*
         One window per exercise. Stacking the lit edges is deliberate — a
