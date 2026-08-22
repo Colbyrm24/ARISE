@@ -1,11 +1,11 @@
 import Link from 'next/link';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
 import { NotificationList } from '@/components/notifications/notification-list';
 
 export default async function ClientNotificationsPage() {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
 
   const notifications = await prisma.notification.findMany({
     where: { userId: user.id },
