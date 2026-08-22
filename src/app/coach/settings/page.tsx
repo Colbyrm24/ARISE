@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SignOutButton } from '@/components/client/sign-out-button';
@@ -35,12 +36,34 @@ export default async function CoachSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Brand & Defaults</CardTitle>
+          <CardTitle>Calls</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <p className="text-sm text-muted-foreground">
+            {user?.profile?.bookingLocation
+              ? 'Clients join on:'
+              : 'No call link set yet, so bookings arrive with nowhere to join.'}
+          </p>
+          {user?.profile?.bookingLocation && (
+            <p className="break-all text-sm">{user.profile.bookingLocation}</p>
+          )}
+          <Link
+            href="/coach/schedule"
+            className="readout w-fit border border-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
+          >
+            Open hours and call link
+          </Link>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Brand</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Brand name, logo, accent color, default goals, and contract templates will be editable
-            here without touching any code — coming as later phases ship.
+            Brand name, logo and accent colour aren&apos;t editable here yet — they live in the
+            code for now.
           </p>
         </CardContent>
       </Card>
