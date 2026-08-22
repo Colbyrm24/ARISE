@@ -333,11 +333,33 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
   }
 
   // --- the four sessions ---------------------------------------------------
+  /*
+    One read for the whole set, not one per session.
+
+    A re-run used to cost four lookups, four updates and four counts in
+    sequence, and on a cold serverless start that was enough to blow the
+    function's time limit before it reached the end — which is exactly what
+    happened the first time this button was pressed twice. Everything the loop
+    needs is fetched up front, and the loop then writes only where something
+    has actually drifted.
+  */
+  const existingWorkouts = await prisma.workout.findMany({
+    where: { templateId: template.id },
+    select: {
+      id: true,
+      name: true,
+      estMinutes: true,
+      equipment: true,
+      instructions: true,
+      _count: { select: { workoutExercises: true } },
+    },
+  });
+  const workoutByName = new Map(existingWorkouts.map((w) => [w.name, w]));
+
   const workoutIds = new Map<string, string>();
   for (const w of WORKOUTS) {
-    let workout = await prisma.workout.findFirst({
-      where: { templateId: template.id, name: w.name },
-    });
+    const found = workoutByName.get(w.name);
+    let workout = found ? { id: found.id } : null;
 
     if (!workout) {
       workout = await prisma.workout.create({
@@ -351,9 +373,14 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
         },
       });
       workoutsCreated += 1;
-    } else {
-      // Repair the header on a re-run without touching the movements, which
-      // the coach may have reordered by hand.
+    } else if (
+      found &&
+      (found.estMinutes !== w.estMinutes ||
+        found.instructions !== w.instructions ||
+        found.equipment.join('|') !== w.equipment.join('|'))
+    ) {
+      // Repair the header only when it has actually drifted, and never touch
+      // the movements, which the coach may have reordered by hand.
       await prisma.workout.update({
         where: { id: workout.id },
         data: { estMinutes: w.estMinutes, equipment: w.equipment, instructions: w.instructions },
@@ -373,7 +400,7 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
       Logged sets point at workout_sets, so a session someone has already
       trained is left alone rather than rebuilt out from under their history.
     */
-    const built = await prisma.workoutExercise.count({ where: { workoutId: workout.id } });
+    const built = found ? found._count.workoutExercises : 0;
     if (built === w.exercises.length) continue;
 
     if (built > 0) {
@@ -426,11 +453,22 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
   }
 
   // --- the week ------------------------------------------------------------
+  const haveDays = new Set(
+    (
+      await prisma.programDay.findMany({
+        where: { templateId: template.id },
+        select: { weekday: true },
+      })
+    ).map((d) => d.weekday)
+  );
+
   for (const d of WEEK) {
+    // A day the coach has since rearranged is left exactly as they left it,
+    // so this only ever fills gaps.
+    if (haveDays.has(d.weekday)) continue;
     const workoutId = d.workout ? (workoutIds.get(d.workout) ?? null) : null;
-    await prisma.programDay.upsert({
-      where: { templateId_weekday: { templateId: template.id, weekday: d.weekday } },
-      create: {
+    await prisma.programDay.create({
+      data: {
         templateId: template.id,
         weekday: d.weekday,
         kind: d.kind,
@@ -439,8 +477,6 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
         cardioTypeId: walkingId,
         stepTarget: DEFAULT_STEP_TARGET,
       },
-      // A re-run must not stomp a week the coach has since rearranged.
-      update: {},
     });
   }
 
