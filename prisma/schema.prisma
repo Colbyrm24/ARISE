@@ -544,6 +544,13 @@ model Food {
   id          String   @id @default(uuid())
   name        String
   source      String   @default("custom") // library | custom | recipe
+  // Null for the shared library, set for a food one client saved.
+  //
+  // Without this, "Save for next time" wrote into a single global table and
+  // the nutrition search read it unscoped — so one client's "Mom's lasagna"
+  // appeared in every other client's results. Library rows stay null and stay
+  // shared, which is the whole point of them.
+  ownerId     String?  @map("owner_id")
   calories    Int
   protein     Decimal  @db.Decimal(6, 2)
   carbs       Decimal  @db.Decimal(6, 2)
@@ -558,6 +565,7 @@ model Food {
   nutritionLogs NutritionLog[]
   mealPlanItems MealPlanItem[]
 
+  @@index([ownerId])
   @@map("foods")
 }
 
