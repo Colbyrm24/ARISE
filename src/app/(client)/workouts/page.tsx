@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ChevronRight, Dumbbell } from 'lucide-react';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -11,7 +11,7 @@ function todayDateOnly() {
 }
 
 export default async function WorkoutsPage() {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
   const today = todayDateOnly();
 
   const activeProgram = await prisma.clientProgram.findFirst({
