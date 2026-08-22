@@ -49,6 +49,11 @@ export default async function CoachExercisesPage({
     prisma.exercise.count(),
   ]);
 
+  // Every movement a client is asked to do should come with a demonstration.
+  // Counting what is still missing turns "add videos eventually" into a
+  // number that goes down.
+  const missingVideos = await prisma.exercise.count({ where: { videoId: null } });
+
   const filtering = Boolean(q || muscle || equipment);
 
   return (
@@ -102,6 +107,12 @@ export default async function CoachExercisesPage({
                 Showing {exercises.length}
                 {exercises.length === 200 ? '+ (narrow your search)' : ''}
               </span>
+              {missingVideos > 0 && (
+                <span className="readout w-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+                  {missingVideos} of {total} movements still have no demo video. Paste a link on any
+                  row below and it shows up inside the workout for every client.
+                </span>
+              )}
             </div>
           </form>
         </CardContent>
@@ -184,6 +195,7 @@ export default async function CoachExercisesPage({
                       <Badge variant="accent">{ex.musclePrimary}</Badge>
                       <Badge variant="outline">{ex.equipment}</Badge>
                       <Badge variant="outline">{ex.difficulty}</Badge>
+                      {!videoUrl && <Badge variant="destructive">Needs video</Badge>}
                       {ex.muscleSecondary.map((m) => (
                         <Badge key={m} variant="default">
                           {m}

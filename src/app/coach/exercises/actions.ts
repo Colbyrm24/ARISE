@@ -86,7 +86,10 @@ export async function setExerciseVideo(formData: FormData) {
   const raw = (formData.get('videoUrl') as string | null)?.trim() ?? '';
 
   if (!raw) {
-    await prisma.exercise.update({ where: { id: exerciseId }, data: { videoId: null } });
+    await prisma.exercise.update({
+      where: { id: exerciseId },
+      data: { videoId: null, videoUrl: null },
+    });
     revalidatePath('/coach/exercises');
     return;
   }
@@ -106,7 +109,10 @@ export async function setExerciseVideo(formData: FormData) {
 
   await prisma.exercise.update({
     where: { id: exerciseId },
-    data: { videoId: video.id },
+    // videoUrl keeps exactly what was pasted. videoId keeps what we managed
+    // to parse out of it. Storing both means a provider we stop being able to
+    // parse doesn't lose the coach's link.
+    data: { videoId: video.id, videoUrl: raw },
   });
 
   revalidatePath('/coach/exercises');
