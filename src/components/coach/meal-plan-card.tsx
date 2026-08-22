@@ -1,4 +1,4 @@
-import { X, Send } from 'lucide-react';
+import { X, Send, CalendarRange } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import {
   updatePlan,
   publishPlan,
   retirePlan,
+  assignStandardWeek,
 } from '@/app/coach/clients/[id]/plan-actions';
 
 /*
@@ -39,11 +40,27 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {!plan ? (
-          <p className="text-xs text-muted-foreground">
-            None yet. Add a line below and the plan is created with it — it shows on their
-            nutrition screen above everything else, so they open the app to a day rather than a
-            search box.
-          </p>
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground">
+              None yet. Add a line below and the plan is created with it — it shows on their
+              nutrition screen above everything else, so they open the app to a day rather than a
+              search box.
+            </p>
+            {/*
+              Or skip all of that. Twenty-one lines typed by hand is the long
+              way round to the answer that is right most of the time, which is
+              "put them on the standard week and adjust from there".
+            */}
+            <form action={assignStandardWeek}>
+              <input type="hidden" name="clientId" value={clientId} />
+              <Button type="submit" size="sm" variant="outline" className="w-full sm:w-auto">
+                <CalendarRange size={14} /> Put them on the 7-day plan
+              </Button>
+            </form>
+            <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+              [7 days · 21 meals · ~2600 cal · ~190g protein]
+            </p>
+          </div>
         ) : (
           <>
             <form action={updatePlan} className="flex flex-col gap-2">
