@@ -2,32 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  LayoutDashboard,
-  Users,
-  Inbox,
-  ClipboardList,
-  Dumbbell,
-  UtensilsCrossed,
-  CreditCard,
-  Camera,
-  CalendarDays,
-  Settings,
-} from 'lucide-react';
+import { NAV_ITEMS as items } from '@/components/coach/nav-items';
 import { cn } from '@/lib/utils';
-
-const items = [
-  { href: '/coach/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/coach/clients', label: 'Clients', icon: Users },
-  { href: '/coach/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/coach/meals', label: 'Meals', icon: Camera, badge: 'pendingMeals' },
-  { href: '/coach/schedule', label: 'Schedule', icon: CalendarDays },
-  { href: '/coach/programs', label: 'Programs', icon: ClipboardList },
-  { href: '/coach/exercises', label: 'Exercises', icon: Dumbbell },
-  { href: '/coach/recipes', label: 'Recipes', icon: UtensilsCrossed },
-  { href: '/coach/payments', label: 'Payments', icon: CreditCard },
-  { href: '/coach/settings', label: 'Settings', icon: Settings },
-] as const;
 
 export function Sidebar({ pendingMeals = 0 }: { pendingMeals?: number }) {
   const pathname = usePathname();
