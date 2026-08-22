@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { seedRecipeLibrary } from '@/lib/recipe-seed';
 
 function splitList(value: FormDataEntryValue | null): string[] {
   if (!value || typeof value !== 'string') return [];
@@ -66,5 +67,17 @@ export async function deleteRecipe(formData: FormData) {
     // referenced by existing nutrition logs — leave it in place
   }
 
+  revalidatePath('/coach/recipes');
+}
+
+/**
+ * Puts the twenty-one meal library into the database.
+ *
+ * Idempotent by title, so pressing it twice adds nothing and a recipe the
+ * coach has since edited is left alone.
+ */
+export async function loadRecipeLibrary() {
+  const coach = await requireCoach();
+  await seedRecipeLibrary(coach.id);
   revalidatePath('/coach/recipes');
 }

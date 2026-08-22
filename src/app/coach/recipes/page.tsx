@@ -1,10 +1,10 @@
-import { UtensilsCrossed, Trash2 } from 'lucide-react';
+import { UtensilsCrossed, Trash2, Download } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { createRecipe, deleteRecipe } from './actions';
+import { createRecipe, deleteRecipe, loadRecipeLibrary } from './actions';
 
 export default async function CoachRecipesPage() {
   const recipes = await prisma.recipe.findMany({ orderBy: { title: 'asc' } });
@@ -18,6 +18,26 @@ export default async function CoachRecipesPage() {
           auto-calculates against their calorie and macro targets.
         </p>
       </header>
+
+      {/* Twenty-one meals, seven days, written to land near 2,600 and 190g
+          without anyone counting. Safe to press twice. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Start from the library</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Loads seven days of breakfast, lunch and dinner with full ingredients, method and
+            macros. From there you can put any client on the whole week in one press from their
+            page.
+          </p>
+          <form action={loadRecipeLibrary}>
+            <Button type="submit" size="sm" className="w-full shrink-0 sm:w-auto">
+              <Download size={15} /> Load meal library
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
