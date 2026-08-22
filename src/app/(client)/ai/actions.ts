@@ -52,7 +52,11 @@ export async function sendAiMessage(formData: FormData) {
     }),
     prisma.aiMessage.findMany({
       where: { conversationId: conversation.id },
-      orderBy: { createdAt: 'asc' },
+      // Newest first, then reversed below. Ascending + take:20 fetched the
+      // OLDEST twenty — so past the twentieth message the model was
+      // permanently answering the client's first few questions and never saw
+      // the one they had just typed.
+      orderBy: { createdAt: 'desc' },
       take: 20,
     }),
   ]);
@@ -87,7 +91,9 @@ ${contextLines.join('\n')}`;
       model: AI_MODEL,
       max_tokens: 500,
       system: systemPrompt,
-      messages: history.map((m) => ({
+      // Reversed back into reading order — the query takes the newest twenty,
+      // the model needs them oldest-first.
+      messages: [...history].reverse().map((m) => ({
         role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
         content: m.content,
       })),

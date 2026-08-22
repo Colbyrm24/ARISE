@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { sendAiMessage } from './actions';
 
 export default async function AiPage() {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
 
   const conversation = await prisma.aiConversation.findFirst({
     where: { userId: user.id, roleContext: 'client' },
