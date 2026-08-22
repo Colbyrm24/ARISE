@@ -5,12 +5,24 @@ import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { addWorkout, deleteWorkout, addWorkoutExercise, deleteWorkoutExercise } from './actions';
+import { requireCoach } from '@/lib/auth';
+import { ProgramWeek } from '@/components/coach/program-week';
+import {
+  addWorkout,
+  deleteWorkout,
+  addWorkoutExercise,
+  deleteWorkoutExercise,
+  setProgramDay,
+  setWeekSteps,
+  deployToClient,
+} from './actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export default async function ProgramBuilderPage({ params }: { params: { id: string } }) {
+  const coach = await requireCoach();
+
   const template = await prisma.workoutTemplate.findUnique({
     where: { id: params.id },
     include: {
@@ -31,6 +43,29 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
   const exercises = await prisma.exercise.findMany({
     orderBy: [{ musclePrimary: 'asc' }, { name: 'asc' }],
   });
+
+  // Everything the week editor and the deploy form need to fill their menus.
+  const [programDays, cardioTypes, clientRows] = await Promise.all([
+    prisma.programDay.findMany({ where: { templateId: template.id }, orderBy: { weekday: 'asc' } }),
+    prisma.cardioType.findMany({
+      where: { coachId: coach.id, active: true },
+      orderBy: { position: 'asc' },
+      select: { id: true, name: true },
+    }),
+    prisma.client.findMany({
+      where: { coachId: coach.id },
+      select: { userId: true, user: { select: { email: true, profile: { select: { fullName: true } } } } },
+    }),
+  ]);
+
+  const clients = clientRows
+    .map((c) => ({ id: c.userId, name: c.user.profile?.fullName || c.user.email }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // The date input wants YYYY-MM-DD. Defaulting to today rather than to the
+  // next Monday, because a coach signing someone up on a Wednesday means
+  // "start Wednesday", not "wait five days".
+  const defaultStart = new Date().toISOString().slice(0, 10);
 
   // A few hundred exercises in one flat dropdown is unusable, so they're
   // grouped by muscle — the browser renders these as labelled sections.
@@ -55,6 +90,26 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
         <h1 className="text-2xl font-semibold">{template.name}</h1>
         {template.description && <p className="mt-1 text-sm text-muted-foreground">{template.description}</p>}
       </header>
+
+      <ProgramWeek
+        templateId={template.id}
+        days={programDays.map((d) => ({
+          weekday: d.weekday,
+          kind: d.kind,
+          workoutId: d.workoutId,
+          label: d.label,
+          cardioTypeId: d.cardioTypeId,
+          cardioMinutes: d.cardioMinutes,
+          stepTarget: d.stepTarget,
+        }))}
+        workouts={template.workouts.map((w) => ({ id: w.id, name: w.name }))}
+        cardioTypes={cardioTypes}
+        clients={clients}
+        setProgramDay={setProgramDay}
+        setWeekSteps={setWeekSteps}
+        deployToClient={deployToClient}
+        defaultStart={defaultStart}
+      />
 
       <Card>
         <CardHeader>
