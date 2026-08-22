@@ -60,7 +60,10 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
 
   const [clients, prSets, weighedIn, messages] = await Promise.all([
     prisma.client.findMany({
-      where: { status: { notIn: ['cancelled', 'completed'] } },
+      // Scoped to this coach. It took a coachId and then listed every client
+      // in the database — harmless with one coach, wrong the moment there
+      // are two, and the kind of wrong nobody notices until it matters.
+      where: { coachId, status: { notIn: ['cancelled', 'completed'] } },
       include: { user: { include: { profile: true } } },
     }),
 

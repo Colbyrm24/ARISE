@@ -93,13 +93,13 @@ function parseEstimate(value: unknown): { estimate: MealEstimate | null; failure
  * unanswered at 2pm is the one the queue exists for. Newest-first would keep
  * burying them under lunch.
  *
- * Not scoped by coach, matching getSegments() in console.ts — this is a
- * single-coach practice and Client.coachId is null on most rows, so filtering
- * on it today would show an empty queue.
+ * Scoped by coach. Every new client is attached to one at signup and older
+ * accounts are repaired on their next sign-in, so filtering on it is safe and
+ * is what keeps two coaches' queues apart.
  */
-export async function getPendingMeals(limit = 40): Promise<PendingMeal[]> {
+export async function getPendingMeals(coachId: string, limit = 40): Promise<PendingMeal[]> {
   const rows = await prisma.nutritionLog.findMany({
-    where: { reviewState: { in: ['estimated', 'failed'] } },
+    where: { reviewState: { in: ['estimated', 'failed'] }, client: { coachId } },
     orderBy: { createdAt: 'asc' },
     take: limit,
     include: {
@@ -135,8 +135,10 @@ export async function getPendingMeals(limit = 40): Promise<PendingMeal[]> {
 }
 
 /** Badge count for the sidebar. Cheap enough to run on every coach page load. */
-export async function countPendingMeals(): Promise<number> {
-  return prisma.nutritionLog.count({ where: { reviewState: { in: ['estimated', 'failed'] } } });
+export async function countPendingMeals(coachId: string): Promise<number> {
+  return prisma.nutritionLog.count({
+    where: { reviewState: { in: ['estimated', 'failed'] }, client: { coachId } },
+  });
 }
 
 /**
@@ -147,16 +149,16 @@ export async function countPendingMeals(): Promise<number> {
  * one; a coach who can see they run 20 percent light knows to look harder at
  * the fat column. Both are more useful than a confidence label.
  */
-export async function getReadAccuracy(): Promise<{
+export async function getReadAccuracy(coachId: string): Promise<{
   corrected: number;
   confirmed: number;
   medianCalorieGapPct: number | null;
   direction: 'high' | 'low' | null;
 } | null> {
   const [confirmed, corrections] = await Promise.all([
-    prisma.nutritionLog.count({ where: { reviewState: 'confirmed' } }),
+    prisma.nutritionLog.count({ where: { reviewState: 'confirmed', client: { coachId } } }),
     prisma.nutritionLog.findMany({
-      where: { reviewState: 'corrected' },
+      where: { reviewState: 'corrected', client: { coachId } },
       select: { calories: true, estimate: true },
       orderBy: { reviewedAt: 'desc' },
       take: 200,
