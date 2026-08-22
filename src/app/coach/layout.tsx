@@ -17,8 +17,8 @@ export default async function CoachLayout({ children }: { children: React.ReactN
       <Sidebar pendingMeals={pendingMeals} />
       {/* The console had no navigation at all below 768px — the sidebar is
           md-and-up and this header held only the wordmark. */}
-      <div className="flex h-16 items-center justify-between border-b border-border px-5 md:hidden">
-        <span className="text-lg font-semibold tracking-[0.2em]">ARISE</span>
+      <div className="relative flex h-16 items-center justify-between border-b border-accent/25 px-5 shadow-[0_1px_0_hsl(var(--accent)/0.3),0_14px_44px_-14px_hsl(var(--system)/0.8)] md:hidden">
+        <span className="glow-mark text-lg font-semibold tracking-[0.2em]">ARISE</span>
         <CoachMobileNav pendingMeals={pendingMeals} />
       </div>
       <main className="md:pl-60">
