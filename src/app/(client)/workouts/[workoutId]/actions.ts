@@ -122,13 +122,31 @@ export async function completeWorkout(formData: FormData) {
 
   const workoutLogId = formData.get('workoutLogId') as string | null;
   const workoutId = formData.get('workoutId') as string | null;
-  if (!workoutLogId || !workoutId) return;
+  if (!workoutId) return;
 
-  const log = await prisma.workoutLog.findUnique({
-    where: { id: workoutLogId },
-    include: { sets: true },
-  });
-  if (!log || log.clientId !== user.id) return;
+  /*
+    A workout can be finished without a single set logged.
+
+    The button used to be hidden until a WorkoutLog existed, and a log only
+    appeared once a set was logged — so a circuit, a bodyweight session, or
+    anyone who trains and doesn't log could never mark a session done. Their
+    Today card said "Not started" forever and the workout habit never ticked.
+  */
+  let log = workoutLogId
+    ? await prisma.workoutLog.findUnique({ where: { id: workoutLogId }, include: { sets: true } })
+    : await prisma.workoutLog.findFirst({
+        where: { clientId: user.id, workoutId, completedAt: null },
+        orderBy: { startedAt: 'desc' },
+        include: { sets: true },
+      });
+
+  if (!log) {
+    log = await prisma.workoutLog.create({
+      data: { clientId: user.id, workoutId, startedAt: new Date() },
+      include: { sets: true },
+    });
+  }
+  if (log.clientId !== user.id) return;
 
   const totalVolume = log.sets.reduce((sum, s) => {
     const w = s.actualWeight ? Number(s.actualWeight) : 0;
@@ -140,7 +158,7 @@ export async function completeWorkout(formData: FormData) {
   const duration = Math.round((completedAt.getTime() - log.startedAt.getTime()) / 1000);
 
   await prisma.workoutLog.update({
-    where: { id: workoutLogId },
+    where: { id: log.id },
     data: { completedAt, duration, totalVolume },
   });
 

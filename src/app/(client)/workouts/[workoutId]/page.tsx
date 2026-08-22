@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Play } from 'lucide-react';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ function todayDateOnly() {
 }
 
 export default async function WorkoutSessionPage({ params }: { params: { workoutId: string } }) {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
 
   const workout = await prisma.workout.findUnique({
     where: { id: params.workoutId },
@@ -185,9 +185,9 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
         })}
       </div>
 
-      {!isComplete && todayLog && (
+      {!isComplete && (
         <form action={completeWorkout}>
-          <input type="hidden" name="workoutLogId" value={todayLog.id} />
+          <input type="hidden" name="workoutLogId" value={todayLog?.id ?? ''} />
           <input type="hidden" name="workoutId" value={workout.id} />
           <Button type="submit" className="w-full">
             Finish workout
