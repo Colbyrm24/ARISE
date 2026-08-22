@@ -1,10 +1,12 @@
 'use server';
 
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { renderAgreementTemplate, formatAgreementDate } from '@/lib/agreement';
+import { notifyCoach } from '@/lib/notifications';
 
 /**
  * The moment a client actually signs. Only the client who owns the
@@ -45,6 +47,14 @@ export async function signAgreement(formData: FormData) {
     prisma.client.update({ where: { userId: user.id }, data: { status: 'onboarding' } }),
   ]);
 
+  await notifyCoach(user.id, 'check_in', `${signedName} signed their agreement.`);
+
   revalidatePath(`/agreement/${agreementId}`);
   revalidatePath(`/coach/clients/${user.id}`);
+  revalidatePath('/today');
+
+  // Straight into the intake rather than back to a page whose only remaining
+  // advice was "use your browser's print option". Signing is the moment the
+  // product opens up; leaving somebody on a receipt was the end of the funnel.
+  redirect('/onboarding?welcome=1');
 }
