@@ -1,5 +1,5 @@
 import { Trash2 } from 'lucide-react';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -48,7 +48,7 @@ export default async function NutritionPage({
 }: {
   searchParams: { q?: string; cat?: string };
 }) {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
   const today = todayDateOnly();
 
   const q = (searchParams.q ?? '').trim();
@@ -72,6 +72,9 @@ export default async function NutritionPage({
     */
     prisma.food.findMany({
       where: {
+        // The shared library, plus anything this client saved themselves.
+        // Unscoped, one person's "Mom's lasagna" was in everybody's results.
+        OR: [{ ownerId: null }, { ownerId: user.id }],
         ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
         ...(!q && cat ? { category: cat } : {}),
       },
@@ -97,13 +100,18 @@ export default async function NutritionPage({
   const carbsEaten = todayLogs.reduce((sum, l) => sum + Number(l.carbs), 0);
   const fatEaten = todayLogs.reduce((sum, l) => sum + Number(l.fat), 0);
 
+  /*
+    Protein is a floor — hit it or beat it. Calories, carbs and fat are
+    budgets, and going 900 over is not "complete". They read the same before,
+    so a blown day rendered exactly as green as a perfect one.
+  */
   const macros = target
-    ? [
-        { label: 'Calories', eaten: caloriesEaten, goal: target.calories, unit: '' },
-        { label: 'Protein', eaten: Math.round(proteinEaten), goal: Math.round(Number(target.protein)), unit: 'g' },
-        { label: 'Carbs', eaten: Math.round(carbsEaten), goal: Math.round(Number(target.carbs)), unit: 'g' },
-        { label: 'Fat', eaten: Math.round(fatEaten), goal: Math.round(Number(target.fat)), unit: 'g' },
-      ]
+    ? ([
+        { label: 'Calories', eaten: caloriesEaten, goal: target.calories, unit: '', mode: 'budget' },
+        { label: 'Protein', eaten: Math.round(proteinEaten), goal: Math.round(Number(target.protein)), unit: 'g', mode: 'reach' },
+        { label: 'Carbs', eaten: Math.round(carbsEaten), goal: Math.round(Number(target.carbs)), unit: 'g', mode: 'budget' },
+        { label: 'Fat', eaten: Math.round(fatEaten), goal: Math.round(Number(target.fat)), unit: 'g', mode: 'budget' },
+      ] as const)
     : [];
 
   return (
@@ -120,7 +128,7 @@ export default async function NutritionPage({
               <div key={m.label}>
                 <div className="mb-2 flex items-baseline justify-between text-sm">
                   <span>{m.label}</span>
-                  <Count value={m.eaten} total={`${m.goal}${m.unit}`} />
+                  <Count value={m.eaten} total={`${m.goal}${m.unit}`} mode={m.mode} />
                 </div>
                 <Progress value={Math.min((m.eaten / Math.max(m.goal, 1)) * 100, 100)} />
               </div>
@@ -161,6 +169,32 @@ export default async function NutritionPage({
                     {log.calories} cal · {Math.round(Number(log.protein))}p ·{' '}
                     {Math.round(Number(log.carbs))}c · {Math.round(Number(log.fat))}f
                   </p>
+                  {/*
+                    The photo logger promises "your coach will confirm it" and
+                    then nothing on this screen ever said whether they had. An
+                    unchecked guess and a coach-corrected number looked
+                    identical, which quietly made the promise meaningless.
+                  */}
+                  {log.reviewState === 'estimated' && (
+                    <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
+                      Estimate · waiting on your coach
+                    </p>
+                  )}
+                  {log.reviewState === 'failed' && (
+                    <p className="readout mt-0.5 text-[10px] uppercase text-destructive">
+                      Couldn&apos;t read this one — add the numbers or leave it for your coach
+                    </p>
+                  )}
+                  {log.reviewState === 'corrected' && (
+                    <p className="readout mt-0.5 text-[10px] uppercase text-success">
+                      Corrected by your coach
+                    </p>
+                  )}
+                  {log.reviewState === 'confirmed' && (
+                    <p className="readout mt-0.5 text-[10px] uppercase text-success">
+                      Confirmed by your coach
+                    </p>
+                  )}
                 </div>
                 <form action={removeMealLog}>
                   <input type="hidden" name="logId" value={log.id} />

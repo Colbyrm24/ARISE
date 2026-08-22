@@ -156,6 +156,9 @@ export async function quickAddFood(formData: FormData) {
       data: {
         name,
         source: 'custom',
+        // Theirs, not everyone's. Without this the row landed in the shared
+        // library and showed up in every other client's search.
+        ownerId: user.id,
         calories: Math.round(calories),
         protein,
         carbs,
