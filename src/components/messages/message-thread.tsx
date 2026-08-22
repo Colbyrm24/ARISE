@@ -61,7 +61,15 @@ export function MessageThread({
                     : 'rounded-bl-md bg-secondary text-foreground'
                 )}
               >
-                {m.body}
+                {m.body ? (
+                  m.body
+                ) : (
+                  /* A message with no body is an attachment. It used to render
+                     as an empty bubble — a photo from the coach looked like a
+                     glitch. The preview on Today already said "Sent an
+                     attachment"; the thread itself did not. */
+                  <span className="opacity-70">Sent an attachment</span>
+                )}
               </div>
             </div>
           </div>
