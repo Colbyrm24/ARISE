@@ -124,24 +124,66 @@ SystemWindowContent.displayName = 'SystemWindowContent';
  * protein, steps, sessions — and don't use it for things that aren't a
  * progression (weight, dates, money).
  */
+/**
+ * Whether going past the total is a good thing.
+ *
+ * `reach` — protein, steps, sets. More is fine; hitting it is the win.
+ * `budget` — calories, carbs, fat. There is a number to land on, and sailing
+ *   past it is the opposite of done.
+ *
+ * This distinction was missing, and everything used `reach`. So a client who
+ * ate 2,900 against a 2,000 target saw the same green as one who ate exactly
+ * 2,000 — and their calories habit ticked itself complete. The screen was
+ * congratulating people for blowing their deficit.
+ */
+export type CountMode = 'reach' | 'budget';
+
+/** Landed, short, or over. Exported so habits can complete on the same rule. */
+export function countState(
+  value: number,
+  total: number | undefined,
+  mode: CountMode = 'reach'
+): 'none' | 'short' | 'landed' | 'over' {
+  if (total === undefined || !Number.isFinite(total) || total <= 0) return 'none';
+  const ratio = value / total;
+  if (mode === 'reach') return ratio >= 1 ? 'landed' : 'short';
+  // A 5% overshoot on a 2,000 target is 100 calories — inside the error bars
+  // of any estimate, so it isn't worth flagging. Beyond that it is.
+  if (ratio > 1.05) return 'over';
+  return ratio >= 0.9 ? 'landed' : 'short';
+}
+
+/**
+ * Bracket notation: [3/5], [112/185g], [8.2/10k].
+ *
+ * A percentage tells someone how they're doing; a bracket tells them what's
+ * left. Use it for anything a client is working through — sets, reps,
+ * protein, steps, sessions — and don't use it for things that aren't a
+ * progression (weight, dates, money).
+ */
 export function Count({
   value,
   total,
   unit,
+  mode = 'reach',
   className,
 }: {
   value: number | string;
   total?: number | string;
   unit?: string;
+  mode?: CountMode;
   className?: string;
 }) {
-  const done = total !== undefined && Number(value) >= Number(total);
+  const state = countState(Number(value), total === undefined ? undefined : Number(total), mode);
   return (
     <span
       className={cn(
         'readout text-sm',
-        // Green means complete, and complete is the only thing it means.
-        done ? 'text-success' : 'text-accent glow-soft',
+        // Green means landed on it. Red means past it, and only ever for a
+        // budget — nobody should be warned for exceeding their protein.
+        state === 'landed' && 'text-success',
+        state === 'over' && 'text-destructive',
+        (state === 'short' || state === 'none') && 'text-accent glow-soft',
         className
       )}
     >
