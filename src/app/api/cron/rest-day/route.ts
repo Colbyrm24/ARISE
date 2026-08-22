@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
-import { sendRestDayMessages } from '@/lib/auto-message';
+import { runAutoMessages } from '@/lib/auto-message';
 
 export const dynamic = 'force-dynamic';
 
 /*
-  The daily rest-day run.
+  The daily run.
 
-  Scheduled in vercel.json for 13:00 UTC — 9am Eastern, which is when a rest
-  day message should land: early enough to set the tone for the day, late
-  enough that it isn't waking anybody up.
+  Sends all three automatic messages — the morning check-in, the nudge to
+  anyone who has gone quiet, and the rest-day line — with the one-per-client
+  rule applied across all of them.
+
+  Scheduled in vercel.json for 13:00 UTC, which is 9am Eastern: early enough
+  to set the tone for the day, late enough that it isn't waking anybody up.
 
   Vercel signs its own cron requests with CRON_SECRET when that variable is
   set. We accept either that or an explicit `?key=` for running it by hand,
@@ -35,6 +38,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  const result = await sendRestDayMessages();
+  const result = await runAutoMessages();
   return NextResponse.json({ ok: true, ...result });
 }
