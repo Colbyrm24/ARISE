@@ -19,6 +19,13 @@ const selectClass =
 const textareaClass =
   'w-full resize-none rounded-xl border border-border bg-secondary/30 p-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring';
 
+const LINK_STATUS_LABELS: Record<string, string> = {
+  pending: 'Awaiting payment',
+  paid: 'Paid',
+  expired: 'Expired',
+  cancelled: 'Cancelled',
+};
+
 export default async function CoachPaymentsPage() {
   const [plans, templates, recentLinks] = await Promise.all([
     prisma.plan.findMany({ orderBy: { createdAt: 'desc' } }),
@@ -67,7 +74,7 @@ export default async function CoachPaymentsPage() {
                       </p>
                     </div>
                     <Badge variant={link.status === 'paid' ? 'success' : 'outline'}>
-                      {link.status}
+                      {LINK_STATUS_LABELS[link.status] ?? link.status}
                     </Badge>
                   </Link>
                 );
@@ -166,14 +173,20 @@ export default async function CoachPaymentsPage() {
             ARISE fills them in automatically the moment a client pays.
           </p>
 
+          {/*
+            The header sits OUTSIDE the edit form on purpose. "Make default"
+            used to be its own <form> nested inside the edit <form>, which HTML
+            forbids — the parser drops the inner one, so the button became a
+            submit for the outer form and just re-saved the body. Making a
+            template default was impossible from this screen, which then meant
+            the template select on every client page had no default to pick.
+          */}
           {templates.map((template) => (
-            <form
+            <div
               key={template.id}
-              action={updateAgreementTemplate}
-              className="flex flex-col gap-3 rounded-xl border border-border bg-secondary/20 p-4"
+              className="flex flex-col gap-3 border border-border bg-secondary/20 p-4"
             >
-              <input type="hidden" name="templateId" value={template.id} />
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-medium">
                   {template.name}{' '}
                   <span className="text-xs font-normal text-muted-foreground">v{template.version}</span>
@@ -189,11 +202,15 @@ export default async function CoachPaymentsPage() {
                   </form>
                 )}
               </div>
-              <textarea name="body" rows={10} defaultValue={template.body} className={textareaClass} />
-              <Button type="submit" size="sm" className="w-fit">
-                Save Changes
-              </Button>
-            </form>
+
+              <form action={updateAgreementTemplate} className="flex flex-col gap-3">
+                <input type="hidden" name="templateId" value={template.id} />
+                <textarea name="body" rows={10} defaultValue={template.body} className={textareaClass} />
+                <Button type="submit" size="sm" className="w-fit">
+                  Save changes
+                </Button>
+              </form>
+            </div>
           ))}
 
           <form action={createAgreementTemplate} className="flex flex-col gap-3 border-t border-border pt-5">
