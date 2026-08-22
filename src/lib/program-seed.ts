@@ -207,9 +207,11 @@ export const GONE_QUIET_MESSAGES = [
 /*
   The week.
 
-  Colby's stated rest days are Thursday and Sunday, so that is what this
-  builds. Weekdays are ISO — 1 is Monday, 7 is Sunday — and every single day
-  carries the step target, including the two rest days.
+  Rest lands on Wednesday and Sunday, matching how the split actually runs
+  rather than how it was first described to me — five lifting days with the
+  midweek break sitting between Legs and Back. Weekdays are ISO — 1 is
+  Monday, 7 is Sunday — and every single day carries the step target,
+  including the two rest days.
 
   This is a starting point, not a rule: the program screen edits any day in
   place, and nothing here is baked into the deploy.
@@ -217,8 +219,8 @@ export const GONE_QUIET_MESSAGES = [
 export const WEEK: { weekday: number; kind: 'workout' | 'rest'; workout?: string; label?: string }[] = [
   { weekday: 1, kind: 'workout', workout: 'chest' },
   { weekday: 2, kind: 'workout', workout: 'legs' },
-  { weekday: 3, kind: 'workout', workout: 'back' },
-  { weekday: 4, kind: 'rest', label: 'REST DAY' },
+  { weekday: 3, kind: 'rest', label: 'REST DAY' },
+  { weekday: 4, kind: 'workout', workout: 'back' },
   { weekday: 5, kind: 'workout', workout: 'legs' },
   { weekday: 6, kind: 'workout', workout: 'shoulders' },
   { weekday: 7, kind: 'rest', label: 'REST DAY' },
@@ -327,7 +329,7 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
       data: {
         coachId,
         name: TEMPLATE_NAME,
-        description: 'Five lifting days, steps every day, rest Thursday and Sunday.',
+        description: 'Five lifting days, steps every day, rest Wednesday and Sunday.',
       },
     });
   }
