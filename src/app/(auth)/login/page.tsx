@@ -43,7 +43,14 @@ function LoginForm() {
       return;
     }
 
-    const next = searchParams.get('next') ?? '/today';
+    /*
+      Only ever a path on this site. `?next=https://evil.com` used to send
+      somebody straight off the domain the instant after they typed their
+      password — the classic phishing finish. A leading slash that isn't a
+      protocol-relative `//` is the whole test.
+    */
+    const raw = searchParams.get('next') ?? '';
+    const next = /^\/(?!\/)/.test(raw) ? raw : '/';
     router.push(next);
     router.refresh();
   }
