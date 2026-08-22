@@ -176,6 +176,35 @@ export const REST_DAY_MESSAGES = [
 ];
 
 /*
+  The morning line.
+
+  These are his own, lifted from what he already sends — because he already
+  sends the same five, one thread at a time, thirty times over. The only thing
+  changing is who does the pasting.
+*/
+export const DAILY_CHECK_IN_MESSAGES = [
+  'Hey brotha!!!!! how we feelin whats on the agenda today?',
+  'Alright my man how we doin so far today??🤟',
+  'Morning my man!! hows the body feeling today?',
+  'Hey dude!! whats the plan looking like today?',
+  'Morning brotha! what are we getting after today?',
+];
+
+/*
+  For someone who has gone quiet.
+
+  Deliberately free of any guilt. A client who has had a bad week and gone
+  silent is already telling themselves off; a message that piles on is the one
+  that makes them stay gone.
+*/
+export const GONE_QUIET_MESSAGES = [
+  'Hey my man havent heard from you in a few days. Everything good? even if the weeks been rough just shoot me a message and well pick it right back up',
+  'Yo brotha checking in on you. Been quiet on your end for a bit, hows everything going? no judgement at all I just wanna make sure youre good',
+  'Hey dude its been a few days. Whats been going on? doesnt matter how the weeks gone we can start again today',
+  'Checking in my man. However the last few days went we can work with it, just lemme know where youre at',
+];
+
+/*
   The week.
 
   Colby's stated rest days are Thursday and Sunday, so that is what this
@@ -271,19 +300,22 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
   const walkingId = cardioIds.get('Walking') ?? null;
 
   // --- rest-day messages ---------------------------------------------------
-  const existingMessages = await prisma.autoMessage.count({
-    where: { coachId, trigger: 'rest_day' },
-  });
-  if (existingMessages === 0) {
+  /*
+    Seeded per trigger, so adding a new one later fills only the gap rather
+    than being blocked by the others already existing.
+  */
+  const SETS: [string, string[]][] = [
+    ['rest_day', REST_DAY_MESSAGES],
+    ['daily_check_in', DAILY_CHECK_IN_MESSAGES],
+    ['gone_quiet', GONE_QUIET_MESSAGES],
+  ];
+  for (const [trigger, bodies] of SETS) {
+    const have = await prisma.autoMessage.count({ where: { coachId, trigger } });
+    if (have > 0) continue;
     await prisma.autoMessage.createMany({
-      data: REST_DAY_MESSAGES.map((body, position) => ({
-        coachId,
-        trigger: 'rest_day',
-        body,
-        position,
-      })),
+      data: bodies.map((body, position) => ({ coachId, trigger, body, position })),
     });
-    messagesCreated = REST_DAY_MESSAGES.length;
+    messagesCreated += bodies.length;
   }
 
   // --- the template --------------------------------------------------------
