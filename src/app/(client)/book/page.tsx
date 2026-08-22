@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { BookSlots } from '@/components/book-slots';
 import { coachForClient, openSlotsFor, upcomingForClient, timeZoneOf, BOOK_AHEAD_DAYS } from '@/lib/booking';
@@ -9,7 +9,7 @@ import { LocalTime } from '@/components/local-time';
 export const dynamic = 'force-dynamic';
 
 export default async function BookPage() {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
   const coach = await coachForClient(user.id);
 
   const [days, upcoming] = await Promise.all([

@@ -76,7 +76,7 @@ export async function bookSlot(formData: FormData): Promise<BookResult> {
   }
 
   const name = user.profile?.fullName || user.email;
-  await notify(coach.id, 'check_in', `${name} booked ${formatSlotFull(match.startsAt, tz)}.`, {
+  await notify(coach.id, 'booking', `${name} booked ${formatSlotFull(match.startsAt, tz)}.`, {
     clientId: user.id,
   });
 
@@ -101,7 +101,7 @@ export async function cancelBooking(formData: FormData) {
   const name = user.profile?.fullName || user.email;
   await notify(
     booking.coachId,
-    'check_in',
+    'booking',
     `${name} cancelled ${formatSlotFull(booking.startsAt, timeZoneOf(coachProfile))}.`,
     { clientId: user.id }
   );
