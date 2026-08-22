@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 
 /*
@@ -56,7 +57,6 @@ export const EXERCISES: SeedExercise[] = [
   { name: 'Hip Thrust Machine', musclePrimary: 'Glutes', muscleSecondary: ['Hamstrings'], equipment: 'Machine', movementPattern: 'Hinge' },
 ];
 
-type SeedSet = { reps: string; rest: number; note?: string };
 type SeedWorkoutExercise = { name: string; sets: number; reps: string; rest: number; note?: string };
 
 export type SeedWorkout = {
@@ -221,44 +221,52 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
   let messagesCreated = 0;
 
   // --- movements -----------------------------------------------------------
+  // One read and one write, rather than a lookup per movement. Eighteen
+  // round trips is most of a serverless function's budget spent on nothing.
   const exerciseIds = new Map<string, string>();
-  for (const e of EXERCISES) {
-    const existing = await prisma.exercise.findFirst({ where: { name: e.name } });
-    if (existing) {
-      exerciseIds.set(e.name, existing.id);
-      continue;
-    }
-    const created = await prisma.exercise.create({
-      data: {
-        name: e.name,
-        musclePrimary: e.musclePrimary,
-        muscleSecondary: e.muscleSecondary,
-        equipment: e.equipment,
-        difficulty: 'intermediate',
-        movementPattern: e.movementPattern,
-        tags: [],
-        substitutions: [],
-      },
-    });
-    exerciseIds.set(e.name, created.id);
-    exercisesCreated += 1;
+  const found = await prisma.exercise.findMany({
+    where: { name: { in: EXERCISES.map((e) => e.name) } },
+    select: { id: true, name: true },
+  });
+  for (const f of found) exerciseIds.set(f.name, f.id);
+
+  const missing = EXERCISES.filter((e) => !exerciseIds.has(e.name)).map((e) => ({
+    id: randomUUID(),
+    name: e.name,
+    musclePrimary: e.musclePrimary,
+    muscleSecondary: e.muscleSecondary,
+    equipment: e.equipment,
+    difficulty: 'intermediate',
+    movementPattern: e.movementPattern,
+    tags: [] as string[],
+    substitutions: [] as string[],
+  }));
+  if (missing.length > 0) {
+    await prisma.exercise.createMany({ data: missing, skipDuplicates: true });
+    for (const m of missing) exerciseIds.set(m.name, m.id);
+    exercisesCreated = missing.length;
   }
 
   // --- cardio --------------------------------------------------------------
   const cardioIds = new Map<string, string>();
-  for (const c of CARDIO_TYPES) {
-    const existing = await prisma.cardioType.findUnique({
-      where: { coachId_name: { coachId, name: c.name } },
-    });
-    if (existing) {
-      cardioIds.set(c.name, existing.id);
-      continue;
-    }
-    const created = await prisma.cardioType.create({
-      data: { coachId, name: c.name, unit: c.unit, defaultTarget: c.defaultTarget, position: c.position },
-    });
-    cardioIds.set(c.name, created.id);
-    cardioCreated += 1;
+  const existingCardio = await prisma.cardioType.findMany({
+    where: { coachId },
+    select: { id: true, name: true },
+  });
+  for (const c of existingCardio) cardioIds.set(c.name, c.id);
+
+  const newCardio = CARDIO_TYPES.filter((c) => !cardioIds.has(c.name)).map((c) => ({
+    id: randomUUID(),
+    coachId,
+    name: c.name,
+    unit: c.unit,
+    defaultTarget: c.defaultTarget,
+    position: c.position,
+  }));
+  if (newCardio.length > 0) {
+    await prisma.cardioType.createMany({ data: newCardio, skipDuplicates: true });
+    for (const c of newCardio) cardioIds.set(c.name, c.id);
+    cardioCreated = newCardio.length;
   }
   const walkingId = cardioIds.get('Walking') ?? null;
 
@@ -267,12 +275,15 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
     where: { coachId, trigger: 'rest_day' },
   });
   if (existingMessages === 0) {
-    for (const [i, body] of REST_DAY_MESSAGES.entries()) {
-      await prisma.autoMessage.create({
-        data: { coachId, trigger: 'rest_day', body, position: i },
-      });
-      messagesCreated += 1;
-    }
+    await prisma.autoMessage.createMany({
+      data: REST_DAY_MESSAGES.map((body, position) => ({
+        coachId,
+        trigger: 'rest_day',
+        body,
+        position,
+      })),
+    });
+    messagesCreated = REST_DAY_MESSAGES.length;
   }
 
   // --- the template --------------------------------------------------------
@@ -318,33 +329,68 @@ export async function seedCoachProgram(coachId: string): Promise<SeedResult> {
     }
     workoutIds.set(w.key, workout.id);
 
-    const alreadyBuilt = await prisma.workoutExercise.count({ where: { workoutId: workout.id } });
-    if (alreadyBuilt > 0) continue;
+    /*
+      Resume, don't assume.
 
-    for (const [order, ex] of w.exercises.entries()) {
-      const exerciseId = exerciseIds.get(ex.name);
-      if (!exerciseId) continue;
+      "Has any movements" is not the same as "is finished" — a run that dies
+      partway leaves a workout with three of its seven exercises, and treating
+      that as built means the gap never heals. Comparing against the expected
+      count instead, and rebuilding the whole session when it doesn't match,
+      is what makes pressing the button a second time actually repair things.
 
-      const we = await prisma.workoutExercise.create({
-        data: { workoutId: workout.id, exerciseId, order, notes: ex.note ?? null },
-      });
+      Logged sets point at workout_sets, so a session someone has already
+      trained is left alone rather than rebuilt out from under their history.
+    */
+    const built = await prisma.workoutExercise.count({ where: { workoutId: workout.id } });
+    if (built === w.exercises.length) continue;
 
-      const sets: SeedSet[] = Array.from({ length: ex.sets }, () => ({
-        reps: ex.reps,
-        rest: ex.rest,
-      }));
-      for (const [i, s] of sets.entries()) {
-        await prisma.workoutSet.create({
-          data: {
-            workoutExerciseId: we.id,
-            setNumber: i + 1,
-            type: 'working',
-            targetReps: s.reps,
-            restSeconds: s.rest,
-          },
-        });
-      }
+    if (built > 0) {
+      const trained = await prisma.workoutLog.count({ where: { workoutId: workout.id } });
+      if (trained > 0) continue;
+      // Cascades to the sets.
+      await prisma.workoutExercise.deleteMany({ where: { workoutId: workout.id } });
     }
+
+    /*
+      Built in two statements rather than one per row.
+
+      The first version issued a create per exercise and per set — about 130
+      round trips for four sessions, which ran past the serverless timeout and
+      left the job half done. Generating the ids here means both levels can go
+      in as bulk inserts.
+    */
+    const weRows = w.exercises
+      .map((ex, order) => {
+        const exerciseId = exerciseIds.get(ex.name);
+        if (!exerciseId) return null;
+        return {
+          id: randomUUID(),
+          workoutId: workout!.id,
+          exerciseId,
+          order,
+          notes: ex.note ?? null,
+          _sets: ex.sets,
+          _reps: ex.reps,
+          _rest: ex.rest,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+
+    await prisma.workoutExercise.createMany({
+      data: weRows.map(({ _sets, _reps, _rest, ...row }) => row),
+    });
+
+    await prisma.workoutSet.createMany({
+      data: weRows.flatMap((row) =>
+        Array.from({ length: row._sets }, (_, i) => ({
+          workoutExerciseId: row.id,
+          setNumber: i + 1,
+          type: 'working' as const,
+          targetReps: row._reps,
+          restSeconds: row._rest,
+        }))
+      ),
+    });
   }
 
   // --- the week ------------------------------------------------------------
