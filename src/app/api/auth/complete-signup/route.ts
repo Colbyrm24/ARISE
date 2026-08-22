@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { ensureCoachAssigned } from '@/lib/onboard-client';
+import { notify } from '@/lib/notifications';
 
 /**
  * Called right after Supabase creates the auth user. Mirrors that user
@@ -36,6 +38,19 @@ export async function POST(request: Request) {
       clientRecord: { create: { status: 'lead' } },
     },
   });
+
+  // Attach them to the coach immediately. Without this the account exists but
+  // is unreachable from the console — no inbox thread, no notifications, and
+  // nobody to book a call with.
+  const coachId = await ensureCoachAssigned(dbUser.id);
+
+  // And tell the coach somebody signed up, which nothing did before. A lead
+  // the coach never hears about is a lead that never becomes a client.
+  if (coachId) {
+    await notify(coachId, 'account', `${fullName || user.email} created an account.`, {
+      clientId: dbUser.id,
+    });
+  }
 
   return NextResponse.json({ id: dbUser.id });
 }
