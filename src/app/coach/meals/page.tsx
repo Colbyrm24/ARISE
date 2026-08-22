@@ -179,13 +179,16 @@ function MealCard({ meal }: { meal: PendingMeal }) {
 }
 
 export default async function CoachMealsPage() {
-  await requireCoach();
-  const [meals, accuracy] = await Promise.all([getPendingMeals(), getReadAccuracy()]);
+  const coach = await requireCoach();
+  const [meals, accuracy] = await Promise.all([
+    getPendingMeals(coach.id),
+    getReadAccuracy(coach.id),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1>Meals</h1>
+        <h1 className="display text-2xl">Meals</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Photos your clients logged, read and waiting on you.
         </p>
