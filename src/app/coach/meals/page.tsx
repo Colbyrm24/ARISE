@@ -1,8 +1,9 @@
-import { AlertTriangle, Check, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Send, Trash2 } from 'lucide-react';
 import { requireCoach } from '@/lib/auth';
 import { getPendingMeals, getReadAccuracy, type PendingMeal } from '@/lib/meal-review';
 import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system-window';
 import { Button } from '@/components/ui/button';
+import { macroReply } from '@/lib/meal-reply';
 import { confirmMeal, correctMeal, discardMeal } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -118,28 +119,15 @@ function MealCard({ meal }: { meal: PendingMeal }) {
           </div>
 
           {/*
-            Two forms, not one with a mode switch. Confirming is the common
-            case and has to stay a single tap; the moment it shares a submit
-            button with the edit fields it stops being one.
-          */}
-          <div className="flex flex-wrap items-center gap-2">
-            {!meal.failure && (
-              <form action={confirmMeal}>
-                <input type="hidden" name="logId" value={meal.id} />
-                <Button type="submit" size="sm">
-                  <Check size={14} /> Looks right
-                </Button>
-              </form>
-            )}
-            <form action={discardMeal}>
-              <input type="hidden" name="logId" value={meal.id} />
-              <Button type="submit" size="sm" variant="ghost">
-                <Trash2 size={14} /> Discard
-              </Button>
-            </form>
-          </div>
+            One form now, with two submit buttons pointing at different
+            actions.
 
-          <form action={correctMeal} className="flex flex-col gap-2 border-t border-border/60 pt-3">
+            It used to be two forms so that confirming stayed a single tap.
+            That still holds — formAction keeps it one tap — but sharing a form
+            means the reply below can be sent by either path. Two forms would
+            have meant two reply boxes, or a reply attached to only one of them.
+          */}
+          <form action={correctMeal} className="flex flex-col gap-3 border-t border-border/60 pt-3">
             <input type="hidden" name="logId" value={meal.id} />
             <input
               name="name"
@@ -168,9 +156,51 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                 </label>
               ))}
             </div>
-            <Button type="submit" size="sm" variant="outline" className="self-start">
-              Save corrected
-            </Button>
+            {/*
+              The reply, written for him and editable in place.
+
+              This is the part that replaces the actual job: confirming a photo
+              never took the time, opening Messages and typing the same shape of
+              sentence forty times a day did. Sent from his own account into the
+              normal thread, so the client can reply to it like anything else.
+
+              Leave it untouched and it stays in step with whatever numbers get
+              submitted. Clear it and nothing sends.
+            */}
+            <label className="flex flex-col gap-1.5">
+              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                Reply to {meal.clientName.split(' ')[0]}
+              </span>
+              <textarea
+                name="reply"
+                rows={4}
+                maxLength={2000}
+                defaultValue={macroReply({
+                  id: meal.id,
+                  meal: meal.meal,
+                  calories: meal.calories,
+                  protein: meal.protein,
+                  carbs: meal.carbs,
+                  fat: meal.fat,
+                  failed: Boolean(meal.failure),
+                })}
+                className="w-full resize-y rounded-none border border-input bg-secondary/40 p-2 text-sm leading-relaxed focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+              />
+            </label>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {!meal.failure && (
+                <Button type="submit" formAction={confirmMeal} size="sm">
+                  <Check size={14} /> Numbers are right — send
+                </Button>
+              )}
+              <Button type="submit" size="sm" variant="outline">
+                <Send size={14} /> Use my numbers — send
+              </Button>
+              <Button type="submit" formAction={discardMeal} size="sm" variant="ghost">
+                <Trash2 size={14} /> Discard
+              </Button>
+            </div>
           </form>
         </div>
       </div>

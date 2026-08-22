@@ -4,6 +4,31 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { notify } from '@/lib/notifications';
+import { macroReply } from '@/lib/meal-reply';
+
+/**
+ * Sends the coach's line into the client's thread.
+ *
+ * A real Message from the coach's own account, not a system note — so the
+ * client can reply to it exactly like anything else, and the whole exchange
+ * stays in one place instead of half here and half in their texts.
+ *
+ * Returns quietly on failure. A message that doesn't send is worth far less
+ * than the review itself, and taking the whole action down with it would mean
+ * the numbers never landed either.
+ */
+async function sendReply(coachId: string, clientId: string, raw: FormDataEntryValue | null) {
+  const body = typeof raw === 'string' ? raw.trim().slice(0, 2000) : '';
+  if (!body) return;
+  try {
+    await prisma.message.create({
+      data: { senderId: coachId, recipientId: clientId, body, contextType: 'meal' },
+    });
+    await notify(clientId, 'message', body.slice(0, 80));
+  } catch {
+    /* keep the review */
+  }
+}
 
 /*
   Confirming or correcting a read.
@@ -35,10 +60,16 @@ export async function confirmMeal(formData: FormData) {
     data: { reviewState: 'confirmed', reviewedAt: new Date(), reviewedById: coach.id },
   });
 
+  const replied = typeof formData.get('reply') === 'string' && String(formData.get('reply')).trim();
+  await sendReply(coach.id, log.clientId, formData.get('reply'));
+
   // Told to the client because the number on their screen just changed
   // meaning — it went from a guess to their coach's number, and that is the
-  // whole reason they sent the photo.
-  await notify(log.clientId, 'nutrition', `Your ${log.name || 'meal'} is confirmed.`);
+  // whole reason they sent the photo. Skipped when a message just went out,
+  // since two pings for one action is how a client learns to ignore both.
+  if (!replied) {
+    await notify(log.clientId, 'nutrition', `Your ${log.name || 'meal'} is confirmed.`);
+  }
   refresh(log.clientId);
 }
 
@@ -84,11 +115,41 @@ export async function correctMeal(formData: FormData) {
     },
   });
 
-  await notify(
-    log.clientId,
-    'nutrition',
-    `Your ${name || log.name || 'meal'} came to ${calories} cal and ${protein}g protein.`
-  );
+  /*
+    If the coach corrected the macros but left the sentence alone, the sentence
+    is now quoting the old numbers at the client. Rather than making the box a
+    live-updating client component, compare what came back against what we
+    would have generated for the old values: an exact match means untouched,
+    so regenerate it from the corrected ones. Anything he actually typed is
+    left exactly as written.
+  */
+  const submitted = typeof formData.get('reply') === 'string' ? String(formData.get('reply')) : '';
+  const untouched =
+    submitted.trim() ===
+    macroReply({
+      id: log.id,
+      meal: log.meal,
+      calories: log.calories,
+      protein: Number(log.protein),
+      carbs: Number(log.carbs),
+      fat: Number(log.fat),
+      failed: log.reviewState === 'failed',
+    }).trim();
+
+  const finalReply = untouched
+    ? macroReply({ id: log.id, meal: log.meal, calories, protein, carbs, fat })
+    : submitted;
+
+  const replied = Boolean(finalReply.trim());
+  await sendReply(coach.id, log.clientId, finalReply);
+
+  if (!replied) {
+    await notify(
+      log.clientId,
+      'nutrition',
+      `Your ${name || log.name || 'meal'} came to ${calories} cal and ${protein}g protein.`
+    );
+  }
   refresh(log.clientId);
 }
 
