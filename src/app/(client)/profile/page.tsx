@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, Bell, LineChart, ClipboardCheck } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -67,6 +67,52 @@ export default async function ProfilePage() {
         the most a phone bar carries well, and a call is something people book
         every few weeks — not a screen they open daily.
       */}
+      {/*
+        Progress and the weekly check-in were two and three taps deep — the
+        only route in was a small weight tile on Today, and the check-in was
+        inside that. A client who never tapped it never found either.
+      */}
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6">
+          {[
+            { href: '/progress', label: 'Progress and photos', icon: LineChart },
+            { href: '/check-in', label: 'Weekly check-in', icon: ClipboardCheck },
+          ].map(({ href, label, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center justify-between gap-3 text-sm transition-colors hover:text-accent"
+            >
+              <span className="flex items-center gap-3">
+                <Icon size={16} className="text-accent" />
+                {label}
+              </span>
+              <span className="readout text-[10px] uppercase text-muted-foreground">Open</span>
+            </Link>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/*
+        Updates only ever had one entry point — a badge on Today that vanished
+        the moment it was read. Opening the page marked everything read, so the
+        history became unreachable by design.
+      */}
+      <Card>
+        <CardContent className="pt-6">
+          <Link
+            href="/notifications"
+            className="flex items-center justify-between gap-3 text-sm transition-colors hover:text-accent"
+          >
+            <span className="flex items-center gap-3">
+              <Bell size={16} className="text-accent" />
+              Updates
+            </span>
+            <span className="readout text-[10px] uppercase text-muted-foreground">Open</span>
+          </Link>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="pt-6">
           <Link
