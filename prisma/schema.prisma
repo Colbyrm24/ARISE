@@ -42,10 +42,32 @@ model User {
   pushSubscriptions      PushSubscription[]
   mealLogsReviewed       NutritionLog[]             @relation("MealReviewer")
   mealPlansWritten       MealPlan[]                 @relation("MealPlanCoach")
+  availability           CoachAvailability[]        @relation("CoachAvailability")
+  bookingsAsCoach        Booking[]                  @relation("BookingCoach")
+  bookingsAsClient       Booking[]                  @relation("BookingClient")
+  healthToken            HealthToken?               @relation("HealthTokenClient")
   workoutTemplatesOwned  WorkoutTemplate[]           @relation("TemplateCoach")
   recipesCreated         Recipe[]                    @relation("RecipeCoach")
 
   @@map("users")
+}
+
+// A token a client's phone uses to post their own health data.
+//
+// Not a login. It authenticates one narrow write — steps and bodyweight for
+// one client — so it can live in an iOS Shortcut or Health Auto Export
+// without being worth stealing. Hashed at rest for the same reason a password
+// would be: the plaintext is shown once, at creation, and never again.
+model HealthToken {
+  id         String    @id @default(uuid())
+  clientId   String    @unique @map("client_id")
+  tokenHash  String    @unique @map("token_hash")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  client User @relation("HealthTokenClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("health_tokens")
 }
 
 model Profile {
@@ -54,6 +76,10 @@ model Profile {
   avatarUrl String?  @map("avatar_url")
   phone     String?
   timezone  String?  @default("America/New_York")
+  // Where a booked call happens — a standing Meet link, a phone number,
+  // whatever the coach wants people to join on. Copied onto each booking so
+  // changing it later cannot rewrite where a past call was held.
+  bookingLocation String? @map("booking_location")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -887,6 +913,66 @@ model MealPlanItem {
 
   @@index([planId])
   @@map("meal_plan_items")
+}
+
+// When a coach is open for calls, one row per weekly window.
+//
+// Stored as minutes from midnight in the coach's own timezone rather than as
+// absolute times, because "Tuesdays 9 to 5" is what a person actually means
+// and it has to keep meaning that through a daylight saving change. Turning
+// these into real instants is lib/schedule.ts's job, and it is the part of
+// this feature most likely to be wrong, so it is the part with tests.
+model CoachAvailability {
+  id          String  @id @default(uuid())
+  coachId     String  @map("coach_id")
+  // 0 = Sunday through 6 = Saturday, matching Date.getUTCDay().
+  weekday     Int
+  startMinute Int     @map("start_minute")
+  endMinute   Int     @map("end_minute")
+  slotMinutes Int     @default(30) @map("slot_minutes")
+  active      Boolean @default(true)
+
+  coach User @relation("CoachAvailability", fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId, weekday])
+  @@map("coach_availability")
+}
+
+// A booked call.
+//
+// The unique on (coachId, startsAt) is the only thing that actually prevents
+// a double booking. Checking for a clash before inserting is a race — two
+// clients tapping Book in the same second both read an empty slot — so the
+// constraint is what makes it correct and the check is only there to produce
+// a decent error message.
+model Booking {
+  id          String    @id @default(uuid())
+  coachId     String    @map("coach_id")
+  clientId    String    @map("client_id")
+  startsAt    DateTime  @map("starts_at")
+  endsAt      DateTime  @map("ends_at")
+  // booked | cancelled | completed
+  status      String    @default("booked")
+  note        String?
+  // Whatever the coach wants people to join on — a Meet link, a phone number.
+  location    String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  cancelledAt DateTime? @map("cancelled_at")
+  // "coach" or "client", so the other side can be told who dropped it.
+  cancelledBy String?   @map("cancelled_by")
+
+  coach  User @relation("BookingCoach", fields: [coachId], references: [id], onDelete: Cascade)
+  client User @relation("BookingClient", fields: [clientId], references: [id], onDelete: Cascade)
+
+  // No @@unique here even though the database has one. The constraint that
+  // matters is PARTIAL — unique on (coach_id, starts_at) WHERE status =
+  // 'booked' — because a plain unique would let a cancelled call block its own
+  // slot forever and nobody could rebook it. Prisma cannot express a partial
+  // unique index, so it lives in schedule-migration.sql and is deliberately
+  // absent here rather than being declared wrong.
+  @@index([clientId, startsAt])
+  @@index([coachId, startsAt])
+  @@map("bookings")
 }
 
 model Notification {
