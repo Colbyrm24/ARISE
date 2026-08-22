@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
-import { getCurrentUser } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -10,6 +10,8 @@ import {
   SystemWindowContent,
   Count,
   Cell,
+  countState,
+  type CountMode,
 } from '@/components/ui/system-window';
 import { habitLabel, isTracked } from '@/lib/habits';
 import { upcomingForClient } from '@/lib/booking';
@@ -31,7 +33,7 @@ function greeting() {
 }
 
 export default async function TodayPage() {
-  const user = await getCurrentUser();
+  const user = await requireEntitledClient();
   const firstName = user?.profile?.fullName?.split(' ')[0] ?? 'there';
   const today = todayDateOnly();
 
@@ -133,13 +135,16 @@ export default async function TodayPage() {
       total = 1;
     }
 
-    const hit = value !== undefined && total !== undefined && value >= total;
+    // Calories are a budget, not a target to beat. Everything else is a reach.
+    const mode: CountMode = goal.goalType === 'calories' ? 'budget' : 'reach';
+    const hit = value !== undefined && countState(value, total, mode) === 'landed';
     return {
       id: goal.id,
       label,
       value,
       total,
       unit,
+      mode,
       done: loggedDone.has(goal.id) || hit,
       // Only manual habits get a checkbox. A tracked one completes off the
       // number the app already holds, and letting it be hand-ticked would
@@ -211,7 +216,7 @@ export default async function TodayPage() {
                   <span className="min-w-0 flex-1 text-[15px]">{r.label}</span>
                   <span className="flex shrink-0 items-center gap-3">
                     {r.value !== undefined && r.total !== undefined ? (
-                      <Count value={r.value} total={`${r.total}${r.unit}`} />
+                      <Count value={r.value} total={`${r.total}${r.unit}`} mode={r.mode} />
                     ) : (
                       <span className="readout text-sm text-muted-foreground">[—]</span>
                     )}
@@ -252,39 +257,6 @@ export default async function TodayPage() {
         </SystemWindow>
       )}
 
-      {/*
-        Steps are typed in. There's no native app and no Health permission to
-        read from, so this is the honest version: a number copied off the
-        phone once a day. Shown whenever a steps habit exists, because without
-        it that habit can never complete.
-      */}
-      {stepsHabit && (
-        <SystemWindow title="Steps" plain>
-          <SystemWindowContent className="pt-3">
-            <form action={logSteps} className="flex flex-wrap items-center gap-3">
-              <input
-                type="number"
-                name="steps"
-                min="0"
-                step="1"
-                inputMode="numeric"
-                defaultValue={stepLog?.steps ?? undefined}
-                placeholder="Today's steps"
-                aria-label="Today's steps"
-                className="readout h-10 w-32 rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-              />
-              <Button type="submit" size="sm" variant="outline">
-                {stepLog ? 'Update' : 'Log'}
-              </Button>
-              {stepsHabit.targetValue && (
-                <span className="readout text-[10px] uppercase text-muted-foreground">
-                  Target {Number(stepsHabit.targetValue).toLocaleString()}
-                </span>
-              )}
-            </form>
-          </SystemWindowContent>
-        </SystemWindow>
-      )}
 
       {/* Today's workout */}
       <SystemWindow
@@ -358,15 +330,46 @@ export default async function TodayPage() {
       {/* Steps + weight sit side by side — both are single figures, not
           progressions, so they read as a readout pair rather than two cards. */}
       <div className="grid grid-cols-2 gap-4">
+        {/*
+          The steps entry itself, not a button that did nothing.
+
+          This card used to render a ghost button with no onClick, no form and
+          no href — the only step-logging affordance most clients ever saw, and
+          it was inert. The real form lived in a separate window that only
+          appeared once a coach had set a steps habit, so a client without one
+          could never log a step at all.
+        */}
         <Card>
           <CardContent className="pt-5">
             <p className="readout text-[10px] uppercase text-muted-foreground">Steps</p>
             <p className="readout mt-2 text-xl text-accent glow-soft">
-              {stepLog ? stepLog.steps.toLocaleString() : '0'}
+              {stepLog ? stepLog.steps.toLocaleString() : '—'}
             </p>
-            <Button variant="ghost" size="sm" className="mt-3 -ml-4">
-              Log steps
-            </Button>
+            {stepsHabit?.targetValue && (
+              <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
+                of {Number(stepsHabit.targetValue).toLocaleString()}
+              </p>
+            )}
+            <form action={logSteps} className="mt-3 flex items-center gap-1.5">
+              <input
+                type="number"
+                name="steps"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                defaultValue={stepLog?.steps ?? undefined}
+                placeholder="Today"
+                aria-label="Today's step count"
+                className="readout h-9 w-full min-w-0 rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none"
+              />
+              <button
+                type="submit"
+                aria-label="Save step count"
+                className="readout h-9 shrink-0 border border-border px-2 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
+              >
+                Save
+              </button>
+            </form>
           </CardContent>
         </Card>
 
