@@ -1,0 +1,122 @@
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
+import { requireClient, isEntitled } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { SystemWindow, SystemWindowContent, Cell } from '@/components/ui/system-window';
+import { STATUS_WAITING } from '@/lib/client-status';
+import { SignOutButton } from '@/components/client/sign-out-button';
+
+export const dynamic = 'force-dynamic';
+
+/*
+  Where a client waits.
+
+  Before this existed, somebody who signed up but hadn't paid landed in the
+  full app — every screen, every feature, nothing bought. Gating that was the
+  fix; this is the other half of it, because a gate with nothing behind it is
+  just a locked door.
+
+  It says exactly which step they're on and what happens next, and it keeps
+  the two things a lead can legitimately do — fill in their intake, and reach
+  their coach — within one tap.
+*/
+
+const STEPS = [
+  { key: 'signed-up', label: 'Account created' },
+  { key: 'paid', label: 'Payment' },
+  { key: 'signed', label: 'Agreement signed' },
+  { key: 'in', label: 'Coaching starts' },
+] as const;
+
+function reached(status: string) {
+  switch (status) {
+    case 'lead':
+      return 1;
+    case 'payment_pending':
+      return 1;
+    case 'paid':
+    case 'agreement_pending':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+export default async function WelcomePage() {
+  const user = await requireClient();
+  const status = user.clientRecord?.status ?? 'lead';
+
+  // Somebody who is entitled has no business here — send them to the app.
+  if (isEntitled(status)) redirect('/today');
+
+  const firstName = user.profile?.fullName?.split(' ')[0] ?? 'there';
+  const waiting = STATUS_WAITING[status] ?? STATUS_WAITING.lead!;
+  const done = reached(status);
+
+  const intake = await prisma.onboardingResponse.count({
+    where: { clientId: user.id, completedAt: { not: null } },
+  });
+
+  return (
+    <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-5 px-5 py-10">
+      <header>
+        <p className="readout text-[11px] uppercase text-muted-foreground">ARISE</p>
+        <h1 className="mt-1.5 text-2xl font-bold">
+          {waiting.title}, {firstName}.
+        </h1>
+      </header>
+
+      <SystemWindow title="Where you are" meta={`[${done}/4]`}>
+        <SystemWindowContent className="flex flex-col gap-4 pt-4">
+          <p className="text-sm leading-relaxed text-muted-foreground">{waiting.body}</p>
+
+          <ul className="flex flex-col">
+            {STEPS.map((step, i) => (
+              <li
+                key={step.key}
+                className="flex items-center justify-between gap-4 border-b border-border/50 py-2.5 last:border-b-0"
+              >
+                <span className={`text-sm ${i < done ? '' : 'text-muted-foreground'}`}>
+                  {step.label}
+                </span>
+                <Cell on={i < done} />
+              </li>
+            ))}
+          </ul>
+        </SystemWindowContent>
+      </SystemWindow>
+
+      {/*
+        The intake is the one useful thing somebody can do while they wait, and
+        doing it now is what makes their first week ready on day one instead of
+        day four.
+      */}
+      <SystemWindow title="Worth doing now" plain>
+        <SystemWindowContent className="pt-3">
+          <Link
+            href="/onboarding"
+            className="flex items-center justify-between gap-3 text-sm transition-colors hover:text-accent"
+          >
+            <span>
+              {intake > 0 ? 'Finish your intake' : 'Fill in your intake'}
+              <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
+                {intake > 0 ? `${intake} of 4 done` : 'about 5 minutes'}
+              </span>
+            </span>
+            <ArrowRight size={15} className="shrink-0 text-accent" />
+          </Link>
+        </SystemWindowContent>
+      </SystemWindow>
+
+      <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
+        Waiting longer than you expected? Reply to your coach&apos;s last message and they&apos;ll
+        sort it.
+      </p>
+
+      <div className="max-w-xs">
+        <SignOutButton />
+      </div>
+    </div>
+  );
+}
