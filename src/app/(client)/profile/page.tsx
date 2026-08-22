@@ -1,9 +1,13 @@
+import Link from 'next/link';
+import { CalendarDays } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton } from '@/components/client/sign-out-button';
 import { PushToggle } from '@/components/push-toggle';
+import { HealthSync } from '@/components/health-sync';
+import { prisma } from '@/lib/prisma';
 
 const statusLabels: Record<string, string> = {
   lead: 'Lead',
@@ -20,6 +24,9 @@ const statusLabels: Record<string, string> = {
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();
+  const healthToken = user
+    ? await prisma.healthToken.findUnique({ where: { clientId: user.id } })
+    : null;
   const initials = (user?.profile?.fullName ?? user?.email ?? '?')
     .split(' ')
     .map((p) => p[0])
@@ -36,6 +43,42 @@ export default async function ProfilePage() {
       <Card>
         <CardContent className="pt-6">
           <PushToggle vapidPublicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ''} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <HealthSync
+            hasToken={Boolean(healthToken)}
+            lastUsed={
+              healthToken?.lastUsedAt
+                ? healthToken.lastUsedAt.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                : null
+            }
+          />
+        </CardContent>
+      </Card>
+
+      {/*
+        Booking lives here rather than in the bottom bar. Five items is already
+        the most a phone bar carries well, and a call is something people book
+        every few weeks — not a screen they open daily.
+      */}
+      <Card>
+        <CardContent className="pt-6">
+          <Link
+            href="/book"
+            className="flex items-center justify-between gap-3 text-sm transition-colors hover:text-accent"
+          >
+            <span className="flex items-center gap-3">
+              <CalendarDays size={16} className="text-accent" />
+              Book a call with your coach
+            </span>
+            <span className="readout text-[10px] uppercase text-muted-foreground">Open</span>
+          </Link>
         </CardContent>
       </Card>
 
