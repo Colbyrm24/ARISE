@@ -19,7 +19,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       className={cn(
         'surface-sheen rounded-none border border-border bg-card text-card-foreground transition-all duration-200',
         interactive &&
-          'hover:border-accent/35 hover:shadow-[0_0_0_1px_hsl(var(--accent)/0.08),0_16px_36px_-18px_hsl(var(--system)/0.5)]',
+          'hover:border-accent/55 hover:shadow-[inset_0_0_70px_hsl(var(--system)/0.24),0_0_0_1px_hsl(var(--accent)/0.2),0_0_42px_-6px_hsl(var(--accent)/0.45),0_22px_72px_-24px_hsl(var(--system)/0.9)]',
         className
       )}
       {...props}

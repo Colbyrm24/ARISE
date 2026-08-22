@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 
 /** Corner ticks. Purely decorative, so they're hidden from assistive tech. */
 function Ticks() {
-  const base = 'pointer-events-none absolute h-2 w-2 border-accent/70';
+  const base = 'glow-ink pointer-events-none absolute z-10 h-2 w-2 border-accent';
   return (
     <span aria-hidden className="contents">
       <span className={cn(base, 'left-1.5 top-1.5 border-l border-t')} />
@@ -62,7 +62,7 @@ const SystemWindow = React.forwardRef<HTMLDivElement, SystemWindowProps>(
           ? 'border-destructive/60 shadow-[inset_0_0_40px_hsl(var(--destructive)/0.08)]'
           : 'surface-sheen lit-edge border-border',
         interactive &&
-          'hover:border-accent/40 hover:shadow-[0_0_0_1px_hsl(var(--accent)/0.1),0_16px_36px_-18px_hsl(var(--system)/0.55)]',
+          'hover:border-accent/60 hover:shadow-[inset_0_0_70px_hsl(var(--system)/0.26),0_0_0_1px_hsl(var(--accent)/0.22),0_0_46px_-4px_hsl(var(--accent)/0.5),0_24px_80px_-24px_hsl(var(--system)/0.95)]',
         className
       )}
       {...props}
@@ -82,10 +82,10 @@ const SystemWindow = React.forwardRef<HTMLDivElement, SystemWindowProps>(
         <div className="flex items-center gap-3 px-5 pb-0 pt-5">
           <div
             className={cn(
-              'flex flex-1 items-center justify-center border px-3 py-2 text-center text-xs font-bold uppercase tracking-[0.3em]',
+              'relative z-10 flex flex-1 items-center justify-center border px-3 py-2 text-center text-xs font-bold uppercase tracking-[0.3em]',
               alert
                 ? 'border-destructive/50 bg-destructive/[0.07] text-destructive'
-                : 'glow border-accent/35 bg-accent/[0.07] text-foreground'
+                : 'glow border-accent/55 bg-accent/[0.11] text-foreground shadow-[inset_0_0_22px_hsl(var(--accent)/0.14),0_0_28px_-6px_hsl(var(--accent)/0.6)]'
             )}
           >
             {title}
@@ -206,7 +206,7 @@ export function Cell({ on, className }: { on?: boolean; className?: string }) {
       className={cn(
         'relative inline-block h-4 w-4 shrink-0 border',
         on
-          ? 'border-success bg-success/10 after:absolute after:inset-[3px] after:bg-success after:shadow-[0_0_10px_hsl(var(--success)/0.8)]'
+          ? 'border-success bg-success/15 shadow-[0_0_16px_-2px_hsl(var(--success)/0.7)] after:absolute after:inset-[3px] after:bg-success after:shadow-[0_0_10px_hsl(var(--success)/0.9),0_0_26px_4px_hsl(var(--success)/0.55)]'
           : 'border-border',
         className
       )}
