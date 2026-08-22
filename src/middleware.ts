@@ -59,7 +59,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/signup');
   const isCoachRoute = pathname.startsWith('/coach');
-  const isClientRoute = ['/today', '/workouts', '/nutrition', '/messages', '/profile', '/ai', '/onboarding'].some(
+  const isClientRoute = ['/today', '/workouts', '/nutrition', '/messages', '/profile', '/ai', '/onboarding', '/book'].some(
     (p) => pathname.startsWith(p)
   );
 
@@ -98,6 +98,6 @@ export async function middleware(request: NextRequest) {
 // unexcluded worker file adds an auth call to every page load in the app.
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|robots.txt|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|robots.txt|api/health|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|woff2?)$).*)',
   ],
 };
