@@ -12,6 +12,8 @@ import {
   Cell,
 } from '@/components/ui/system-window';
 import { habitLabel, isTracked } from '@/lib/habits';
+import { upcomingForClient } from '@/lib/booking';
+import { LocalTime } from '@/components/local-time';
 import { toggleHabit, logSteps } from './actions';
 
 function todayDateOnly() {
@@ -42,6 +44,7 @@ export default async function TodayPage() {
     target,
     nutritionLogs,
     stepLog,
+    upcomingCalls,
     latestMessage,
     activeProgram,
     latestWeight,
@@ -55,6 +58,7 @@ export default async function TodayPage() {
         }),
         prisma.nutritionLog.findMany({ where: { clientId: user.id, date: today } }),
         prisma.stepLog.findUnique({ where: { clientId_date: { clientId: user.id, date: today } } }),
+        upcomingForClient(user.id),
         prisma.message.findFirst({
           where: { recipientId: user.id },
           orderBy: { createdAt: 'desc' },
@@ -69,7 +73,7 @@ export default async function TodayPage() {
           orderBy: { date: 'desc' },
         }),
       ])
-    : [[], [], null, [], null, null, null, null];
+    : [[], [], null, [], null, [], null, null, null];
 
   const weighedInToday = latestWeight ? latestWeight.date.getTime() === today.getTime() : false;
 
@@ -146,6 +150,7 @@ export default async function TodayPage() {
 
   const completedCount = rows.filter((r) => r.done).length;
   const stepsHabit = goals.find((g) => g.goalType === 'steps') ?? null;
+  const nextCall = upcomingCalls[0] ?? null;
 
   return (
     <div className="flex flex-col gap-5">
@@ -167,6 +172,31 @@ export default async function TodayPage() {
           )}
         </div>
       </header>
+
+      {/*
+        The next call, if there is one. Everything else on this screen is
+        something you can do any time today; a call is the only thing with a
+        time attached, so it sits above the rest.
+      */}
+      {nextCall && (
+        <SystemWindow title="Next call" plain>
+          <SystemWindowContent className="flex flex-wrap items-center justify-between gap-3 pt-3">
+            <span className="readout text-sm text-accent glow-soft">
+              <LocalTime iso={nextCall.startsAt.toISOString()} />
+            </span>
+            {nextCall.location && (
+              <a
+                href={nextCall.location.startsWith('http') ? nextCall.location : undefined}
+                target={nextCall.location.startsWith('http') ? '_blank' : undefined}
+                rel="noreferrer"
+                className="readout min-w-0 break-all text-[10px] uppercase text-muted-foreground hover:text-accent"
+              >
+                {nextCall.location}
+              </a>
+            )}
+          </SystemWindowContent>
+        </SystemWindow>
+      )}
 
       {/* Daily goals — the core screen. Real numbers, not just checkboxes. */}
       {rows.length > 0 ? (
