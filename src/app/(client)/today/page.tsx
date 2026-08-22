@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/system-window';
 import { habitLabel, isTracked } from '@/lib/habits';
 import { upcomingForClient } from '@/lib/booking';
+import { scheduledToday } from '@/lib/program-deploy';
 import { LocalTime } from '@/components/local-time';
 import { toggleHabit, logSteps } from './actions';
 
@@ -36,6 +37,11 @@ export default async function TodayPage() {
   const user = await requireEntitledClient();
   const firstName = user?.profile?.fullName?.split(' ')[0] ?? 'there';
   const today = todayDateOnly();
+
+  // What the program says today is. Null when nobody has deployed one yet,
+  // in which case this whole block stays off the screen rather than showing
+  // an empty shell.
+  const scheduled = user ? await scheduledToday(user.id) : null;
 
   // Everything below reads real data where the feature already exists.
   // Where the feature is later in the roadmap (water, etc.), this shows
@@ -177,6 +183,58 @@ export default async function TodayPage() {
           )}
         </div>
       </header>
+
+      {/*
+        What the program says today is.
+
+        Above everything else because it is the answer to the question the
+        client opened the app to ask. A rest day gets the same billing as a
+        session — being told plainly to rest is the instruction, not the
+        absence of one.
+      */}
+      {scheduled && (
+        <SystemWindow
+          title={scheduled.kind === 'rest' ? 'Rest day' : "Today's session"}
+          meta={scheduled.workout?.estMinutes ? `[${scheduled.workout.estMinutes} min]` : undefined}
+        >
+          <SystemWindowContent className="flex flex-col gap-3 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span
+                className={
+                  scheduled.kind === 'rest'
+                    ? 'text-sm text-muted-foreground'
+                    : 'glow-soft text-sm font-medium text-foreground'
+                }
+              >
+                {scheduled.kind === 'rest'
+                  ? 'Nothing in the gym today. Steps and food still count.'
+                  : scheduled.label}
+              </span>
+              {scheduled.workoutId && scheduled.kind !== 'rest' && (
+                <Link
+                  href={`/workouts/${scheduled.workoutId}`}
+                  className="readout shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                >
+                  Start
+                </Link>
+              )}
+            </div>
+
+            {scheduled.stepTarget && (
+              <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                <span className="text-sm text-muted-foreground">
+                  {scheduled.cardioType?.name ?? 'Steps'}
+                </span>
+                <Count
+                  value={stepLog?.steps ?? 0}
+                  total={scheduled.stepTarget}
+                  mode="reach"
+                />
+              </div>
+            )}
+          </SystemWindowContent>
+        </SystemWindow>
+      )}
 
       {/*
         The next call, if there is one. Everything else on this screen is
