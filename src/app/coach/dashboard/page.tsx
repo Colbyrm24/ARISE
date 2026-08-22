@@ -90,7 +90,7 @@ export default async function CoachDashboardPage() {
                     className={
                       n > 0
                         ? 'readout text-3xl text-accent glow-soft'
-                        : 'readout text-3xl text-muted-foreground'
+                        : 'readout glow-dim text-3xl text-muted-foreground'
                     }
                   >
                     {String(n).padStart(2, '0')}
@@ -128,7 +128,7 @@ export default async function CoachDashboardPage() {
                     <p
                       className={
                         seg.people.length === 0
-                          ? 'readout text-2xl text-muted-foreground'
+                          ? 'readout glow-dim text-2xl text-muted-foreground'
                           : seg.warn
                             ? 'readout text-2xl text-destructive'
                             : 'readout text-2xl text-accent glow-soft'
