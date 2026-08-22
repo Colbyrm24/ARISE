@@ -1,11 +1,11 @@
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { MessageThread } from '@/components/messages/message-thread';
 import { Composer } from '@/components/messages/composer';
 import { sendMessageToCoach } from './actions';
 
 export default async function MessagesPage() {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
 
   const rel = await prisma.coachClientRelationship.findFirst({
     where: { clientId: user.id, status: 'active' },
