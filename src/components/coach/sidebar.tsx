@@ -11,6 +11,7 @@ import {
   UtensilsCrossed,
   CreditCard,
   Camera,
+  CalendarDays,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,7 @@ const items = [
   { href: '/coach/clients', label: 'Clients', icon: Users },
   { href: '/coach/inbox', label: 'Inbox', icon: Inbox },
   { href: '/coach/meals', label: 'Meals', icon: Camera, badge: 'pendingMeals' },
+  { href: '/coach/schedule', label: 'Schedule', icon: CalendarDays },
   { href: '/coach/programs', label: 'Programs', icon: ClipboardList },
   { href: '/coach/exercises', label: 'Exercises', icon: Dumbbell },
   { href: '/coach/recipes', label: 'Recipes', icon: UtensilsCrossed },
