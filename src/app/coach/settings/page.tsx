@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
-import { REST_DAY } from '@/lib/auto-message';
-import { saveRestDayMessages } from './actions';
+import { TRIGGERS, TRIGGER_LABELS, QUIET_DAYS } from '@/lib/auto-message';
+import { saveAutoMessages } from './actions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SignOutButton } from '@/components/client/sign-out-button';
 import { PushToggle } from '@/components/push-toggle';
@@ -11,12 +11,25 @@ import { PushToggle } from '@/components/push-toggle';
 export default async function CoachSettingsPage() {
   const user = await getCurrentUser();
 
-  const restDayMessages = user
+  const autoMessages = user
     ? await prisma.autoMessage.findMany({
-        where: { coachId: user.id, trigger: REST_DAY },
-        orderBy: { position: 'asc' },
+        where: { coachId: user.id, trigger: { in: [...TRIGGERS] } },
+        orderBy: [{ trigger: 'asc' }, { position: 'asc' }],
       })
     : [];
+
+  const byTrigger = new Map<string, string[]>();
+  for (const m of autoMessages) {
+    if (!byTrigger.has(m.trigger)) byTrigger.set(m.trigger, []);
+    byTrigger.get(m.trigger)!.push(m.body);
+  }
+
+  const BLURB: Record<string, string> = {
+    daily_check_in:
+      'Goes out each morning to every active client — the line you currently paste into every thread one at a time.',
+    gone_quiet: `For anyone who hasn't sent you anything in ${QUIET_DAYS} days. This is the one that saves people, because going quiet is the step before leaving and it's also when they're least likely to message first.`,
+    rest_day: 'For a client whose programme says today is a rest day, so the app doesn\'t go silent on the day the habit is most fragile.',
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -67,43 +80,61 @@ export default async function CoachSettingsPage() {
         </CardContent>
       </Card>
 
-      {/* A rest day is the day a client is most likely to drift — nothing is
-          asked of them, so nothing arrives. These go out on their own so the
-          app doesn't go silent on exactly the wrong day. */}
+      {/*
+        Messages that send themselves.
+
+        One card per trigger rather than one big list, because the three are
+        answering different questions and a coach editing the quiet-client line
+        is in a different frame of mind from one editing the morning hello.
+      */}
       <Card>
         <CardHeader>
-          <CardTitle>Rest day messages</CardTitle>
+          <CardTitle>Automatic messages</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-6">
           <p className="text-sm text-muted-foreground">
-            One per line. On a client&apos;s rest day one of these sends itself from your account,
-            into your normal thread with them — they can reply to it like any other message. It
-            rotates through the list so nobody gets the same line twice in a row, and never sends
-            more than once a day.
+            One per line, in your words. They send from your account into your normal thread, so a
+            client can reply like any other message. Each list rotates so nobody gets the same
+            sentence twice in a row — and at most one of these ever sends to a client in a day,
+            never to someone you&apos;ve already spoken to yourself.
           </p>
-          <form action={saveRestDayMessages} className="flex flex-col gap-3">
-            <textarea
-              name="messages"
-              rows={7}
-              defaultValue={restDayMessages.map((m) => m.body).join('\n')}
-              placeholder="Rest day today my man. Get your steps in and let the body recover"
-              className="w-full border border-input bg-secondary/40 p-3 text-sm leading-relaxed focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-            />
-            <div className="flex items-center gap-3">
-              <Button type="submit" size="sm" variant="outline" className="w-fit">
-                Save messages
-              </Button>
-              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
-                [{restDayMessages.length} in rotation]
-              </span>
-            </div>
-          </form>
-          {restDayMessages.length === 0 && (
-            <p className="readout border border-destructive/40 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
-              Nothing in rotation, so no rest-day message will send. Load your program on the
-              Programs screen to get the default five, or write your own above.
-            </p>
-          )}
+
+          {TRIGGERS.map((t) => {
+            const lines = byTrigger.get(t) ?? [];
+            return (
+              <form
+                key={t}
+                action={saveAutoMessages}
+                className="flex flex-col gap-2 border-t border-border/60 pt-5 first:border-t-0 first:pt-0"
+              >
+                <input type="hidden" name="trigger" value={t} />
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="readout text-[11px] uppercase tracking-wider text-accent glow-soft">
+                    {TRIGGER_LABELS[t]}
+                  </span>
+                  <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                    [{lines.length} in rotation]
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground">{BLURB[t]}</p>
+                <textarea
+                  name="messages"
+                  rows={5}
+                  defaultValue={lines.join('\n')}
+                  className="w-full border border-input bg-secondary/40 p-3 text-sm leading-relaxed focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                />
+                <Button type="submit" size="sm" variant="outline" className="w-fit">
+                  Save
+                </Button>
+                {lines.length === 0 && (
+                  <p className="readout border border-destructive/40 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+                    Nothing in rotation, so this one never sends. Load your program on the Programs
+                    screen to get the defaults, or write your own above.
+                  </p>
+                )}
+              </form>
+            );
+          })}
         </CardContent>
       </Card>
 
