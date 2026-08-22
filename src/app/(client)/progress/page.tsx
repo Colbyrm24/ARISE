@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
-import { requireClient } from '@/lib/auth';
+import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ function daysAgo(n: number) {
 }
 
 export default async function ProgressPage() {
-  const user = await requireClient();
+  const user = await requireEntitledClient();
   const since = daysAgo(90);
 
   const [logs, measurements, photos, thisWeeksCheckIn] = await Promise.all([
