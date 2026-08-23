@@ -3,7 +3,8 @@ import { requireCoach } from '@/lib/auth';
 import { getPendingMeals, getReadAccuracy, type PendingMeal } from '@/lib/meal-review';
 import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system-window';
 import { Button } from '@/components/ui/button';
-import { macroReply } from '@/lib/meal-reply';
+import { macroReply, askIfThatsAll } from '@/lib/meal-reply';
+import type { DayContext } from '@/lib/day-shape';
 import { confirmMeal, correctMeal, discardMeal } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -26,8 +27,96 @@ const CONFIDENCE_TONE = {
 const numberField =
   'readout h-9 w-full min-w-0 rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50';
 
+/*
+  The day around the plate.
+
+  Without this the coach reads a number off the card and then has to open the
+  client's profile to find out whether the number is good — at which point the
+  queue is slower than the text thread it replaced. Four bars and one sentence
+  is the whole of it: enough to answer "is this fine" without becoming a
+  second dashboard sitting inside the queue.
+*/
+/*
+  The flag carries the judgment; the bars underneath carry the numbers.
+
+  An earlier version spelled the figures out here too — "Barely eaten today —
+  830 of 2,200" sitting directly above a bar reading 830/2,200. Saying it
+  twice made the strip wrap on a phone and told the coach nothing extra, so
+  the only flag that quotes a number is the one whose number isn't on a bar.
+*/
+const FLAG_COPY: Record<
+  NonNullable<DayContext['flag']>,
+  (d: DayContext) => { text: string; tone: string }
+> = {
+  under: () => ({ text: 'Barely eaten today', tone: 'text-destructive' }),
+  over: (d) => ({
+    // The overage isn't readable off a bar that's simply full.
+    text: `${Math.abs(d.left!.calories).toLocaleString()} over the ceiling`,
+    tone: 'text-destructive',
+  }),
+  fat_spent: () => ({ text: 'Fat is spent — keep the rest lean', tone: 'text-accent' }),
+  protein_behind: () => ({ text: 'Protein behind the calories', tone: 'text-accent' }),
+  easy_close: (d) => ({
+    // Likewise: "what's left" is the subtraction the coach would do himself.
+    text: `${d.left!.calories.toLocaleString()} left · ${d.left!.protein}g protein to go`,
+    tone: 'text-success',
+  }),
+};
+
+function DayBar({ label, value, target }: { label: string; value: number; target: number }) {
+  // Capped at 100 for the fill but not for the reading, so going over shows
+  // as a full bar with a number that tells the truth.
+  const pct = target > 0 ? Math.min(100, (value / target) * 100) : 0;
+  const over = target > 0 && value > target;
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex items-baseline justify-between gap-1">
+        <span className="readout text-[10px] uppercase text-muted-foreground">{label}</span>
+        <span className={`readout text-[10px] ${over ? 'text-destructive' : ''}`}>
+          {value.toLocaleString()}
+          <span className="text-muted-foreground">/{target.toLocaleString()}</span>
+        </span>
+      </div>
+      <div className="h-1 w-full bg-secondary">
+        <div
+          className={`h-full ${over ? 'bg-destructive' : 'bg-accent'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DayStrip({ day }: { day: DayContext }) {
+  if (!day.target) return null;
+  const flag = day.flag ? FLAG_COPY[day.flag](day) : null;
+
+  return (
+    <div className="flex flex-col gap-2 border border-border/60 bg-secondary/20 p-2">
+      {/*
+        Stacked on a phone. Side by side, a two-word label and a six-word flag
+        both wrap and the header turns into four ragged lines above the bars.
+      */}
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
+        <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+          Day so far · {day.meals} logged
+        </span>
+        {flag && <span className={`readout text-[10px] ${flag.tone}`}>{flag.text}</span>}
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
+        <DayBar label="Cal" value={day.calories} target={day.target.calories} />
+        <DayBar label="Protein" value={day.protein} target={day.target.protein} />
+        <DayBar label="Carbs" value={day.carbs} target={day.target.carbs} />
+        <DayBar label="Fat" value={day.fat} target={day.target.fat} />
+      </div>
+    </div>
+  );
+}
+
 function MealCard({ meal }: { meal: PendingMeal }) {
   const est = meal.estimate;
+  const followUp = askIfThatsAll(meal.day);
 
   return (
     <div className="border border-border bg-card">
@@ -118,6 +207,8 @@ function MealCard({ meal }: { meal: PendingMeal }) {
             <Count value={meal.fat} unit="g fat" />
           </div>
 
+          {meal.day && <DayStrip day={meal.day} />}
+
           {/*
             One form now, with two submit buttons pointing at different
             actions.
@@ -183,10 +274,36 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                   carbs: meal.carbs,
                   fat: meal.fat,
                   failed: Boolean(meal.failure),
+                  day: meal.day,
                 })}
                 className="w-full resize-y rounded-none border border-input bg-secondary/40 p-2 text-sm leading-relaxed focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
               />
             </label>
+
+            {/*
+              "Was that everything?" as a second message rather than a second
+              sentence.
+
+              The reply above already spent its one question, and two questions
+              in one text is the thing he cuts out of drafts. This only appears
+              when the numbers make it a real question — one or two things
+              logged, well under the day — so it stays a signal instead of a
+              box that's always there.
+            */}
+            {followUp && (
+              <label className="flex items-start gap-2 border border-border/60 bg-secondary/20 p-2">
+                <input
+                  type="checkbox"
+                  name="followUp"
+                  value={followUp}
+                  defaultChecked
+                  className="mt-0.5 shrink-0 accent-[hsl(var(--accent))]"
+                />
+                <span className="text-xs leading-relaxed">
+                  Send <span className="text-muted-foreground">&ldquo;{followUp}&rdquo;</span> after
+                </span>
+              </label>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               {!meal.failure && (

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { notify } from '@/lib/notifications';
 import { macroReply } from '@/lib/meal-reply';
+import { getDayContext, withMealAdjusted } from '@/lib/day-totals';
 
 /**
  * Sends the coach's line into the client's thread.
@@ -27,6 +28,26 @@ async function sendReply(coachId: string, clientId: string, raw: FormDataEntryVa
     await notify(clientId, 'message', body.slice(0, 80));
   } catch {
     /* keep the review */
+  }
+}
+
+/**
+ * The "was that everything?" line, as its own message.
+ *
+ * Sent second and only when the coach left the box ticked. Separate rather
+ * than appended because two questions in one text is exactly what he edits
+ * out of drafts — and because a client answering "yeah that was it" is
+ * replying to a question, not to a macro breakdown.
+ */
+async function sendFollowUp(coachId: string, clientId: string, raw: FormDataEntryValue | null) {
+  const body = typeof raw === 'string' ? raw.trim().slice(0, 300) : '';
+  if (!body) return;
+  try {
+    await prisma.message.create({
+      data: { senderId: coachId, recipientId: clientId, body, contextType: 'meal' },
+    });
+  } catch {
+    /* the reply already landed */
   }
 }
 
@@ -62,6 +83,7 @@ export async function confirmMeal(formData: FormData) {
 
   const replied = typeof formData.get('reply') === 'string' && String(formData.get('reply')).trim();
   await sendReply(coach.id, log.clientId, formData.get('reply'));
+  await sendFollowUp(coach.id, log.clientId, formData.get('followUp'));
 
   // Told to the client because the number on their screen just changed
   // meaning — it went from a guess to their coach's number, and that is the
@@ -101,6 +123,21 @@ export async function correctMeal(formData: FormData) {
   const carbs = num('carbs', Math.round(Number(log.carbs)), 1000);
   const fat = num('fat', Math.round(Number(log.fat)), 500);
 
+  const before = {
+    calories: log.calories,
+    protein: Number(log.protein),
+    carbs: Number(log.carbs),
+    fat: Number(log.fat),
+  };
+  const after = { calories, protein, carbs, fat };
+
+  /*
+    Read the day BEFORE the write, because the day is what the sentence on
+    screen was generated from. Reading it afterwards would already contain the
+    correction and the untouched-check below would never match.
+  */
+  const dayBefore = await getDayContext(log.clientId, log.date);
+
   await prisma.nutritionLog.update({
     where: { id: logId },
     data: {
@@ -129,19 +166,25 @@ export async function correctMeal(formData: FormData) {
     macroReply({
       id: log.id,
       meal: log.meal,
-      calories: log.calories,
-      protein: Number(log.protein),
-      carbs: Number(log.carbs),
-      fat: Number(log.fat),
+      ...before,
       failed: log.reviewState === 'failed',
+      day: dayBefore,
     }).trim();
 
   const finalReply = untouched
-    ? macroReply({ id: log.id, meal: log.meal, calories, protein, carbs, fat })
+    ? macroReply({
+        id: log.id,
+        meal: log.meal,
+        ...after,
+        // The day the correction produces, not the one it replaced — otherwise
+        // the regenerated line fixes the plate and still quotes the old day.
+        day: dayBefore ? withMealAdjusted(dayBefore, before, after) : null,
+      })
     : submitted;
 
   const replied = Boolean(finalReply.trim());
   await sendReply(coach.id, log.clientId, finalReply);
+  await sendFollowUp(coach.id, log.clientId, formData.get('followUp'));
 
   if (!replied) {
     await notify(
