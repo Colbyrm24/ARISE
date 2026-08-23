@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { signMealPhotoUrls } from '@/lib/meal-photos';
+import { getDayContexts, dayOf, type DayContext } from '@/lib/day-totals';
 import type { MealEstimate, EstimateItem } from '@/lib/meal-estimate';
 
 /*
@@ -31,6 +32,13 @@ export type PendingMeal = {
   protein: number;
   carbs: number;
   fat: number;
+  /**
+   * The client's whole day around this plate, including it.
+   *
+   * Null only when targets were never set — the card still renders, it just
+   * can't say whether the number is good.
+   */
+  day: DayContext | null;
 };
 
 function initialsOf(name: string) {
@@ -108,9 +116,12 @@ export async function getPendingMeals(coachId: string, limit = 40): Promise<Pend
   });
   if (rows.length === 0) return [];
 
-  const urls = await signMealPhotoUrls(
-    rows.map((r) => r.photoPath).filter((p): p is string => Boolean(p))
-  );
+  // Both batched across the whole queue rather than per row: forty cards
+  // must not mean forty round trips on the busiest screen in the product.
+  const [urls, days] = await Promise.all([
+    signMealPhotoUrls(rows.map((r) => r.photoPath).filter((p): p is string => Boolean(p))),
+    getDayContexts(rows.map((r) => ({ clientId: r.clientId, date: r.date }))),
+  ]);
 
   return rows.map((r) => {
     const fullName = r.client.user.profile?.fullName || r.client.user.email;
@@ -130,6 +141,7 @@ export async function getPendingMeals(coachId: string, limit = 40): Promise<Pend
       protein: Math.round(Number(r.protein)),
       carbs: Math.round(Number(r.carbs)),
       fat: Math.round(Number(r.fat)),
+      day: days.get(`${r.clientId}|${dayOf(r.date).toISOString()}`) ?? null,
     };
   });
 }
