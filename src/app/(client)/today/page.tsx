@@ -316,41 +316,58 @@ export default async function TodayPage() {
       )}
 
 
-      {/* Today's workout */}
-      <SystemWindow
-        title={todaysWorkout ? `Session ${String(todaysWorkout.dayOrder).padStart(2, '0')}` : 'Session'}
-      >
-        <SystemWindowContent className="flex items-center justify-between gap-4 pt-4">
-          <div>
+      {/*
+        The rotation card, for clients whose program was never deployed as a
+        week.
+
+        `todaysWorkout` is the old way of answering "what today is": step
+        through the program's days by how long ago it was assigned. It has no
+        concept of a weekday and no concept of a rest day, so on a four-day
+        program it tells somebody to train seven days a week and drifts a day
+        further out of step every week.
+
+        When a deployed week exists, `scheduled` above already answered the
+        question correctly, and rendering both put two different workouts on
+        screen with two Start buttons — the wrong one styled `primary`, so the
+        loud button was the one that opened Monday's session on a Tuesday.
+        The deployed week wins whenever there is one.
+      */}
+      {!scheduled && (
+        <SystemWindow
+          title={todaysWorkout ? `Session ${String(todaysWorkout.dayOrder).padStart(2, '0')}` : 'Session'}
+        >
+          <SystemWindowContent className="flex items-center justify-between gap-4 pt-4">
+            <div>
+              {todaysWorkout ? (
+                <>
+                  <p className="text-base font-medium">{todaysWorkout.name}</p>
+                  <p className="readout mt-1 text-[11px] uppercase text-muted-foreground">
+                    {workoutDone ? 'Complete' : todaysLog ? 'In progress' : 'Not started'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-base font-medium">No workout assigned yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Your coach will add your program soon.
+                  </p>
+                </>
+              )}
+            </div>
             {todaysWorkout ? (
-              <>
-                <p className="text-base font-medium">{todaysWorkout.name}</p>
-                <p className="readout mt-1 text-[11px] uppercase text-muted-foreground">
-                  {workoutDone ? 'Complete' : todaysLog ? 'In progress' : 'Not started'}
-                </p>
-              </>
+              <Link href={`/workouts/${todaysWorkout.id}`}>
+                <Button variant={workoutDone ? 'outline' : 'primary'} size="sm">
+                  {workoutDone ? 'View' : todaysLog ? 'Continue' : 'Start'}
+                </Button>
+              </Link>
             ) : (
-              <>
-                <p className="text-base font-medium">No workout assigned yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Your coach will add your program soon.
-                </p>
-              </>
-            )}
-          </div>
-          {todaysWorkout ? (
-            <Link href={`/workouts/${todaysWorkout.id}`}>
-              <Button variant={workoutDone ? 'outline' : 'primary'} size="sm">
-                {workoutDone ? 'View' : todaysLog ? 'Continue' : 'Start'}
+              <Button variant="outline" size="sm" disabled>
+                Start
               </Button>
-            </Link>
-          ) : (
-            <Button variant="outline" size="sm" disabled>
-              Start
-            </Button>
-          )}
-        </SystemWindowContent>
-      </SystemWindow>
+            )}
+          </SystemWindowContent>
+        </SystemWindow>
+      )}
 
       {/* Nutrition */}
       <Link href="/nutrition">
