@@ -25,6 +25,25 @@ function todayDateOnly() {
   return d;
 }
 
+/*
+  A habit's target, as a number.
+
+  The coach types these into a free-text box labelled "Target, or what to
+  do", so what actually lands in the column is prose: "12,000 steps",
+  "1 gallon", "180g protein". `Number("12,000 steps")` is NaN, which fell
+  through to undefined and rendered the row as "[—]" — a client with a
+  perfectly good 12,000 step goal saw a dash where their progress should be,
+  on the same screen where the session card was already counting the same
+  steps toward the same number.
+
+  Pull the digits out instead of asking coaches to type bare integers.
+*/
+function targetNumber(raw: unknown): number | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const n = Number(String(raw).replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 /** Time-aware greeting. It said "Good morning" at 11pm before. */
 function greeting() {
   const h = new Date().getHours();
@@ -128,14 +147,16 @@ export default async function TodayPage() {
 
     if (goal.goalType === 'steps') {
       value = stepLog?.steps ?? 0;
-      total = Number(goal.targetValue) || undefined;
+      // Falls back to the number the deployed week already carries, so the
+      // two places steps appear on this screen can't disagree.
+      total = targetNumber(goal.targetValue) ?? scheduled?.stepTarget ?? undefined;
     } else if (goal.goalType === 'protein') {
       value = proteinEaten;
-      total = target ? Math.round(Number(target.protein)) : Number(goal.targetValue) || undefined;
+      total = target ? Math.round(Number(target.protein)) : targetNumber(goal.targetValue);
       unit = 'g';
     } else if (goal.goalType === 'calories') {
       value = caloriesEaten;
-      total = target?.calories ?? (Number(goal.targetValue) || undefined);
+      total = target?.calories ?? targetNumber(goal.targetValue);
     } else if (goal.goalType === 'workout') {
       value = workoutDone ? 1 : 0;
       total = 1;
