@@ -294,8 +294,17 @@ export default async function TodayPage({
   const nextCall = upcomingCalls[0] ?? null;
 
   return (
-    <div className="flex flex-col gap-5">
-      <header>
+    /*
+      One column on a phone, two on a desktop.
+
+      The full-width run at the top is the answer to "what do I do today" —
+      the date, the week, and the session — and it stays full width at every
+      size because splitting the answer in half is how you stop it reading
+      as an answer. Everything below it is reference: habits, food, steps,
+      weight, the last message. Those pair up.
+    */
+    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:gap-y-6">
+      <header className="lg:col-span-2">
         <p className="readout text-[11px] uppercase text-muted-foreground">
           {viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </p>
@@ -322,7 +331,9 @@ export default async function TodayPage({
         </div>
       </header>
 
-      <WeekStrip days={weekDays} />
+      <div className="lg:col-span-2">
+        <WeekStrip days={weekDays} />
+      </div>
 
       {/*
         A way back, and a reason to notice you've wandered.
@@ -333,7 +344,7 @@ export default async function TodayPage({
       {!isToday && (
         <Link
           href="/today"
-          className="readout -mt-1 self-start text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+          className="readout -mt-1 self-start text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent lg:col-span-2"
         >
           {isPast ? '← Back to today' : '← Back to today'}
         </Link>
@@ -349,6 +360,7 @@ export default async function TodayPage({
       */}
       {scheduled && (
         <SystemWindow
+          className="lg:col-span-2"
           title={scheduled.kind === 'rest' ? 'Rest day' : isToday ? "Today's session" : 'Session'}
           meta={scheduled.workout?.estMinutes ? `[${scheduled.workout.estMinutes} min]` : undefined}
         >
@@ -397,7 +409,7 @@ export default async function TodayPage({
         time attached, so it sits above the rest.
       */}
       {nextCall && (
-        <SystemWindow title="Next call" plain>
+        <SystemWindow title="Next call" plain className="lg:col-span-2">
           <SystemWindowContent className="flex flex-wrap items-center justify-between gap-3 pt-3">
             <span className="readout text-sm text-accent glow-soft">
               <LocalTime iso={nextCall.startsAt.toISOString()} />
@@ -559,7 +571,7 @@ export default async function TodayPage({
 
       {/* Steps + weight sit side by side — both are single figures, not
           progressions, so they read as a readout pair rather than two cards. */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-4 lg:col-span-2">
         {/*
           The steps entry itself, not a button that did nothing.
 
