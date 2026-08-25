@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
-import { requireCoach } from '@/lib/auth';
+import { requireCoach, isEntitled } from '@/lib/auth';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { stripe } from '@/lib/stripe';
 import { getSiteUrl } from '@/lib/site-url';
@@ -115,7 +115,31 @@ export async function createPaymentLink(formData: FormData) {
     });
   }
 
-  await prisma.client.update({ where: { userId: clientId }, data: { status: 'payment_pending' } });
+  /*
+    Move them to payment_pending only if they haven't bought yet.
+
+    This used to be unconditional, and `payment_pending` is below the
+    entitlement line — so generating a link for somebody who was already
+    active silently revoked their access to the entire app. The coach saw
+    nothing; the client opened ARISE that evening and got the waiting-room
+    screen telling them to check their email for a payment link, with their
+    program, their meals and their history all gone.
+
+    Sending a renewal or a second-term link to a client mid-engagement is a
+    completely ordinary thing to do, so the old behaviour was a live trap.
+    A link for someone already being coached is now just a link.
+  */
+  const existing = await prisma.client.findUnique({
+    where: { userId: clientId },
+    select: { status: true },
+  });
+
+  if (existing && !isEntitled(existing.status)) {
+    await prisma.client.update({
+      where: { userId: clientId },
+      data: { status: 'payment_pending' },
+    });
+  }
 
   revalidatePath(`/coach/clients/${clientId}`);
 }
