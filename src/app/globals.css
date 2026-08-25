@@ -13,8 +13,13 @@
 */
 @layer base {
   :root {
-    /* void — the page ground. blue-black, never grey. */
-    --background: 224 65% 3%;
+    /*
+      void — the page ground. Near-black, with just enough blue left in it
+      that the accents don't read as sitting on grey. It used to carry a
+      full lattice of lit seams and shadow pools; the light now comes from
+      the windows and the type, and the ground stays out of the way.
+    */
+    --background: 224 30% 4%;
     /* ice */
     --foreground: 216 100% 93%;
 
@@ -70,49 +75,23 @@
   html {
     color-scheme: dark;
   }
+  /*
+    The ground is flat.
+
+    This used to be a lit plate: two axes of hairline seams, five pools of
+    shadow laid over them, and a glow pooling up from below — nine layers,
+    fixed-attachment, behind every screen in the app. It was the most
+    striking thing about ARISE and also the loudest, and on a screen whose
+    whole job is "here is the one thing to do today" the ground was
+    competing with the answer.
+
+    Everything that makes the app feel lit still does: the windows still
+    break light across their top edge, headings still bloom, the accent
+    still glows, and sign-in still pools light up from the floor in its own
+    layout. That light now has somewhere dark to land.
+  */
   body {
     @apply bg-background text-foreground antialiased;
-    /* Light pooling up from the bottom of the plate, the way a system
-       window lights the ground it opens over. */
-    /*
-      The plate, in three passes, painted front to back.
-
-      1. Seams — sparse hairlines of light on two axes. These are the cracks;
-         everything else exists to make them read as cracks.
-      2. Mass — irregular pools of something darker than the background,
-         laid OVER the glow so the light is what shows through the gaps
-         rather than washing across the whole surface.
-      3. Glow — the light source itself, pooling up from below.
-
-      Order matters more than the values here. Put the glow on top of the mass
-      and it stops being shadow with light behind it and becomes a blue page.
-    */
-    background-image:
-      repeating-linear-gradient(
-        112deg,
-        transparent 0 112px,
-        hsl(var(--accent) / 0.05) 112px 118px,
-        hsl(var(--accent) / 0.42) 118px 119px,
-        hsl(var(--accent) / 0.05) 119px 125px,
-        transparent 125px 250px
-      ),
-      repeating-linear-gradient(
-        67deg,
-        transparent 0 198px,
-        hsl(var(--system) / 0.05) 198px 205px,
-        hsl(var(--system) / 0.32) 205px 206px,
-        hsl(var(--system) / 0.05) 206px 213px,
-        transparent 213px 460px
-      ),
-      radial-gradient(ellipse 55% 40% at 12% 16%, hsl(var(--shadow) / 0.92), transparent 70%),
-      radial-gradient(ellipse 45% 55% at 88% 28%, hsl(var(--shadow) / 0.88), transparent 72%),
-      radial-gradient(ellipse 62% 34% at 34% 70%, hsl(var(--shadow) / 0.92), transparent 68%),
-      radial-gradient(ellipse 40% 46% at 72% 86%, hsl(var(--shadow) / 0.88), transparent 70%),
-      radial-gradient(ellipse 50% 30% at 56% 44%, hsl(var(--shadow) / 0.75), transparent 76%),
-      radial-gradient(ellipse 120% 62% at 50% 110%, hsl(var(--system) / 0.26), transparent 62%),
-      radial-gradient(ellipse 80% 48% at 50% -8%, hsl(var(--system) / 0.14), transparent 68%);
-    background-attachment: fixed;
-    background-repeat: no-repeat;
   }
   h1, h2, h3, h4 {
     @apply tracking-tight;
@@ -143,32 +122,25 @@
 }
 
 /*
-  Two fixed overlays that sit above everything and take no clicks. The grain
-  is what stops the flat fills reading as "rendered"; the rake is the light
-  falling across the plate at 74deg. Both are deliberately near-invisible
-  individually — the effect is cumulative.
+  Grain, and nothing else.
+
+  There were two overlays here: this one, and a 74deg rake of hairlines
+  falling across the plate. The rake went with the plate — it was the same
+  diagonal pattern at a smaller scale, and leaving it behind would have kept
+  a ghost of the lattice on an otherwise flat page.
+
+  The grain stays. It's what stops a large flat near-black fill reading as
+  "rendered" rather than as a surface, and it carries no pattern of its own.
 */
-body::before,
-body::after {
+body::before {
   content: '';
   position: fixed;
   z-index: 60;
   pointer-events: none;
-}
-body::before {
   inset: -50%;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='220' height='220' filter='url(%23n)' opacity='0.42'/></svg>");
-  opacity: 0.22;
+  opacity: 0.16;
   mix-blend-mode: overlay;
-}
-body::after {
-  inset: 0;
-  background-image: repeating-linear-gradient(
-    74deg,
-    transparent 0 3px,
-    hsl(var(--accent) / 0.05) 3px 4px,
-    transparent 4px 9px
-  );
 }
 
 /* Thin, quiet scrollbars */
