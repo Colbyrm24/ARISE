@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/system-window';
 import { habitLabel, isTracked } from '@/lib/habits';
 import { upcomingForClient } from '@/lib/booking';
-import { scheduledToday } from '@/lib/program-deploy';
+import { scheduledToday, scheduleBetween } from '@/lib/program-deploy';
 import { LocalTime } from '@/components/local-time';
+import { WeekStrip } from '@/components/client/week-strip';
 import { toggleHabit, logSteps } from './actions';
 
 function todayDateOnly() {
@@ -24,6 +25,51 @@ function todayDateOnly() {
   d.setHours(0, 0, 0, 0);
   return d;
 }
+
+/*
+  Which day this screen is showing.
+
+  The day lives in the URL (`/today?d=2026-08-27`) rather than in component
+  state, which is what lets the whole page stay a server component: moving to
+  Thursday is a navigation, and Thursday's session, meals and habits are
+  fetched for Thursday rather than fetched for today and filtered in the
+  browser. It also means a day can be linked to — a coach can send "look at
+  Saturday" and have it open on Saturday.
+*/
+function dateKey(d: Date) {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+/** Anything that isn't a real YYYY-MM-DD falls back to today rather than erroring. */
+function parseDateKey(raw: string | undefined): Date | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [y, m, d] = raw.split('-').map(Number);
+  const out = new Date(y, m - 1, d);
+  out.setHours(0, 0, 0, 0);
+  if (Number.isNaN(out.getTime())) return null;
+  // Rejects 2026-02-31 and friends, which Date happily rolls into March.
+  if (out.getFullYear() !== y || out.getMonth() !== m - 1 || out.getDate() !== d) return null;
+  return out;
+}
+
+function addLocalDays(d: Date, n: number) {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  out.setHours(0, 0, 0, 0);
+  return out;
+}
+
+/** Monday. The training week starts where the program's week starts. */
+function startOfWeek(d: Date) {
+  const js = d.getDay(); // 0 = Sunday
+  return addLocalDays(d, -(js === 0 ? 6 : js - 1));
+}
+
+const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 /*
   A habit's target, as a number.
@@ -52,15 +98,70 @@ function greeting() {
   return 'Good evening';
 }
 
-export default async function TodayPage() {
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams?: { d?: string };
+}) {
   const user = await requireEntitledClient();
   const firstName = user?.profile?.fullName?.split(' ')[0] ?? 'there';
   const today = todayDateOnly();
 
-  // What the program says today is. Null when nobody has deployed one yet,
-  // in which case this whole block stays off the screen rather than showing
-  // an empty shell.
-  const scheduled = user ? await scheduledToday(user.id) : null;
+  /*
+    Every query below is scoped to `viewDate`, not to today. That is the
+    whole calendar change: the page already knew how to render a day, it
+    just always rendered the same one.
+
+    `isToday` gates the things that write. You can look at Thursday, but you
+    cannot tick Thursday's habits on Tuesday — a checkbox that silently
+    logged against the wrong day would be worse than no checkbox.
+  */
+  const viewDate = parseDateKey(searchParams?.d) ?? today;
+  const isToday = viewDate.getTime() === today.getTime();
+  const isPast = viewDate.getTime() < today.getTime();
+
+  // What the program says this day is. Null when nobody has deployed one
+  // yet, in which case this whole block stays off the screen rather than
+  // showing an empty shell.
+  const scheduled = user ? await scheduledToday(user.id, viewDate) : null;
+
+  // The seven days around whichever one is open, for the strip at the top.
+  const weekStart = startOfWeek(viewDate);
+  const weekItems = user ? await scheduleBetween(user.id, weekStart, addLocalDays(weekStart, 6)) : [];
+  /*
+    Scheduled rows are stored at UTC midnight; the dates on this page are
+    local midnight. Keyed off the UTC calendar date on one side and the
+    local one on the other, which agree for every timezone this app is used
+    in. Worth knowing if that ever stops being true.
+  */
+  /*
+    Only two fields off each row are needed to draw the strip, so the map is
+    typed to exactly those. Being explicit here rather than leaning on
+    inference keeps this compiling whether or not the Prisma client has been
+    generated — `new Map(xs.map(x => [k, x]))` infers its value type as {}
+    from an array that isn't a tuple, and the failure shows up as
+    "Property 'kind' does not exist", three lines away from the cause.
+  */
+  const scheduledByDay = new Map<string, { date: Date; kind: string }>(
+    weekItems.map(
+      (item) =>
+        [item.date.toISOString().slice(0, 10), item as { date: Date; kind: string }] as const
+    )
+  );
+  const weekDays = WEEKDAY_LETTERS.map((letter, i) => {
+    const day = addLocalDays(weekStart, i);
+    const iso = dateKey(day);
+    const item = scheduledByDay.get(iso);
+    return {
+      iso,
+      letter,
+      dayNumber: day.getDate(),
+      hasSession: Boolean(item && item.kind !== 'rest'),
+      isRest: item?.kind === 'rest',
+      isToday: day.getTime() === today.getTime(),
+      isSelected: day.getTime() === viewDate.getTime(),
+    };
+  });
 
   // Everything below reads real data where the feature already exists.
   // Where the feature is later in the roadmap (water, etc.), this shows
@@ -78,13 +179,13 @@ export default async function TodayPage() {
   ] = user
     ? await Promise.all([
         prisma.dailyGoal.findMany({ where: { clientId: user.id, active: true } }),
-        prisma.dailyGoalLog.findMany({ where: { clientId: user.id, date: today } }),
+        prisma.dailyGoalLog.findMany({ where: { clientId: user.id, date: viewDate } }),
         prisma.nutritionTarget.findFirst({
-          where: { clientId: user.id, effectiveDate: { lte: today } },
+          where: { clientId: user.id, effectiveDate: { lte: viewDate } },
           orderBy: { effectiveDate: 'desc' },
         }),
-        prisma.nutritionLog.findMany({ where: { clientId: user.id, date: today } }),
-        prisma.stepLog.findUnique({ where: { clientId_date: { clientId: user.id, date: today } } }),
+        prisma.nutritionLog.findMany({ where: { clientId: user.id, date: viewDate } }),
+        prisma.stepLog.findUnique({ where: { clientId_date: { clientId: user.id, date: viewDate } } }),
         upcomingForClient(user.id),
         prisma.message.findFirst({
           where: { recipientId: user.id },
@@ -102,7 +203,7 @@ export default async function TodayPage() {
       ])
     : [[], [], null, [], null, [], null, null, null];
 
-  const weighedInToday = latestWeight ? latestWeight.date.getTime() === today.getTime() : false;
+  const weighedInToday = latestWeight ? latestWeight.date.getTime() === viewDate.getTime() : false;
 
   const unreadUpdates = user
     ? await prisma.notification.count({ where: { userId: user.id, readAt: null } })
@@ -123,7 +224,11 @@ export default async function TodayPage() {
   const todaysLog =
     user && todaysWorkout
       ? await prisma.workoutLog.findFirst({
-          where: { clientId: user.id, workoutId: todaysWorkout.id, startedAt: { gte: today } },
+          where: {
+            clientId: user.id,
+            workoutId: todaysWorkout.id,
+            startedAt: { gte: viewDate, lt: addLocalDays(viewDate, 1) },
+          },
           orderBy: { startedAt: 'desc' },
         })
       : null;
@@ -173,10 +278,14 @@ export default async function TodayPage() {
       unit,
       mode,
       done: loggedDone.has(goal.id) || hit,
+      // Only manual habits get a checkbox, and only on today — ticking a box
+      // while looking at Thursday would write Thursday's habit against
+      // today's date, which is a quiet way to corrupt somebody's streak.
+      //
       // Only manual habits get a checkbox. A tracked one completes off the
       // number the app already holds, and letting it be hand-ticked would
       // mean protein could read done on a day someone ate 40g.
-      tickable: !isTracked(goal.goalType),
+      tickable: isToday && !isTracked(goal.goalType),
     };
   });
 
@@ -188,11 +297,19 @@ export default async function TodayPage() {
     <div className="flex flex-col gap-5">
       <header>
         <p className="readout text-[11px] uppercase text-muted-foreground">
-          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          {viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </p>
         <div className="mt-1.5 flex items-center justify-between gap-3">
+          {/*
+            The greeting is for today. On any other day it would be a lie —
+            "Good evening" on a Saturday you're looking at from Tuesday — so
+            the heading becomes the day itself, which is the more useful
+            thing to say anyway once you've navigated somewhere.
+          */}
           <h1 className="text-2xl font-bold">
-            {greeting()}, {firstName}.
+            {isToday
+              ? `${greeting()}, ${firstName}.`
+              : viewDate.toLocaleDateString('en-US', { weekday: 'long' })}
           </h1>
           {unreadUpdates > 0 && (
             <Link
@@ -205,6 +322,23 @@ export default async function TodayPage() {
         </div>
       </header>
 
+      <WeekStrip days={weekDays} />
+
+      {/*
+        A way back, and a reason to notice you've wandered.
+
+        Without this the only route home from Friday is the browser's back
+        button, and on a phone installed as a PWA there isn't one.
+      */}
+      {!isToday && (
+        <Link
+          href="/today"
+          className="readout -mt-1 self-start text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+        >
+          {isPast ? '← Back to today' : '← Back to today'}
+        </Link>
+      )}
+
       {/*
         What the program says today is.
 
@@ -215,7 +349,7 @@ export default async function TodayPage() {
       */}
       {scheduled && (
         <SystemWindow
-          title={scheduled.kind === 'rest' ? 'Rest day' : "Today's session"}
+          title={scheduled.kind === 'rest' ? 'Rest day' : isToday ? "Today's session" : 'Session'}
           meta={scheduled.workout?.estMinutes ? `[${scheduled.workout.estMinutes} min]` : undefined}
         >
           <SystemWindowContent className="flex flex-col gap-3 pt-4">
