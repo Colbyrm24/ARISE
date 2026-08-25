@@ -72,7 +72,18 @@ function LoginForm() {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
+            <div className="flex items-baseline justify-between">
+              <Label htmlFor="password">Password</Label>
+              {/* Without this there was no way back into an account at all —
+                  a forgotten password meant the coach resetting it by hand
+                  in the Supabase dashboard, for every client, forever. */}
+              <Link
+                href="/forgot-password"
+                className="text-xs text-muted-foreground transition-colors hover:text-accent"
+              >
+                Forgot?
+              </Link>
+            </div>
             <Input
               id="password"
               type="password"
