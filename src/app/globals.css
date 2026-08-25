@@ -212,6 +212,83 @@ body::before {
     pointer-events: none;
   }
 
+  /*
+    The same edge, all the way around the viewport. Desktop only.
+
+    On a phone the app fills the screen and the device's own bezel is the
+    frame. On a desktop it doesn't, and once the lit plate came out from
+    behind everything the browser window was just a large dark rectangle
+    with a column of content down the middle of it — the outside had nothing
+    holding it.
+
+    This is `.lit-edge` unrolled onto four sides: the identical gradient
+    (transparent, accent, foreground at the midpoint, accent, transparent)
+    running along each edge, so the brightest part of every run is the
+    centre of that side. The glow throws INWARD via an inset shadow, because
+    there is nothing outside a viewport edge for it to land on.
+
+    Fixed, and never takes a click.
+  */
+  .viewport-frame {
+    display: none;
+  }
+
+  @media (min-width: 1024px) {
+    .viewport-frame {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      pointer-events: none;
+      background-image:
+        linear-gradient(
+          90deg,
+          transparent,
+          hsl(var(--accent)) 12%,
+          hsl(var(--foreground)) 50%,
+          hsl(var(--accent)) 88%,
+          transparent
+        ),
+        linear-gradient(
+          90deg,
+          transparent,
+          hsl(var(--accent)) 12%,
+          hsl(var(--foreground)) 50%,
+          hsl(var(--accent)) 88%,
+          transparent
+        ),
+        linear-gradient(
+          180deg,
+          transparent,
+          hsl(var(--accent)) 12%,
+          hsl(var(--foreground)) 50%,
+          hsl(var(--accent)) 88%,
+          transparent
+        ),
+        linear-gradient(
+          180deg,
+          transparent,
+          hsl(var(--accent)) 12%,
+          hsl(var(--foreground)) 50%,
+          hsl(var(--accent)) 88%,
+          transparent
+        );
+      background-size: 100% 2px, 100% 2px, 2px 100%, 2px 100%;
+      background-position: top left, bottom left, top left, top right;
+      background-repeat: no-repeat;
+      /*
+        Dimmer than a window's own edge on purpose. The frame is the room,
+        not the thing you're reading — matched to `.lit-edge` it competed
+        with every panel on the screen at once.
+      */
+      opacity: 0.62;
+      box-shadow:
+        inset 0 0 24px -2px hsl(var(--accent) / 0.34),
+        inset 0 0 70px 4px hsl(var(--accent) / 0.16),
+        inset 0 0 160px 30px hsl(var(--system) / 0.22);
+    }
+  }
+
   /* The wash the lit edge throws down into the panel. Without it the light
      stops dead at the border and the edge reads as a drawn line. */
   .lit-edge::after {

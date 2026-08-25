@@ -50,6 +50,13 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${archivo.variable} ${dmMono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground">
+        {/*
+          The lit frame around the viewport. Desktop only — see
+          `.viewport-frame` in globals.css. Rendered here rather than in each
+          layout so the coach console and the client app are held by the same
+          light, and so anything added later gets it without asking.
+        */}
+        <div aria-hidden className="viewport-frame" />
         {children}
       </body>
     </html>
