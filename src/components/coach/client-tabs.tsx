@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 
 const TABS = [
   { segment: '', label: 'Overview' },
+  { segment: 'calendar', label: 'Calendar' },
   { segment: 'meals', label: 'Meals' },
   { segment: 'habits', label: 'Habits' },
   { segment: 'progress', label: 'Progress' },
