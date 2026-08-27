@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { stripe } from '@/lib/stripe';
 import { renderAgreementTemplate, formatAgreementDate } from '@/lib/agreement';
 import { describePaymentStructure } from '@/lib/plans';
+import { recordSubscriptionFromCheckout } from '@/lib/subscription-sync';
 import type { PaymentLink, Plan, AgreementTemplate } from '@prisma/client';
 
 type PaymentLinkWithRelations = PaymentLink & { plan: Plan; template: AgreementTemplate };
@@ -118,7 +119,38 @@ export async function finalizeStripeSession(sessionId: string) {
   const providerPaymentId =
     typeof session.payment_intent === 'string' ? session.payment_intent : session.id;
 
-  return createAgreementAndPayment(paymentLink, providerPaymentId);
+  const agreement = await createAgreementAndPayment(paymentLink, providerPaymentId);
+
+  /*
+    A recurring plan leaves a live subscription behind at Stripe that will
+    keep charging. Record it, so the invoice webhooks have something to
+    attach payments to and so a fixed plan can be counted down and stopped.
+
+    This runs after the agreement rather than inside its transaction: the
+    client has paid, and a failure to file the bookkeeping should not undo
+    that or block them from signing. A missed row is recoverable — the next
+    invoice arrives with the subscription id on it.
+  */
+  const stripeSubscriptionId =
+    typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+
+  if (stripeSubscriptionId) {
+    try {
+      await recordSubscriptionFromCheckout(
+        paymentLink.id,
+        paymentLink.clientId,
+        paymentLink.planId,
+        stripeSubscriptionId
+      );
+    } catch (err) {
+      console.error('Could not record subscription from checkout', {
+        paymentLinkId: paymentLink.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  return agreement;
 }
 
 /**

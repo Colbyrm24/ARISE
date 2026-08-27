@@ -37,7 +37,19 @@ export function initialsOf(name: string | null | undefined, email: string) {
   return (email[0] ?? '?').toUpperCase();
 }
 
-/** Monday 00:00 UTC of the current week — matches weekOf() in check-in.ts. */
+/*
+  Monday 00:00 UTC of the current week.
+
+  Deliberately the server's week, not any one client's: this bounds a
+  roster-wide weigh-in query, and there is no single timezone to resolve it
+  in. The cost is that a late-Sunday weigh-in on the west coast can read as
+  "no weigh-in this week" until Monday — worth knowing, but a segment being
+  a few hours eager is a smaller problem than a per-client query per row.
+
+  This used to claim it matched weekOf() in check-in.ts. That stopped being
+  true when check-ins moved to the client's own timezone; nothing here
+  depends on the two agreeing.
+*/
 function startOfWeek() {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
@@ -134,7 +146,7 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
     {
       key: 'ending',
       label: 'Coaching ends this week',
-      href: '/coach/clients',
+      href: '/coach/clients?segment=ending',
       warn: false,
       /*
         Status counts, not just endDate.
@@ -161,14 +173,14 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
     {
       key: 'pbs',
       label: 'New personal bests',
-      href: '/coach/clients',
+      href: '/coach/clients?segment=pbs',
       warn: false,
       people: clients.filter((c) => prIds.has(c.userId)).map(person),
     },
     {
       key: 'quiet',
       label: 'Not messaged in 3+ days',
-      href: '/coach/inbox',
+      href: '/coach/clients?segment=quiet',
       warn: true,
       people: engaged
         .filter((c) => {
@@ -180,7 +192,7 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
     {
       key: 'noweighin',
       label: 'No weigh-in this week',
-      href: '/coach/clients',
+      href: '/coach/clients?segment=noweighin',
       warn: true,
       people: engaged.filter((c) => !weighedIds.has(c.userId)).map(person),
     },

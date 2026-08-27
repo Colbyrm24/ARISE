@@ -150,7 +150,7 @@ export function hourIn(tz: string | null | undefined, now: Date = new Date()): n
 }
 
 /** Anything carrying a profile — a session user, a joined client row. */
-type HasProfile = { profile?: { timezone?: string | null } | null } | null | undefined;
+export type HasProfile = { profile?: { timezone?: string | null } | null } | null | undefined;
 
 /**
  * The date it is now for this person.
