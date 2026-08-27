@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { todayFor } from '@/lib/day';
 import { isTracked } from '@/lib/habits';
 
 /*
@@ -13,11 +14,6 @@ import { isTracked } from '@/lib/habits';
   completed — the checkbox on the busiest screen in the app did not exist.
 */
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function refresh() {
   revalidatePath('/today');
@@ -41,7 +37,7 @@ export async function toggleHabit(formData: FormData) {
   if (!goal || goal.clientId !== user.id || !goal.active) return;
   if (isTracked(goal.goalType)) return;
 
-  const date = todayDateOnly();
+  const date = todayFor(user);
   const existing = await prisma.dailyGoalLog.findUnique({
     where: { dailyGoalId_date: { dailyGoalId: goalId, date } },
   });
@@ -81,7 +77,7 @@ export async function logSteps(formData: FormData) {
   // and storing it would make every average and chart after it useless.
   const value = Math.round(Math.min(steps, 200000));
 
-  const date = todayDateOnly();
+  const date = todayFor(user);
   await prisma.stepLog.upsert({
     where: { clientId_date: { clientId: user.id, date } },
     create: { clientId: user.id, date, steps: value, source: 'manual' },
