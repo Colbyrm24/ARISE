@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { coachOwnsClient } from '@/lib/coach-guard';
 import { notify } from '@/lib/notifications';
 import { macroReply } from '@/lib/meal-reply';
 import { getDayContext, withMealAdjusted } from '@/lib/day-totals';
@@ -67,17 +68,38 @@ function refresh(clientId: string) {
   revalidatePath(`/coach/clients/${clientId}`);
 }
 
+/**
+ * The one log this coach is allowed to act on, or null.
+ *
+ * All three actions below took a `logId` straight off the form and acted on
+ * whatever came back. `requireCoach()` answers "is this person a coach", never
+ * "is this their client" — and the queue that renders these forms IS scoped
+ * (`meal-review.ts` filters on `client: { coachId }`), so the read path knew
+ * the answer and the write path never asked.
+ *
+ * A Server Action is a public endpoint the moment it exists. With a second
+ * coach account, one POST of somebody else's log id deleted their client's
+ * meal and its photo, rewrote their macros, or — through `sendReply` — put a
+ * message and a push notification on a stranger's client's phone from an
+ * account they'd never met. Their in-app thread filters to their real coach,
+ * so the push would land with nothing behind it.
+ */
+async function reviewableLog(coachId: string, logId: string | null) {
+  if (!logId) return null;
+  const log = await prisma.nutritionLog.findUnique({ where: { id: logId } });
+  if (!log || log.reviewState === null) return null;
+  if (!(await coachOwnsClient(coachId, log.clientId))) return null;
+  return log;
+}
+
 /** The coach agrees with the numbers as read. One tap, no edits. */
 export async function confirmMeal(formData: FormData) {
   const coach = await requireCoach();
-  const logId = formData.get('logId') as string | null;
-  if (!logId) return;
-
-  const log = await prisma.nutritionLog.findUnique({ where: { id: logId } });
-  if (!log || log.reviewState === null) return;
+  const log = await reviewableLog(coach.id, formData.get('logId') as string | null);
+  if (!log) return;
 
   await prisma.nutritionLog.update({
-    where: { id: logId },
+    where: { id: log.id },
     data: { reviewState: 'confirmed', reviewedAt: new Date(), reviewedById: coach.id },
   });
 
@@ -103,11 +125,9 @@ export async function confirmMeal(formData: FormData) {
  */
 export async function correctMeal(formData: FormData) {
   const coach = await requireCoach();
-  const logId = formData.get('logId') as string | null;
-  if (!logId) return;
-
-  const log = await prisma.nutritionLog.findUnique({ where: { id: logId } });
-  if (!log || log.reviewState === null) return;
+  const log = await reviewableLog(coach.id, formData.get('logId') as string | null);
+  if (!log) return;
+  const logId = log.id;
 
   function num(field: string, fallback: number, max: number) {
     const raw = (formData.get(field) as string | null)?.trim();
@@ -202,14 +222,11 @@ export async function correctMeal(formData: FormData) {
  * bucket is the tidier failure than a plate nobody can account for.
  */
 export async function discardMeal(formData: FormData) {
-  await requireCoach();
-  const logId = formData.get('logId') as string | null;
-  if (!logId) return;
+  const coach = await requireCoach();
+  const log = await reviewableLog(coach.id, formData.get('logId') as string | null);
+  if (!log) return;
 
-  const log = await prisma.nutritionLog.findUnique({ where: { id: logId } });
-  if (!log || log.reviewState === null) return;
-
-  await prisma.nutritionLog.delete({ where: { id: logId } });
+  await prisma.nutritionLog.delete({ where: { id: log.id } });
   if (log.photoPath) {
     const { removeMealPhoto } = await import('@/lib/meal-photos');
     await removeMealPhoto(log.photoPath);
