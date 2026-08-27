@@ -4,15 +4,24 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { startOfDayInstantFor } from '@/lib/day';
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+/*
+  `today` is the lifter's today, not the server's.
 
-async function getOrCreateTodayLog(clientId: string, workoutId: string) {
-  const today = todayDateOnly();
+  This one bounds a `startedAt` timestamp rather than a `@db.Date` column, so
+  it takes the INSTANT local midnight happened — not `todayFor`, which is the
+  `@db.Date` label for the day and sits at 8pm the previous evening in New
+  York. Getting either half wrong splits or merges a session: the old UTC
+  midnight opened a second log for a 7pm PDT workout, and bounding by the
+  date label swept last night's unfinished session into this morning.
+*/
+async function getOrCreateTodayLog(
+  clientId: string,
+  workoutId: string,
+  user: Parameters<typeof startOfDayInstantFor>[0]
+) {
+  const today = startOfDayInstantFor(user);
   const existing = await prisma.workoutLog.findFirst({
     where: { clientId, workoutId, startedAt: { gte: today }, completedAt: null },
     orderBy: { startedAt: 'desc' },
@@ -66,6 +75,30 @@ async function detectPr({
   return actualWeight > previous;
 }
 
+/**
+ * The workout, only if it is in the program this client is actually on.
+ *
+ * The page that renders these forms already refuses a workout outside the
+ * assigned program — "never trust the URL alone" — and then the actions it
+ * submits to trusted the URL alone. A Server Action is reachable directly,
+ * and `requireClient` (not `requireEntitledClient`) means a lead, a paused,
+ * or an unassigned account reaches these too. So any client could POST a
+ * workoutId from any coach's template and write training history against a
+ * program nobody gave them: sessions that never happened on their coach's
+ * rail, and personal bests off sets they were never assigned.
+ */
+async function assignedWorkout(clientId: string, workoutId: string) {
+  const [assigned, workout] = await Promise.all([
+    prisma.clientProgram.findFirst({
+      where: { clientId, active: true },
+      select: { templateId: true },
+    }),
+    prisma.workout.findUnique({ where: { id: workoutId }, select: { id: true, templateId: true } }),
+  ]);
+  if (!assigned || !workout) return null;
+  return workout.templateId === assigned.templateId ? workout : null;
+}
+
 /** Logs (or updates) one set's actual weight/reps for today's session. */
 export async function logSet(formData: FormData) {
   const user = await requireClient();
@@ -74,12 +107,22 @@ export async function logSet(formData: FormData) {
   const workoutSetId = formData.get('workoutSetId') as string | null;
   if (!workoutId || !workoutSetId) return;
 
+  if (!(await assignedWorkout(user.id, workoutId))) return;
+
+  // And the set has to belong to that workout — two ids on one form, so
+  // neither is trusted to vouch for the other.
+  const set = await prisma.workoutSet.findUnique({
+    where: { id: workoutSetId },
+    select: { workoutExercise: { select: { workoutId: true } } },
+  });
+  if (set?.workoutExercise.workoutId !== workoutId) return;
+
   const actualWeightRaw = formData.get('actualWeight') as string | null;
   const actualRepsRaw = formData.get('actualReps') as string | null;
   const actualWeight = actualWeightRaw ? Number(actualWeightRaw) : null;
   const actualReps = actualRepsRaw ? Number(actualRepsRaw) : null;
 
-  const log = await getOrCreateTodayLog(user.id, workoutId);
+  const log = await getOrCreateTodayLog(user.id, workoutId, user);
 
   const existingSet = await prisma.workoutLogSet.findFirst({
     where: { workoutLogId: log.id, workoutSetId },
@@ -98,7 +141,22 @@ export async function logSet(formData: FormData) {
       data: {
         actualWeight: actualWeight ?? undefined,
         actualReps: actualReps ?? undefined,
-        isPr,
+        /*
+          A blank weight box must not clear a personal best.
+
+          `?? undefined` already protects the weight and the reps — resubmit
+          with the weight blank and the stored 225 stays. `isPr` had no such
+          guard and was written unconditionally, and `detectPr` returns false
+          the moment there is no weight to compare. So resubmitting a PR row
+          with only the reps filled in left the row reading 225 lb with the
+          flag gone: the PB dropped off the coach's dashboard while the weight
+          that earned it was still sitting there.
+
+          This bites without anyone doing anything odd, because a stored
+          weight of 0 renders as an empty box — so the form submits blank on a
+          set the client never touched.
+        */
+        ...(actualWeight === null ? {} : { isPr }),
       },
     });
   } else {
@@ -123,6 +181,12 @@ export async function completeWorkout(formData: FormData) {
   const workoutLogId = formData.get('workoutLogId') as string | null;
   const workoutId = formData.get('workoutId') as string | null;
   if (!workoutId) return;
+
+  // Same gate as logSet. This one creates a WorkoutLog from a bare workoutId
+  // when none exists, so without it any client could manufacture a completed
+  // session — with a duration and a volume — against a workout from a program
+  // they were never on.
+  if (!(await assignedWorkout(user.id, workoutId))) return;
 
   /*
     A workout can be finished without a single set logged.
