@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { markScheduledDone } from '@/lib/scheduled';
 import { requireClient } from '@/lib/auth';
 import { startOfDayInstantFor } from '@/lib/day';
 
@@ -225,6 +226,18 @@ export async function completeWorkout(formData: FormData) {
     where: { id: log.id },
     data: { completedAt, duration, totalVolume },
   });
+
+  /*
+    Tick the day on the coach's calendar. That screen draws a filled chip for
+    a finished session, and nothing anywhere ever set the field it reads, so
+    a client who trained every day still showed a month of hollow chips and
+    a header saying "Workouts 0/12".
+
+    Attributed to startedAt, not to now. Somebody who starts at 11:50pm and
+    finishes after midnight trained on the earlier day, which is what every
+    other query in the app already assumes.
+  */
+  await markScheduledDone(user.id, 'workout', { workoutId, startedAt: log.startedAt });
 
   revalidatePath(`/workouts/${workoutId}`);
   revalidatePath('/workouts');
