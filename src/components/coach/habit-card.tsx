@@ -1,5 +1,6 @@
 import { Flame, X } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { todayFor, daysAgoFor } from '@/lib/day';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { HABIT_TYPES, HABIT_META, habitLabel, isTracked, streakFrom } from '@/lib/habits';
@@ -17,9 +18,15 @@ import { addHabit, retireHabit, setSteps } from '@/app/coach/clients/[id]/habit-
 const STREAK_WINDOW_DAYS = 60;
 
 export async function HabitCard({ clientId }: { clientId: string }) {
-  const since = new Date();
-  since.setHours(0, 0, 0, 0);
-  since.setDate(since.getDate() - STREAK_WINDOW_DAYS);
+  // Streaks are counted in the client's days, not the server's. On a UTC host
+  // an evening tick landed on tomorrow, so a streak the client kept perfectly
+  // read as broken here.
+  const who = await prisma.user.findUnique({
+    where: { id: clientId },
+    select: { profile: { select: { timezone: true } } },
+  });
+  const today = todayFor(who);
+  const since = daysAgoFor(STREAK_WINDOW_DAYS, who);
 
   const [habits, logs, todaySteps] = await Promise.all([
     prisma.dailyGoal.findMany({
@@ -32,7 +39,10 @@ export async function HabitCard({ clientId }: { clientId: string }) {
       where: { clientId, completed: true, date: { gte: since } },
       select: { dailyGoalId: true, date: true },
     }),
-    prisma.stepLog.findFirst({ where: { clientId }, orderBy: { date: 'desc' } }),
+    // Bounded to today. It said "Steps today" while showing whatever the
+    // newest step log was, which on a client who hadn't walked since Friday
+    // meant Friday's number sitting under a label saying today.
+    prisma.stepLog.findUnique({ where: { clientId_date: { clientId, date: today } } }),
   ]);
 
   const byHabit = new Map<string, Set<string>>();
@@ -57,7 +67,7 @@ export async function HabitCard({ clientId }: { clientId: string }) {
         ) : (
           <ul className="flex flex-col">
             {habits.map((habit) => {
-              const streak = streakFrom(byHabit.get(habit.id) ?? new Set());
+              const streak = streakFrom(byHabit.get(habit.id) ?? new Set(), today);
               return (
                 <li
                   key={habit.id}
