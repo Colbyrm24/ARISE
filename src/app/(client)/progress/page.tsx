@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { PhotoGrid } from '@/components/progress/photo-grid';
 import { PHOTO_ANGLES, signPhotoUrls } from '@/lib/progress-photos';
-import { weekOf, formatWeek } from '@/lib/check-in';
+import { weekOfFor, formatWeek } from '@/lib/check-in';
 import { logWeight, logMeasurement, removeWeightLog } from './actions';
 import { uploadProgressPhoto, deleteProgressPhoto } from './photo-actions';
 
@@ -26,6 +26,9 @@ const MEASUREMENTS = [
 export default async function ProgressPage() {
   const user = await requireEntitledClient();
   const since = daysAgoIn(90, zoneOf(user.profile));
+  // Their week, not the server's — a Sunday-evening check-in on the west
+  // coast is already Monday in UTC.
+  const thisWeek = weekOfFor(user);
 
   const [logs, measurements, photos, thisWeeksCheckIn] = await Promise.all([
     prisma.weightLog.findMany({
@@ -41,7 +44,7 @@ export default async function ProgressPage() {
       orderBy: { date: 'desc' },
       take: 24,
     }),
-    prisma.checkIn.findFirst({ where: { clientId: user.id, weekOf: weekOf() } }),
+    prisma.checkIn.findFirst({ where: { clientId: user.id, weekOf: thisWeek } }),
   ]);
 
   const signed = await signPhotoUrls(photos.map((p) => p.storagePath));
@@ -207,7 +210,7 @@ export default async function ProgressPage() {
               <p className="mt-1 text-base font-medium">
                 {thisWeeksCheckIn ? 'Submitted' : 'Not sent yet'}
               </p>
-              <p className="text-xs text-muted-foreground">{formatWeek(weekOf())}</p>
+              <p className="text-xs text-muted-foreground">{formatWeek(thisWeek)}</p>
             </div>
             <ChevronRight size={16} className="text-muted-foreground" />
           </CardContent>
