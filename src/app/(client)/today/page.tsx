@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
+import { Check, ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,7 +20,7 @@ import { LocalTime } from '@/components/local-time';
 import { WeekStrip } from '@/components/client/week-strip';
 import { todayFor, hourIn, zoneOf, startOfDay } from '@/lib/day';
 import { ProgressRing, ProgressBar } from '@/components/client/progress-ring';
-import { toggleHabit, logSteps } from './actions';
+import { toggleHabit, logSteps, logCardio } from './actions';
 
 /*
   Which day this screen is showing.
@@ -134,6 +134,16 @@ export default async function TodayPage({
   // yet, in which case this whole block stays off the screen rather than
   // showing an empty shell.
   const scheduled = user ? await scheduledToday(user.id, viewDate) : null;
+
+  // What they have already logged against a minutes-based cardio day, so the
+  // row can show "done" instead of offering the form again.
+  const cardioLog =
+    user && scheduled?.cardioTypeId && scheduled.kind === 'cardio'
+      ? await prisma.cardioLog.findFirst({
+          where: { clientId: user.id, cardioTypeId: scheduled.cardioTypeId, date: viewDate },
+          select: { minutes: true },
+        })
+      : null;
 
   // The seven days around whichever one is open, for the strip at the top.
   const weekStart = startOfWeek(viewDate);
@@ -438,6 +448,58 @@ export default async function TodayPage({
                   total={scheduled.stepTarget}
                   mode="reach"
                 />
+              </div>
+            )}
+
+            {/*
+              A minutes-based cardio day. The block above only ever rendered
+              when a step target was set, so somebody prescribed "Stairmaster,
+              20 minutes" saw the label and no number at all, and had nowhere
+              to say they had done it. cardioMinutes was written by the deploy
+              and read by nothing, and had no input on the coach's builder
+              either, so it was never even non-null.
+
+              Not gated on the absence of a step target: steps live on every
+              day, not just cardio days, and one "set week steps" click writes
+              the same target across all seven. A day can carry both.
+            */}
+            {scheduled.kind === 'cardio' && scheduled.cardioMinutes && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+                <span className="text-sm text-muted-foreground">
+                  {scheduled.cardioType?.name ?? 'Cardio'}{' '}
+                  <span className="readout text-[10px] uppercase">
+                    {scheduled.cardioMinutes} min
+                  </span>
+                </span>
+
+                {cardioLog?.minutes && !isToday ? (
+                  <span className="readout flex items-center gap-1 text-[10px] uppercase text-success">
+                    <Check size={12} /> {cardioLog.minutes} min done
+                  </span>
+                ) : isToday ? (
+                  <form action={logCardio} className="flex shrink-0 items-center gap-2">
+                    <input type="hidden" name="cardioTypeId" value={scheduled.cardioTypeId ?? ''} />
+                    <input
+                      type="number"
+                      name="minutes"
+                      min="1"
+                      max="600"
+                      inputMode="numeric"
+                      defaultValue={cardioLog?.minutes ?? scheduled.cardioMinutes}
+                      aria-label="Minutes done"
+                      className="readout h-9 w-20 border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                    >
+                      {cardioLog?.minutes ? 'Update' : 'Log'}
+                    </button>
+                    {cardioLog?.minutes ? (
+                      <Check size={12} className="shrink-0 text-success" />
+                    ) : null}
+                  </form>
+                ) : null}
               </div>
             )}
           </SystemWindowContent>
