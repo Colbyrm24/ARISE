@@ -1,16 +1,12 @@
 import { prisma } from '@/lib/prisma';
+import { daysAgoIn, zoneOf } from '@/lib/day';
+import { weekOverWeek } from '@/lib/weight-trend';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { PhotoGrid } from '@/components/progress/photo-grid';
 import { signPhotoUrls } from '@/lib/progress-photos';
 import { CHECK_IN_QUESTIONS, formatWeek, readAnswers } from '@/lib/check-in';
 
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - n);
-  return d;
-}
 
 /**
  * Coach-side read-only view of a client's weight trend. Self-fetching so the
@@ -20,9 +16,16 @@ function daysAgo(n: number) {
  * client list, so there's nothing extra to authorize here.
  */
 export async function ClientProgressCard({ clientId }: { clientId: string }) {
+  // The window and the week boundaries are the client's, not the server's.
+  const who = await prisma.user.findUnique({
+    where: { id: clientId },
+    select: { profile: { select: { timezone: true } } },
+  });
+  const tz = zoneOf(who?.profile);
+
   const [logs, measurements, photos, checkIn] = await Promise.all([
     prisma.weightLog.findMany({
-      where: { clientId, date: { gte: daysAgo(90) } },
+      where: { clientId, date: { gte: daysAgoIn(90, tz) } },
       orderBy: { date: 'asc' },
     }),
     prisma.measurement.findMany({
@@ -51,12 +54,7 @@ export async function ClientProgressCard({ clientId }: { clientId: string }) {
   const points = logs.map((l) => ({ date: l.date, weight: Number(l.weight) }));
   const latest = points[points.length - 1] ?? null;
 
-  const cut = daysAgo(7).getTime();
-  const prevCut = daysAgo(14).getTime();
-  const recent = points.filter((p) => p.date.getTime() >= cut);
-  const prior = points.filter((p) => p.date.getTime() >= prevCut && p.date.getTime() < cut);
-  const mean = (a: typeof points) => a.reduce((s, p) => s + p.weight, 0) / a.length;
-  const weekChange = recent.length > 0 && prior.length > 0 ? mean(recent) - mean(prior) : null;
+  const { change: weekChange } = weekOverWeek(points, tz);
 
   const latestByType = new Map<string, (typeof measurements)[number]>();
   for (const m of measurements) if (!latestByType.has(m.type)) latestByType.set(m.type, m);
