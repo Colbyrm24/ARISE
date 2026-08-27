@@ -15,12 +15,37 @@ export default async function AgreementCompletePage({
   searchParams: { session_id?: string };
 }) {
   const sessionId = searchParams.session_id;
+  let agreementId: string | null = null;
 
   if (sessionId) {
-    const agreement = await finalizeStripeSession(sessionId);
-    if (agreement) {
-      redirect(`/agreement/${agreement.id}`);
+    /*
+      This is the screen a client sees in the seconds after paying, so it is
+      the worst possible place to throw. A transient Stripe timeout, or this
+      racing the webhook and both trying to write the same payment row, used
+      to crash the page — leaving somebody who had just handed over money
+      looking at an error.
+
+      Failing quietly is right here because nothing is lost by it: the
+      webhook does the same work, finalize is idempotent, and the fallback
+      copy below already says to refresh. The client's money and agreement
+      are safe either way.
+
+      The catch has to wrap only this call. `redirect()` works by throwing,
+      so redirecting inside the try would be swallowed as a failure.
+    */
+    try {
+      const agreement = await finalizeStripeSession(sessionId);
+      agreementId = agreement?.id ?? null;
+    } catch (err) {
+      console.error('Could not finalize checkout on the success page', {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
+  }
+
+  if (agreementId) {
+    redirect(`/agreement/${agreementId}`);
   }
 
   return (
