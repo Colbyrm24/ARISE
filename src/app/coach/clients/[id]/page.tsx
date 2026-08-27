@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Dumbbell, Apple } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { requireCoach } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,9 @@ const selectClass =
 /*
   Overview — the two things a coach changes most: what they are training
   and what they are eating. Everything else moved to its own tab.
+
+  Ownership is checked once in the layout that wraps every tab, so this and
+  its five siblings don't each carry their own guard.
 */
 export default async function ClientOverviewPage({ params }: { params: { id: string } }) {
   const client = await prisma.client.findUnique({
@@ -35,7 +39,16 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
 
   if (!client) notFound();
 
-  const programTemplates = await prisma.workoutTemplate.findMany({ orderBy: { name: 'asc' } });
+  /*
+    Scoped to this coach. This feeds the assign-program dropdown, and
+    unfiltered it offered every coach's templates for assignment to a client
+    who isn't theirs.
+  */
+  const coach = await requireCoach();
+  const programTemplates = await prisma.workoutTemplate.findMany({
+    where: { coachId: coach.id },
+    orderBy: { name: 'asc' },
+  });
 
   const activeProgram = client.clientPrograms[0] ?? null;
   const currentTarget = client.nutritionTargets[0] ?? null;

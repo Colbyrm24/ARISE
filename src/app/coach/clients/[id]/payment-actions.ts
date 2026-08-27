@@ -151,7 +151,23 @@ export async function markPaymentLinkPaid(formData: FormData) {
   const paymentLinkId = formData.get('paymentLinkId') as string | null;
   const clientId = formData.get('clientId') as string | null;
   if (!paymentLinkId || !clientId) return;
-  if (!(await coachOwnsClient(coach.id, clientId))) return;
+
+  /*
+    The guard used to check `clientId` while everything downstream keyed off
+    `paymentLink.clientId` — two ids on one form, and the checked one wasn't
+    the one that acted. Submitting your own client next to somebody else's
+    pending link passed the check and then, on THEIR client, marked the link
+    paid, wrote a succeeded Payment for the full plan price with no money
+    moved, created a binding agreement, and pushed them to agreement_pending.
+
+    So the link is resolved first and its own owner is what gets checked.
+  */
+  const link = await prisma.paymentLink.findUnique({
+    where: { id: paymentLinkId },
+    select: { clientId: true },
+  });
+  if (!link || link.clientId !== clientId) return;
+  if (!(await coachOwnsClient(coach.id, link.clientId))) return;
 
   await finalizeManualPaymentLink(paymentLinkId);
 
