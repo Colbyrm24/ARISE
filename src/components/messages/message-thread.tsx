@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { dayIn, todayIn, zoneOf } from '@/lib/day';
 
 type ThreadMessage = {
   id: string;
@@ -7,15 +8,26 @@ type ThreadMessage = {
   createdAt: Date;
 };
 
-function dayLabel(d: Date) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const that = new Date(d);
-  that.setHours(0, 0, 0, 0);
-  const diff = Math.round((today.getTime() - that.getTime()) / 86400000);
+/*
+  This renders on the server, so "today" has to be named rather than assumed.
+
+  `setHours(0,0,0,0)` here was the server's midnight — UTC on Vercel — so from
+  early evening onward every message sent that day was stamped with a date
+  instead of "Today", and yesterday's ran a day out. Both people in a thread
+  see it in their own zone, which is the point: the label should agree with
+  the phone in the reader's hand.
+*/
+function dayLabel(d: Date, tz: string | null | undefined) {
+  const diff = Math.round((todayIn(tz).getTime() - dayIn(d, tz).getTime()) / 86400000);
   if (diff === 0) return 'Today';
   if (diff === 1) return 'Yesterday';
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // zoneOf, not `tz ?? undefined` — an omitted prop would otherwise fall back
+  // to New York in the diff above and to the server's zone here.
+  return d.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: zoneOf({ timezone: tz }),
+  });
 }
 
 /**
@@ -25,9 +37,12 @@ function dayLabel(d: Date) {
 export function MessageThread({
   messages,
   meId,
+  tz,
 }: {
   messages: ThreadMessage[];
   meId: string;
+  /** The reader's zone — whoever is looking at the thread, not its subject. */
+  tz?: string | null;
 }) {
   if (messages.length === 0) {
     return (
@@ -43,7 +58,7 @@ export function MessageThread({
     <div className="flex flex-1 flex-col gap-2 overflow-y-auto pb-4">
       {messages.map((m) => {
         const mine = m.senderId === meId;
-        const label = dayLabel(m.createdAt);
+        const label = dayLabel(m.createdAt, tz);
         const showDay = label !== lastDay;
         lastDay = label;
 
