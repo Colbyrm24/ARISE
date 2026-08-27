@@ -7,6 +7,7 @@ import { coachOwnsClient } from '@/lib/coach-guard';
 import { stripe } from '@/lib/stripe';
 import { getSiteUrl } from '@/lib/site-url';
 import { finalizeManualPaymentLink } from '@/lib/payment-finalize';
+import { parsePrice, parseCount } from '@/lib/billing';
 import type { PaymentFrequency, PaymentProviderType } from '@prisma/client';
 
 const FREQUENCY_TO_INTERVAL: Record<Exclude<PaymentFrequency, 'one_time'>, { interval: 'week' | 'month'; interval_count: number }> = {
@@ -31,6 +32,7 @@ export async function createPaymentLink(formData: FormData) {
   const startDateRaw = formData.get('startDate') as string | null;
   const priceOverrideRaw = formData.get('priceOverride') as string | null;
   const termMonthsOverrideRaw = formData.get('termMonthsOverride') as string | null;
+  const numberOfPaymentsOverrideRaw = formData.get('numberOfPaymentsOverride') as string | null;
   const manualCheckoutUrl = (formData.get('manualCheckoutUrl') as string | null)?.trim();
 
   if (!clientId || !planId || !agreementTemplateId || !provider || !startDateRaw) return;
@@ -40,44 +42,77 @@ export async function createPaymentLink(formData: FormData) {
   if (!plan) return;
 
   const startDate = new Date(startDateRaw);
-  const priceOverride = priceOverrideRaw ? Number(priceOverrideRaw) : null;
-  const termMonthsOverride = termMonthsOverrideRaw ? Number(termMonthsOverrideRaw) : null;
+  if (Number.isNaN(startDate.getTime())) return;
+
+  /*
+    These used to be `raw ? Number(raw) : null`, which turns "abc" into NaN
+    rather than null — and `?? Number(plan.price)` doesn't catch NaN, only
+    null. So a typo in the price box travelled all the way into
+    `unit_amount: Math.round(NaN * 100)` inside the Stripe call, which 500s
+    the page the coach is standing on with no hint as to which field did it.
+  */
+  const priceOverride = parsePrice(priceOverrideRaw);
+  const termMonthsOverride = parseCount(termMonthsOverrideRaw);
+  // How many payments this client agreed to, when it differs from the plan's
+  // default. This is what decides when their subscription stops, so it is
+  // stored on the link rather than living only in Stripe's metadata.
+  const numberOfPaymentsOverride = parseCount(numberOfPaymentsOverrideRaw);
   const effectivePrice = priceOverride ?? Number(plan.price);
+  if (!Number.isFinite(effectivePrice) || effectivePrice <= 0) return;
 
   if (provider === 'stripe') {
     const origin = getSiteUrl();
     const isRecurring = plan.billingType !== 'one_time' && plan.paymentFrequency && plan.paymentFrequency !== 'one_time';
 
-    const session = await stripe.checkout.sessions.create({
-      mode: isRecurring ? 'subscription' : 'payment',
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            unit_amount: Math.round(effectivePrice * 100),
-            product_data: { name: plan.name },
-            ...(isRecurring
-              ? { recurring: FREQUENCY_TO_INTERVAL[plan.paymentFrequency as Exclude<PaymentFrequency, 'one_time'>] }
-              : {}),
-          },
-          quantity: 1,
-        },
-      ],
-      ...(isRecurring && plan.billingType === 'payment_plan' && plan.numberOfPayments
-        ? {
-            subscription_data: {
-              // Fixed-length payment plans are modeled as a subscription
-              // that auto-cancels once the agreed number of payments has
-              // gone through, rather than running forever like a true
-              // subscription would.
-              metadata: { numberOfPayments: String(plan.numberOfPayments) },
+    // Stripe is a network call on a page the coach is watching. A refused
+    // API key or a transient outage should leave them on the form, not on a
+    // stack trace.
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        mode: isRecurring ? 'subscription' : 'payment',
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              unit_amount: Math.round(effectivePrice * 100),
+              product_data: { name: plan.name },
+              ...(isRecurring
+                ? { recurring: FREQUENCY_TO_INTERVAL[plan.paymentFrequency as Exclude<PaymentFrequency, 'one_time'>] }
+                : {}),
             },
-          }
-        : {}),
-      success_url: `${origin}/agreement/complete?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/today`,
-      metadata: { clientId, planId },
-    });
+            quantity: 1,
+          },
+        ],
+        ...(isRecurring && plan.billingType === 'payment_plan'
+          ? {
+              subscription_data: {
+                // Informational only. This metadata used to be the *only*
+                // record of how many payments were agreed, and nothing ever
+                // read it back — which is how fixed plans came to bill
+                // forever. The count that actually stops the billing lives
+                // on the PaymentLink now, enforced from the invoice webhooks
+                // by lib/subscription-sync.ts.
+                metadata: {
+                  numberOfPayments: String(
+                    numberOfPaymentsOverride ?? plan.numberOfPayments ?? ''
+                  ),
+                },
+              },
+            }
+          : {}),
+        success_url: `${origin}/agreement/complete?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/today`,
+        metadata: { clientId, planId },
+      });
+    } catch (err) {
+      console.error('Stripe refused to create a checkout session', {
+        clientId,
+        planId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
 
     if (!session.url) return;
 
@@ -89,6 +124,7 @@ export async function createPaymentLink(formData: FormData) {
         provider,
         priceOverride,
         termMonthsOverride,
+        numberOfPaymentsOverride,
         startDate,
         checkoutUrl: session.url,
         providerRef: session.id,
@@ -108,6 +144,7 @@ export async function createPaymentLink(formData: FormData) {
         provider,
         priceOverride,
         termMonthsOverride,
+        numberOfPaymentsOverride,
         startDate,
         checkoutUrl: manualCheckoutUrl,
         providerRef: `manual-${Date.now()}`,
