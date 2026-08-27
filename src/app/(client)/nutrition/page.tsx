@@ -1,5 +1,6 @@
 import { Trash2 } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
+import { todayFor } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -16,11 +17,6 @@ import { MealPlanCard } from '@/components/meal-plan-card';
 import { getActivePlan } from '@/lib/meal-plans';
 import { logMeal, logFood, quickAddFood, removeMealLog } from './actions';
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 const MEAL_OPTIONS = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -49,7 +45,7 @@ export default async function NutritionPage({
   searchParams: { q?: string; cat?: string };
 }) {
   const user = await requireEntitledClient();
-  const today = todayDateOnly();
+  const today = todayFor(user);
 
   const q = (searchParams.q ?? '').trim();
   const cat = searchParams.cat ?? '';
