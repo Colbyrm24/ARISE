@@ -172,19 +172,37 @@ export function ProgramWeek({
                       ))}
                     </select>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <select
                         name="cardioTypeId"
                         defaultValue={day?.cardioTypeId ?? ''}
                         className={selectClass}
                       >
-                        <option value="">— no cardio —</option>
+                        <option value="">no cardio</option>
                         {cardioTypes.map((c) => (
                           <option key={c.id} value={c.id}>
                             {c.name}
                           </option>
                         ))}
                       </select>
+                      {/*
+                        Minutes had no input at all. setProgramDay has always
+                        read a `cardioMinutes` field off this form and nothing
+                        ever posted one, so Number(null) became 0, the action
+                        stored null, and every minutes-based cardio day was
+                        impossible to prescribe. The client's screen had
+                        nothing to show and nothing to log against.
+                      */}
+                      <input
+                        name="cardioMinutes"
+                        type="number"
+                        min={0}
+                        max={600}
+                        step={5}
+                        placeholder="Mins"
+                        defaultValue={day?.cardioMinutes ?? ''}
+                        className={inputClass}
+                      />
                       <input
                         name="stepTarget"
                         type="number"
