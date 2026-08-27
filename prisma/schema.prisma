@@ -595,6 +595,9 @@ model CardioLog {
   client     Client     @relation(fields: [clientId], references: [userId], onDelete: Cascade)
   cardioType CardioType @relation(fields: [cardioTypeId], references: [id])
 
+  // One log per type per day. The client's screen upserts against this, and
+  // without it two quick submits both insert and the duplicate is invisible.
+  @@unique([clientId, cardioTypeId, date])
   @@index([clientId, date])
   @@map("cardio_logs")
 }
