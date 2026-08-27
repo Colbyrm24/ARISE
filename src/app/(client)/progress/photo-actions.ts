@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { todayFor } from '@/lib/day';
 import {
   PHOTO_ANGLES,
   type PhotoAngle,
@@ -13,11 +14,6 @@ import {
 } from '@/lib/progress-photos';
 import { notifyCoach, displayName } from '@/lib/notifications';
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 export async function uploadProgressPhoto(formData: FormData) {
   const user = await requireClient();
@@ -28,8 +24,8 @@ export async function uploadProgressPhoto(formData: FormData) {
   const file = formData.get('photo') as File | null;
   if (!file || isAllowedPhoto(file) !== null) return;
 
-  const date = todayDateOnly();
-  const path = photoPath(user.id, new Date(), angle as PhotoAngle, file.name);
+  const date = todayFor(user);
+  const path = photoPath(user.id, date, angle as PhotoAngle, file.name);
 
   const error = await uploadPhoto(path, file);
   if (error) return;
