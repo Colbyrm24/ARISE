@@ -3,20 +3,35 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
-import { coachOwnsClient } from '@/lib/coach-guard';
-import { deployProgram, DEFAULT_WEEKS } from '@/lib/program-deploy';
+import {
+  coachOwnsClient,
+  coachOwnsTemplate,
+  ownedWorkout,
+  ownedWorkoutExercise,
+} from '@/lib/coach-guard';
+import { deployProgram, setActiveProgram, DEFAULT_WEEKS } from '@/lib/program-deploy';
 
-/**
- * Server Actions for the single-program builder: add/remove days, and
- * add/remove exercises (with their sets) within a day.
- */
+/*
+  Server Actions for the single-program builder: add/remove days, and
+  add/remove exercises (with their sets) within a day.
+
+  Every one of these took a templateId (or a workoutId) off the form and
+  wrote, with only `requireCoach()` in front of it — which answers "is this
+  person a coach", not "is this their program". `deployToClient`, at the
+  bottom of this same file, has always checked `template.coachId`. The
+  builders never did.
+
+  Where a row id and a templateId arrive together, the template is derived
+  from the row and the submitted one is only used to revalidate a path.
+*/
 
 export async function addWorkout(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const templateId = formData.get('templateId') as string | null;
   const name = (formData.get('name') as string | null)?.trim();
   if (!templateId || !name) return;
+  if (!(await coachOwnsTemplate(coach.id, templateId))) return;
 
   const count = await prisma.workout.count({ where: { templateId } });
 
@@ -28,28 +43,28 @@ export async function addWorkout(formData: FormData) {
 }
 
 export async function deleteWorkout(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
-  const workoutId = formData.get('workoutId') as string | null;
-  const templateId = formData.get('templateId') as string | null;
-  if (!workoutId || !templateId) return;
+  const workout = await ownedWorkout(coach.id, formData.get('workoutId') as string | null);
+  if (!workout) return;
 
   try {
-    await prisma.workout.delete({ where: { id: workoutId } });
+    await prisma.workout.delete({ where: { id: workout.id } });
   } catch {
     // Has logged workouts against it — leave it in place.
   }
 
-  revalidatePath(`/coach/programs/${templateId}`);
+  revalidatePath(`/coach/programs/${workout.templateId}`);
 }
 
 export async function addWorkoutExercise(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
-  const workoutId = formData.get('workoutId') as string | null;
-  const templateId = formData.get('templateId') as string | null;
   const exerciseId = formData.get('exerciseId') as string | null;
-  if (!workoutId || !templateId || !exerciseId) return;
+  const owned = await ownedWorkout(coach.id, formData.get('workoutId') as string | null);
+  if (!owned || !exerciseId) return;
+  const workoutId = owned.id;
+  const templateId = owned.templateId;
 
   const numSets = Math.max(1, Number(formData.get('numSets')) || 3);
   const targetReps = (formData.get('targetReps') as string | null)?.trim() || null;
@@ -78,19 +93,21 @@ export async function addWorkoutExercise(formData: FormData) {
 }
 
 export async function deleteWorkoutExercise(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
-  const workoutExerciseId = formData.get('workoutExerciseId') as string | null;
-  const templateId = formData.get('templateId') as string | null;
-  if (!workoutExerciseId || !templateId) return;
+  const owned = await ownedWorkoutExercise(
+    coach.id,
+    formData.get('workoutExerciseId') as string | null
+  );
+  if (!owned) return;
 
   try {
-    await prisma.workoutExercise.delete({ where: { id: workoutExerciseId } });
+    await prisma.workoutExercise.delete({ where: { id: owned.id } });
   } catch {
     // Has logged sets against it — leave it in place.
   }
 
-  revalidatePath(`/coach/programs/${templateId}`);
+  revalidatePath(`/coach/programs/${owned.templateId}`);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -106,11 +123,12 @@ export async function deleteWorkoutExercise(formData: FormData) {
  * marked "rest" while still carrying a leg session.
  */
 export async function setProgramDay(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const templateId = formData.get('templateId') as string | null;
   const weekday = Number(formData.get('weekday'));
   if (!templateId || !Number.isInteger(weekday) || weekday < 1 || weekday > 7) return;
+  if (!(await coachOwnsTemplate(coach.id, templateId))) return;
 
   const kindRaw = (formData.get('kind') as string | null) ?? 'rest';
   const kind = ['workout', 'cardio', 'rest'].includes(kindRaw) ? kindRaw : 'rest';
@@ -141,11 +159,12 @@ export async function setProgramDay(formData: FormData) {
 
 /** Applies one step target to all seven days at once. */
 export async function setWeekSteps(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const templateId = formData.get('templateId') as string | null;
   const raw = Number(formData.get('stepTarget'));
   if (!templateId || !Number.isFinite(raw) || raw <= 0) return;
+  if (!(await coachOwnsTemplate(coach.id, templateId))) return;
 
   await prisma.programDay.updateMany({
     where: { templateId },
@@ -198,13 +217,9 @@ export async function deployToClient(
     return { ok: false, message: 'Nothing to deploy — the week is empty. Fill in some days first.' };
   }
 
-  // Keep the older assignment record in step, so anything still reading
-  // ClientProgram sees the same truth.
-  await prisma.clientProgram.upsert({
-    where: { id: `${clientId}:${templateId}` },
-    create: { id: `${clientId}:${templateId}`, clientId, templateId, active: true },
-    update: { active: true },
-  }).catch(() => undefined);
+  // Keep the assignment record in step, so anything still reading
+  // ClientProgram sees the same truth as the calendar just written.
+  await setActiveProgram(clientId, templateId);
 
   revalidatePath(`/coach/programs/${templateId}`);
   revalidatePath(`/coach/clients/${clientId}`);
