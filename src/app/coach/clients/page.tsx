@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { requireCoach } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -33,8 +34,20 @@ export default async function CoachClientsPage({
     ? (searchParams.status as ClientStatus)
     : undefined;
 
+  /*
+    Scoped to this coach's roster.
+
+    The second page under /coach with no auth call of its own — the layout's
+    requireCoach() answers "is a coach", and this then listed every client in
+    the database with their name, email and status. It is also where the
+    client ids that made the other gaps in this pass targetable came from,
+    and every row links to a record page that now 404s unless it's yours.
+  */
+  const coach = await requireCoach();
+
   const clients = await prisma.client.findMany({
     where: {
+      coachId: coach.id,
       ...(statusFilter ? { status: statusFilter } : {}),
       ...(q
         ? {
