@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system-window';
 import { Button } from '@/components/ui/button';
-import { CHECK_IN_QUESTIONS, weekOf, formatWeek, readAnswers } from '@/lib/check-in';
+import { CHECK_IN_QUESTIONS, weekOfFor, formatWeek, readAnswers } from '@/lib/check-in';
 import { submitCheckIn } from './actions';
 
 export default async function CheckInPage({
@@ -13,12 +13,16 @@ export default async function CheckInPage({
   searchParams: { saved?: string };
 }) {
   const user = await requireEntitledClient();
-  const week = weekOf();
+  const week = weekOfFor(user);
 
   const [current, previous] = await Promise.all([
     prisma.checkIn.findFirst({ where: { clientId: user.id, weekOf: week } }),
     prisma.checkIn.findMany({
-      where: { clientId: user.id, weekOf: { lt: week } },
+      // Every week except this one, rather than only earlier ones. Check-ins
+      // saved before the timezone fix could land on a *future* Monday, and
+      // `lt` hid those completely — the client saw neither the answers they
+      // had sent nor any trace of them in history.
+      where: { clientId: user.id, weekOf: { not: week } },
       orderBy: { weekOf: 'desc' },
       take: 4,
     }),

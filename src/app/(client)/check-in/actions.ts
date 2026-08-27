@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireEntitledClient } from '@/lib/auth';
-import { CHECK_IN_QUESTIONS, weekOf, formatWeek, type CheckInAnswers } from '@/lib/check-in';
+import { CHECK_IN_QUESTIONS, weekOfFor, formatWeek, type CheckInAnswers } from '@/lib/check-in';
 import { notifyCoach, displayName } from '@/lib/notifications';
 
 export async function submitCheckIn(formData: FormData) {
@@ -26,7 +26,7 @@ export async function submitCheckIn(formData: FormData) {
 
   if (Object.keys(answers).length === 0) return;
 
-  const week = weekOf();
+  const week = weekOfFor(user);
   const existing = await prisma.checkIn.findFirst({
     where: { clientId: user.id, weekOf: week },
   });
