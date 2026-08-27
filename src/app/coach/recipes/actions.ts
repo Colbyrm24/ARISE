@@ -57,12 +57,23 @@ export async function createRecipe(formData: FormData) {
 
 /** Removes a recipe from the library. No-ops if it's already been logged by a client. */
 export async function deleteRecipe(formData: FormData) {
-  await requireCoach();
+  const user = await requireCoach();
   const recipeId = formData.get('recipeId') as string | null;
   if (!recipeId) return;
 
+  /*
+    createRecipe stamps coachId and this ignored it. Recipe ids are readable
+    by every client — the nutrition screen serves the whole library unfiltered
+    — so any coach account could delete another coach's recipes using an id a
+    client handed them.
+
+    Scoped as a deleteMany rather than a lookup-then-delete: one statement, no
+    window between the check and the write.
+  */
   try {
-    await prisma.recipe.delete({ where: { id: recipeId } });
+    const where =
+      user.role === 'admin' ? { id: recipeId } : { id: recipeId, coachId: user.id };
+    await prisma.recipe.deleteMany({ where });
   } catch {
     // referenced by existing nutrition logs — leave it in place
   }
