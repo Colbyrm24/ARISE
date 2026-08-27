@@ -74,38 +74,5 @@ export type HealthPayload = {
   weight?: number;
 };
 
-/**
- * Validates one posted reading.
- *
- * Health exports are messy: they send strings for numbers, they send zero for
- * a day that hasn't happened, and they retry. Anything that doesn't parse is
- * dropped rather than stored, because a bad number in a weight chart is worse
- * than a missing one.
- */
-export function parseHealthPayload(body: unknown): { date: Date; steps?: number; weight?: number } | null {
-  if (!body || typeof body !== 'object') return null;
-  const b = body as Record<string, unknown>;
-
-  const date = new Date(typeof b.date === 'string' && b.date ? b.date : Date.now());
-  if (Number.isNaN(date.getTime())) return null;
-  date.setHours(0, 0, 0, 0);
-
-  // More than a day in the future is a clock problem, not a reading.
-  if (date.getTime() > Date.now() + 86400000) return null;
-
-  const out: { date: Date; steps?: number; weight?: number } = { date };
-
-  const steps = Number(b.steps);
-  // Zero steps is almost always an export firing before the day started, and
-  // storing it would overwrite a real count from the same day.
-  if (Number.isFinite(steps) && steps > 0 && steps <= 200000) out.steps = Math.round(steps);
-
-  const weight = Number(b.weight);
-  // Wide enough for kg or lbs, narrow enough to reject a stray sensor value.
-  if (Number.isFinite(weight) && weight >= 20 && weight <= 700) {
-    out.weight = Math.round(weight * 100) / 100;
-  }
-
-  if (out.steps === undefined && out.weight === undefined) return null;
-  return out;
-}
+export { parseHealthPayload } from '@/lib/health-payload';
+export type { HealthReading } from '@/lib/health-payload';

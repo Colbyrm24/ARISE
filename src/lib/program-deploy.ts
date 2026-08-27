@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 /*
@@ -169,8 +170,13 @@ export async function scheduleBetween(clientId: string, from: Date, to: Date) {
 }
 
 /** What a client is meant to do today. Null when the calendar is empty. */
-export async function scheduledToday(clientId: string, now = new Date()) {
-  const today = dateOnly(now);
+export async function scheduledToday(clientId: string, today: Date) {
+  /*
+    `today` is passed in rather than computed, and it must be the client's own
+    calendar day. This used to default to `dateOnly(new Date())` — UTC on the
+    server — so from early evening onward a client west of Greenwich was shown
+    tomorrow's session, or a rest day on a day they were meant to train.
+  */
   return prisma.scheduledItem.findFirst({
     where: { clientId, date: today },
     include: {
@@ -181,3 +187,39 @@ export async function scheduledToday(clientId: string, now = new Date()) {
 }
 
 export { dateOnly, addDays };
+
+/**
+ * Make this the client's one active program.
+ *
+ * Two paths used to do this differently and neither was safe. Assigning from
+ * the client page deactivated everything and then always CREATED a row, so
+ * re-assigning the same program four times left four rows. Deploying from the
+ * builder upserted on a synthetic `"clientId:templateId"` id that the other
+ * path never writes — so a program assigned first and deployed second ended
+ * up with two rows, both active, and which one won a `findFirst` was up to
+ * Postgres.
+ *
+ * There is no unique constraint on (clientId, templateId) to lean on, so the
+ * row is found rather than keyed, inside a transaction. Deactivating
+ * everything first and reactivating exactly one also collapses any duplicates
+ * an earlier deploy already left behind.
+ */
+export async function setActiveProgram(clientId: string, templateId: string) {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.clientProgram.updateMany({
+      where: { clientId, active: true },
+      data: { active: false },
+    });
+
+    const existing = await tx.clientProgram.findFirst({
+      where: { clientId, templateId },
+      orderBy: { assignedAt: 'desc' },
+    });
+
+    if (existing) {
+      await tx.clientProgram.update({ where: { id: existing.id }, data: { active: true } });
+    } else {
+      await tx.clientProgram.create({ data: { clientId, templateId, active: true } });
+    }
+  });
+}

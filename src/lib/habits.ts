@@ -91,20 +91,32 @@ export function isHabitType(value: string): value is HabitType {
  * for a habit they'll do at 8pm is the fastest way to make them stop looking.
  * Yesterday missing does break it.
  */
-export function streakFrom(doneDates: Set<string>, today = new Date()): number {
-  const day = 24 * 60 * 60 * 1000;
+export function streakFrom(doneDates: Set<string>, today: Date): number {
+  /*
+    `today` must already be the client's calendar day — todayFor(user) — and
+    is stepped in UTC from there.
+
+    Two things this gets right that the old version didn't. It no longer
+    applies server-local midnight, which on a UTC host meant a client's
+    streak broke and healed five hours early. And stepping by whole UTC dates
+    rather than subtracting 86,400,000ms means the twice-yearly 23- and
+    25-hour local days can't skip a date or visit one twice — either of which
+    silently ends a streak somebody actually kept.
+  */
   const key = (d: Date) => d.toISOString().slice(0, 10);
+  const back = (d: Date, n: number) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - n));
 
   let streak = 0;
-  let cursor = new Date(today.getTime());
-  cursor.setHours(0, 0, 0, 0);
+  let n = 0;
 
-  if (doneDates.has(key(cursor))) streak += 1;
-  cursor = new Date(cursor.getTime() - day);
+  // Today not being done yet is not a miss; it may only be mid-afternoon.
+  if (doneDates.has(key(today))) streak += 1;
+  n += 1;
 
-  while (doneDates.has(key(cursor))) {
+  while (doneDates.has(key(back(today, n)))) {
     streak += 1;
-    cursor = new Date(cursor.getTime() - day);
+    n += 1;
   }
   return streak;
 }
