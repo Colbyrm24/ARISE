@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { CalendarDays, Bell, LineChart, ClipboardCheck } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
+import { BackgroundPicker } from '@/components/client/background-picker';
+import { backgroundOf } from '@/lib/backgrounds';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton } from '@/components/client/sign-out-button';
 import { PushToggle } from '@/components/push-toggle';
@@ -139,6 +141,12 @@ export default async function ProfilePage() {
               Tap the photo to change it
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <BackgroundPicker current={backgroundOf(user?.profile?.background)} />
         </CardContent>
       </Card>
 
