@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Check, ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
+import { Check, ChevronRight, MessageCircle } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
@@ -785,18 +785,6 @@ export default async function TodayPage({
         </Card>
       </Link>
 
-      {/* AI Coach */}
-      <Link href="/ai">
-        <Card interactive className="border-accent/30 bg-accent/[0.06]">
-          <CardContent className="flex items-center gap-3 pt-5">
-            <Sparkles size={18} className="text-accent" />
-            <div>
-              <p className="text-sm font-medium">AI Coach</p>
-              <p className="text-sm text-muted-foreground">Ask me anything</p>
-            </div>
-          </CardContent>
-        </Card>
-      </Link>
     </div>
   );
 }
