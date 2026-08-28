@@ -209,7 +209,42 @@ export async function handleInvoicePaid(invoice: {
           paidAt,
         },
       });
+    } else if (role === 'first' && sub.paymentLinkId) {
+      /*
+        The signup charge, and the finalize path has not written its row yet.
+
+        Looking for that row and not finding it used to mean "write a fresh
+        one", which is how one real $1 payment became two succeeded rows: the
+        webhook and the checkout success page ran concurrently, the lookup
+        above happened before the other side had committed, and both inserted.
+
+        Claiming the payment link here closes that window. paymentLinkId is
+        unique on Payment, so this row and the finalize path's row are now the
+        same row by construction, whichever of them arrives first.
+      */
+      await prisma.payment.upsert({
+        where: { paymentLinkId: sub.paymentLinkId },
+        create: {
+          clientId: sub.clientId,
+          subscriptionId: sub.id,
+          paymentLinkId: sub.paymentLinkId,
+          provider: 'stripe',
+          providerPaymentId: invoice.id,
+          amount,
+          status: 'succeeded',
+          paidAt,
+        },
+        update: {
+          subscriptionId: sub.id,
+          providerPaymentId: invoice.id,
+          amount,
+          status: 'succeeded',
+          paidAt,
+        },
+      });
     } else {
+      // A renewal. Nothing to adopt — every month after the first is its own
+      // charge, and the invoice id is what keeps a retry from doubling it.
       await prisma.payment.create({
         data: {
           clientId: sub.clientId,

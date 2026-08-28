@@ -59,8 +59,28 @@ async function createAgreementAndPayment(
 
   const [, , agreement] = await prisma.$transaction([
     prisma.paymentLink.update({ where: { id: paymentLink.id }, data: { status: 'paid' } }),
-    prisma.payment.create({
-      data: {
+    /*
+      Upsert, not create.
+
+      This and the invoice.paid webhook both describe the same first charge,
+      they are triggered by different Stripe events, and nothing sequences
+      them — a real $1 payment produced TWO succeeded rows 537ms apart, and
+      the coach's screen read "$2.00 collected over 2 payments" for one
+      dollar. On a fixed payment plan that is worse than cosmetic: the count
+      is what cancels the subscription, so a duplicated signup charge ends a
+      six-payment plan on the fifth.
+
+      Payment.paymentLinkId is unique, so keying the row to the link makes
+      the database itself the referee: whichever handler arrives first
+      inserts, and the other lands on ON CONFLICT and changes nothing. An
+      empty update is deliberate — if the webhook got here first its row
+      already carries the invoice id, which is the better reference of the
+      two, and overwriting it with the session id would break the idempotency
+      check on any later retry of that invoice.
+    */
+    prisma.payment.upsert({
+      where: { paymentLinkId: paymentLink.id },
+      create: {
         clientId: paymentLink.clientId,
         paymentLinkId: paymentLink.id,
         provider: paymentLink.provider,
@@ -69,6 +89,7 @@ async function createAgreementAndPayment(
         status: 'succeeded',
         paidAt: new Date(),
       },
+      update: {},
     }),
     prisma.agreement.create({
       data: {
