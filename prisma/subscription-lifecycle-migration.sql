@@ -23,8 +23,11 @@
 
 BEGIN;
 
+-- text, not uuid. Prisma maps `String @id @default(uuid())` to a text column,
+-- so payment_links.id is text and a uuid column here cannot be referenced by
+-- a foreign key against it (Postgres 42804, "cannot be implemented").
 ALTER TABLE subscriptions
-  ADD COLUMN IF NOT EXISTS payment_link_id uuid;
+  ADD COLUMN IF NOT EXISTS payment_link_id text;
 
 DO $$
 BEGIN
