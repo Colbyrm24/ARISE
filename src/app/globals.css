@@ -36,8 +36,15 @@
     --secondary-foreground: 216 100% 93%;
 
     --muted: 219 63% 12%;
-    /* ash — labels, secondary ink */
-    --muted-foreground: 215 25% 53%;
+    /*
+      ash — labels, secondary ink.
+
+      Was 25% saturation at 53% lightness, which lands around 4.0:1 on the
+      panel fill and reads as washed out on a phone in daylight. Lifted to
+      72% and desaturated slightly: about 8.5:1, still clearly secondary
+      against the 93% body ink, but legible rather than faint.
+    */
+    --muted-foreground: 215 20% 72%;
 
     /* beam again: one accent, no second hue */
     --accent: 211 100% 72%;
@@ -361,10 +368,19 @@ body::before {
   }
 
   /* Counts, timestamps, statuses — anything the system says about itself. */
+  /*
+    The small mono labels: set counts, rest times, units, meta.
+
+    These are the faintest thing on the app because they combine a small size,
+    wide tracking and the muted ink. A little weight costs nothing at this
+    size and is the difference between reading a rest interval at arm's length
+    mid-set and squinting at it.
+  */
   .readout {
     font-family: var(--font-mono), ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
+    font-weight: 500;
   }
 
   /* Display type: Archivo pushed to its widest. Headlines and marks only. */
