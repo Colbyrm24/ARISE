@@ -78,63 +78,97 @@ export async function createPaymentLink(formData: FormData) {
   if (provider === 'stripe') {
     const origin = getSiteUrl();
     const isRecurring = plan.billingType !== 'one_time' && plan.paymentFrequency && plan.paymentFrequency !== 'one_time';
+    const successUrl = `${origin}/agreement/complete?session_id={CHECKOUT_SESSION_ID}`;
 
-    // Stripe is a network call on a page the coach is watching. A refused
-    // API key or a transient outage should leave them on the form, not on a
-    // stack trace.
-    let session;
-    try {
-      session = await stripe.checkout.sessions.create({
-        mode: isRecurring ? 'subscription' : 'payment',
-        line_items: [
-          plan.stripePriceId
-            ? // The price already exists in Stripe. Naming it keeps every
-              // charge attached to one product in the Stripe dashboard,
-              // instead of each link minting a new throwaway product.
-              { price: plan.stripePriceId, quantity: 1 }
-            : {
-                price_data: {
-                  currency: 'usd',
-                  unit_amount: Math.round(effectivePrice * 100),
-                  product_data: { name: plan.name },
-                  ...(isRecurring
-                    ? { recurring: FREQUENCY_TO_INTERVAL[plan.paymentFrequency as Exclude<PaymentFrequency, 'one_time'>] }
-                    : {}),
-                },
-                quantity: 1,
+    // Informational only on Stripe's side. The count that actually stops a
+    // fixed plan lives on the PaymentLink and is enforced from the invoice
+    // webhooks by lib/subscription-sync.ts.
+    const agreedPayments = String(numberOfPaymentsOverride ?? plan.numberOfPayments ?? '');
+    const fixedPlanMetadata =
+      isRecurring && plan.billingType === 'payment_plan'
+        ? { subscription_data: { metadata: { numberOfPayments: agreedPayments } } }
+        : {};
+
+    let checkoutUrl: string;
+    let providerRef: string;
+
+    if (plan.stripePriceId) {
+      /*
+        A Payment Link, not a Checkout Session.
+
+        A Checkout Session expires 24 hours after it is created — Stripe's
+        limit, not a setting — and nothing here marked one stale. So a link
+        sent on a Monday and opened on a Wednesday showed the client a Stripe
+        error page, while the coach's screen still read "Payment link sent"
+        with a copy button next to a dead URL.
+
+        A Payment Link does not expire. It is restricted to a single
+        completed checkout instead, so it stays good until the person it was
+        sent to actually uses it, and cannot be forwarded around and paid
+        twice. This path needs a real Price, which is exactly what an
+        imported plan has.
+      */
+      let link;
+      try {
+        link = await stripe.paymentLinks.create({
+          line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+          after_completion: { type: 'redirect', redirect: { url: successUrl } },
+          restrictions: { completed_sessions: { limit: 1 } },
+          metadata: { clientId, planId },
+          ...fixedPlanMetadata,
+        });
+      } catch (err) {
+        console.error('Stripe refused to create a payment link', {
+          clientId,
+          planId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+      checkoutUrl = link.url;
+      providerRef = link.id;
+    } else {
+      /*
+        A plan priced by hand in ARISE has no Price at Stripe to point a
+        Payment Link at, so it still goes through a Checkout Session and
+        still expires after 24 hours. Importing the price from Stripe on the
+        payments screen is what upgrades a plan to a link that keeps.
+      */
+      let session;
+      try {
+        session = await stripe.checkout.sessions.create({
+          mode: isRecurring ? 'subscription' : 'payment',
+          line_items: [
+            {
+              price_data: {
+                currency: 'usd',
+                unit_amount: Math.round(effectivePrice * 100),
+                product_data: { name: plan.name },
+                ...(isRecurring
+                  ? { recurring: FREQUENCY_TO_INTERVAL[plan.paymentFrequency as Exclude<PaymentFrequency, 'one_time'>] }
+                  : {}),
               },
-        ],
-        ...(isRecurring && plan.billingType === 'payment_plan'
-          ? {
-              subscription_data: {
-                // Informational only. This metadata used to be the *only*
-                // record of how many payments were agreed, and nothing ever
-                // read it back — which is how fixed plans came to bill
-                // forever. The count that actually stops the billing lives
-                // on the PaymentLink now, enforced from the invoice webhooks
-                // by lib/subscription-sync.ts.
-                metadata: {
-                  numberOfPayments: String(
-                    numberOfPaymentsOverride ?? plan.numberOfPayments ?? ''
-                  ),
-                },
-              },
-            }
-          : {}),
-        success_url: `${origin}/agreement/complete?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/today`,
-        metadata: { clientId, planId },
-      });
-    } catch (err) {
-      console.error('Stripe refused to create a checkout session', {
-        clientId,
-        planId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      return;
+              quantity: 1,
+            },
+          ],
+          ...fixedPlanMetadata,
+          success_url: successUrl,
+          cancel_url: `${origin}/today`,
+          metadata: { clientId, planId },
+        });
+      } catch (err) {
+        console.error('Stripe refused to create a checkout session', {
+          clientId,
+          planId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return;
+      }
+
+      if (!session.url) return;
+      checkoutUrl = session.url;
+      providerRef = session.id;
     }
-
-    if (!session.url) return;
 
     await prisma.paymentLink.create({
       data: {
@@ -146,8 +180,8 @@ export async function createPaymentLink(formData: FormData) {
         termMonthsOverride,
         numberOfPaymentsOverride,
         startDate,
-        checkoutUrl: session.url,
-        providerRef: session.id,
+        checkoutUrl,
+        providerRef,
       },
     });
   } else {
