@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BILLING_TYPE_LABELS, PAYMENT_FREQUENCY_LABELS, PROVIDER_LABELS } from '@/lib/plans';
+import { listStripePrices, type ClassifiedStripePrice } from '@/lib/stripe-prices';
 import {
   createPlan,
   togglePlanActive,
@@ -12,6 +13,7 @@ import {
   updateAgreementTemplate,
   setDefaultAgreementTemplate,
 } from './actions';
+import { importStripePrice, syncStripePrices, updatePlanTerm } from './stripe-actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -26,6 +28,25 @@ const LINK_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelled',
 };
 
+/*
+  Reading Stripe is a network call on a page that must still render when the
+  key is missing, the account is new, or Stripe is having a bad morning. A
+  failure here costs the coach the import card, not the whole screen.
+*/
+async function readStripePrices(): Promise<{ prices: ClassifiedStripePrice[]; error: string | null }> {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return { prices: [], error: 'STRIPE_SECRET_KEY is not set on this deployment yet.' };
+  }
+  try {
+    return { prices: await listStripePrices(), error: null };
+  } catch (err) {
+    console.error('Could not list Stripe prices', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return { prices: [], error: 'Stripe did not answer. Check the API key and try again.' };
+  }
+}
+
 export default async function CoachPaymentsPage() {
   const [plans, templates, recentLinks] = await Promise.all([
     prisma.plan.findMany({ orderBy: { createdAt: 'desc' } }),
@@ -36,6 +57,9 @@ export default async function CoachPaymentsPage() {
       take: 10,
     }),
   ]);
+
+  const { prices: stripePrices, error: stripeError } = await readStripePrices();
+  const importedPriceIds = new Set(plans.map((p) => p.stripePriceId).filter(Boolean) as string[]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -84,6 +108,83 @@ export default async function CoachPaymentsPage() {
         </CardContent>
       </Card>
 
+      {/* Your Stripe prices */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>Prices in Stripe</CardTitle>
+          <form action={syncStripePrices}>
+            <Button type="submit" size="sm" variant="secondary">
+              Sync from Stripe
+            </Button>
+          </form>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Every active price in your Stripe account. Import one and it becomes a plan you can
+            pick for any client — the checkout then charges that exact Stripe price, so the amount
+            never has to be re-typed here and can never drift from what you actually charge.
+          </p>
+
+          {stripeError ? (
+            <p className="text-sm text-destructive">{stripeError}</p>
+          ) : stripePrices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No active prices in Stripe yet. Create one in the Stripe dashboard, then press Sync.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {stripePrices.map((price) => {
+                const imported = price.supported && importedPriceIds.has(price.id);
+                return (
+                  <div
+                    key={price.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{price.name}</p>
+                      {price.supported ? (
+                        <p className="truncate text-xs text-muted-foreground">
+                          $
+                          {price.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {price.paymentFrequency
+                            ? ` ${PAYMENT_FREQUENCY_LABELS[price.paymentFrequency]}`
+                            : ' one time'}{' '}
+                          · {price.id}
+                        </p>
+                      ) : (
+                        <p className="truncate text-xs text-muted-foreground">{price.reason}</p>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {!price.supported ? (
+                        <Badge variant="outline">Not importable</Badge>
+                      ) : imported ? (
+                        <Badge variant="success">Imported</Badge>
+                      ) : (
+                        <form action={importStripePrice} className="flex items-center gap-2">
+                          <input type="hidden" name="priceId" value={price.id} />
+                          <Input
+                            name="termMonths"
+                            type="number"
+                            min="1"
+                            defaultValue={12}
+                            className="h-9 w-24"
+                            aria-label="Agreement length in months"
+                          />
+                          <Button type="submit" size="sm">
+                            Import
+                          </Button>
+                        </form>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Plans */}
       <Card>
         <CardHeader>
@@ -110,6 +211,23 @@ export default async function CoachPaymentsPage() {
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {plan.stripePriceId && (
+                      <form action={updatePlanTerm} className="flex items-center gap-1.5">
+                        <input type="hidden" name="planId" value={plan.id} />
+                        <Input
+                          name="termMonths"
+                          type="number"
+                          min="1"
+                          defaultValue={plan.termMonths}
+                          className="h-9 w-20"
+                          aria-label={`Agreement length for ${plan.name}, in months`}
+                        />
+                        <Button type="submit" variant="ghost" size="sm">
+                          Save mo
+                        </Button>
+                      </form>
+                    )}
+                    {plan.stripePriceId && <Badge variant="outline">Stripe price</Badge>}
                     <Badge variant={plan.active ? 'success' : 'outline'}>
                       {plan.active ? 'Active' : 'Archived'}
                     </Badge>
