@@ -204,6 +204,7 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                   {plans.map((plan) => (
                     <option key={plan.id} value={plan.id}>
                       {plan.name} — ${Number(plan.price).toLocaleString('en-US')}
+                      {plan.stripePriceId ? ' (Stripe price)' : ''}
                     </option>
                   ))}
                 </select>
@@ -219,7 +220,10 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                   <option value="fanbasis">FanBasis</option>
                 </select>
                 <Input name="startDate" type="date" required />
-                <Input name="priceOverride" type="number" step="0.01" min="0" placeholder="Override price ($, optional)" />
+                {/* Ignored for a plan backed by a Stripe price — Stripe owns that
+                    amount, and the agreement has to say the same number the card
+                    is actually charged. See payment-actions.ts. */}
+                <Input name="priceOverride" type="number" step="0.01" min="0" placeholder="Override price ($, ARISE-priced plans only)" />
                 <Input name="termMonthsOverride" type="number" min="1" placeholder="Override duration (months, optional)" />
                 {/*
                   On a fixed payment plan this is the number that ends the
@@ -241,7 +245,9 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
               </div>
               <p className="text-xs text-muted-foreground">
                 Stripe links are generated automatically, and a payment plan stops billing on its
-                own once the agreed number of payments has gone through. For FanBasis, paste the
+                own once the agreed number of payments has gone through. Plans marked{' '}
+                <span className="text-foreground">(Stripe price)</span> charge the exact price you
+                set up in Stripe, so the override box above does not apply to them. For FanBasis, paste the
                 checkout link you created in FanBasis&apos;s own dashboard — FanBasis has no API
                 integration here yet, so those payments are confirmed by hand.
               </p>
