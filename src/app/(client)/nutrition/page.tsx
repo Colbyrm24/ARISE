@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Trash2 } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { todayFor } from '@/lib/day';
@@ -398,7 +399,14 @@ export default async function NutritionPage({
                 className="flex flex-col gap-2 border-b border-border/50 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
               >
                 <div className="min-w-0 sm:flex-1">
-                  <p className="text-sm font-medium">{recipe.title}</p>
+                  <p className="text-sm font-medium">
+                    <Link
+                      href={`/recipes/${recipe.id}`}
+                      className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
+                    >
+                      {recipe.title}
+                    </Link>
+                  </p>
                   <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
                     {recipe.calories} cal · {Math.round(Number(recipe.protein))}p ·{' '}
                     {Math.round(Number(recipe.carbs))}c · {Math.round(Number(recipe.fat))}f

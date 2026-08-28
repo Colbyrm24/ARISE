@@ -107,3 +107,42 @@ export function watchUrlFor(storageProvider: string, externalId: string): string
       return null;
   }
 }
+
+/*
+  A demo for every exercise, without inventing any.
+
+  319 exercises, and until now exactly zero of them had a video attached, so
+  the "Watch demo" link never appeared for anybody. Attaching one is the coach
+  pasting a URL per movement, which is 319 pieces of manual work nobody was
+  ever going to do.
+
+  What this does NOT do is guess YouTube ids. A fabricated eleven-character id
+  is either a dead link or, worse, a live video of something else entirely —
+  and a client following a demo for the wrong lift under load is a real way to
+  get somebody hurt. There is no way to verify an id from here.
+
+  So the fallback is a search, not a guess. It always resolves, it always
+  lands on the movement actually named, and the first results for a query like
+  "romanian deadlift how to proper form" are exactly what you would have
+  picked by hand. A specific video the coach attaches still wins; this is only
+  what fills the gap until one does.
+*/
+export function demoSearchUrl(exerciseName: string): string {
+  const q = `${exerciseName} how to proper form`;
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+}
+
+/**
+ * The demo link to show for an exercise: the coach's own if there is one,
+ * otherwise a search for the movement by name.
+ */
+export function demoLinkFor(exercise: {
+  name: string;
+  video?: { storageProvider: string; externalId: string } | null;
+}): { url: string; exact: boolean } {
+  const attached = exercise.video
+    ? watchUrlFor(exercise.video.storageProvider, exercise.video.externalId)
+    : null;
+  if (attached) return { url: attached, exact: true };
+  return { url: demoSearchUrl(exercise.name), exact: false };
+}
