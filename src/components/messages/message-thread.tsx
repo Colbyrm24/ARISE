@@ -1,11 +1,13 @@
 import { cn } from '@/lib/utils';
 import { dayIn, todayIn, zoneOf } from '@/lib/day';
+import { VoicePlayer } from '@/components/messages/voice-player';
 
 type ThreadMessage = {
   id: string;
   senderId: string;
   body: string | null;
   createdAt: Date;
+  attachments?: { id: string; type: string; storagePath: string }[];
 };
 
 /*
@@ -38,11 +40,18 @@ export function MessageThread({
   messages,
   meId,
   tz,
+  audioUrls,
 }: {
   messages: ThreadMessage[];
   meId: string;
   /** The reader's zone — whoever is looking at the thread, not its subject. */
   tz?: string | null;
+  /**
+   * storagePath → signed URL, signed in one batch by the page. The bucket is
+   * private, so an unsigned path plays nothing; a missing entry falls back to
+   * saying so rather than rendering a dead player.
+   */
+  audioUrls?: Map<string, string>;
 }) {
   if (messages.length === 0) {
     return (
@@ -62,6 +71,8 @@ export function MessageThread({
         const showDay = label !== lastDay;
         lastDay = label;
 
+        const voice = (m.attachments ?? []).filter((a) => a.type === 'voice');
+
         return (
           <div key={m.id} className="flex flex-col">
             {showDay && (
@@ -76,7 +87,20 @@ export function MessageThread({
                     : 'rounded-bl-md bg-secondary text-foreground'
                 )}
               >
-                {m.body ? (
+                {voice.length > 0 ? (
+                  <div className="flex flex-col gap-1.5 py-0.5">
+                    {voice.map((a) => {
+                      const src = audioUrls?.get(a.storagePath);
+                      return src ? (
+                        <VoicePlayer key={a.id} src={src} />
+                      ) : (
+                        <span key={a.id} className="opacity-70">
+                          Voice message unavailable
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : m.body ? (
                   m.body
                 ) : (
                   /* A message with no body is an attachment. It used to render

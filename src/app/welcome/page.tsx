@@ -76,7 +76,12 @@ export default async function WelcomePage() {
             },
             orderBy: { createdAt: 'desc' },
             take: 6,
-            select: { id: true, body: true, senderId: true },
+            select: {
+              id: true,
+              body: true,
+              senderId: true,
+              attachments: { select: { type: true } },
+            },
           })
           .then((rows) => rows.reverse())
       : Promise.resolve([]),
@@ -154,7 +159,10 @@ export default async function WelcomePage() {
                       : 'self-start border border-accent/30 bg-accent/[0.07]'
                   )}
                 >
-                  {m.body}
+                  {m.body ??
+                    (m.attachments.some((a) => a.type === 'voice')
+                      ? 'Sent a voice message — open Messages to play it'
+                      : 'Sent an attachment')}
                 </li>
               ))}
             </ul>

@@ -3,7 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { zoneOf } from '@/lib/day';
 import { MessageThread } from '@/components/messages/message-thread';
 import { Composer } from '@/components/messages/composer';
-import { sendMessageToCoach } from './actions';
+import { signVoiceNoteUrls } from '@/lib/voice-notes';
+import { sendMessageToCoach, sendVoiceNoteToCoach } from './actions';
 
 export default async function MessagesPage() {
   const user = await requireEntitledClient();
@@ -42,8 +43,14 @@ export default async function MessagesPage() {
     },
     orderBy: { createdAt: 'desc' },
     take: 200,
+    include: { attachments: true },
   });
   const messages = recent.reverse();
+
+  // One signing round trip for the whole thread rather than one per bubble.
+  const audioUrls = await signVoiceNoteUrls(
+    messages.flatMap((m) => m.attachments.filter((a) => a.type === 'voice').map((a) => a.storagePath))
+  );
 
   // Opening the thread is the read receipt. Written directly rather than through
   // the server action — revalidatePath() is not allowed during a render pass.
@@ -63,8 +70,17 @@ export default async function MessagesPage() {
         <p className="text-sm text-muted-foreground">Your coach</p>
       </header>
 
-      <MessageThread messages={messages} meId={user.id} tz={zoneOf(user.profile)} />
-      <Composer action={sendMessageToCoach} placeholder={`Message ${coachName.split(' ')[0]}…`} />
+      <MessageThread
+        messages={messages}
+        meId={user.id}
+        tz={zoneOf(user.profile)}
+        audioUrls={audioUrls}
+      />
+      <Composer
+        action={sendMessageToCoach}
+        voiceAction={sendVoiceNoteToCoach}
+        placeholder={`Message ${coachName.split(' ')[0]}…`}
+      />
     </div>
   );
 }

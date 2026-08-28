@@ -136,7 +136,16 @@ export async function getWaitingThreads(coachId: string): Promise<WaitingThread[
           },
         ],
       },
-      select: { senderId: true, recipientId: true, body: true, createdAt: true },
+      // attachments too: a voice note has no body, and without this the
+      // inbox preview line read "No messages yet" on a thread that had just
+      // been answered.
+      select: {
+        senderId: true,
+        recipientId: true,
+        body: true,
+        createdAt: true,
+        attachments: { select: { type: true } },
+      },
     }) as unknown as Promise<Preview[]>,
   ]);
 

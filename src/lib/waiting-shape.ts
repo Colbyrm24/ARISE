@@ -93,6 +93,8 @@ export type Preview = {
   recipientId: string;
   body: string | null;
   createdAt: Date;
+  /** Carried so a bodiless message still previews as something. */
+  attachments?: { type: string }[];
 };
 
 export type Person = { clientId: string; name: string; avatarUrl?: string | null };
@@ -160,11 +162,13 @@ export function waitingIdsFrom(
  * too, so it always wins.
  */
 export function previewsByPerson(coachId: string, rows: Preview[]) {
-  const out = new Map<string, { body: string | null; at: Date }>();
+  const out = new Map<string, { body: string | null; at: Date; attachments?: { type: string }[] }>();
   for (const m of rows) {
     const other = m.senderId === coachId ? m.recipientId : m.senderId;
     const held = out.get(other);
-    if (!held || m.createdAt > held.at) out.set(other, { body: m.body, at: m.createdAt });
+    if (!held || m.createdAt > held.at) {
+      out.set(other, { body: m.body, at: m.createdAt, attachments: m.attachments });
+    }
   }
   return out;
 }
@@ -195,7 +199,18 @@ export function assembleThreads(input: {
         name: p.name,
         initials: initialsOf(p.name),
         avatarUrl: p.avatarUrl ?? null,
-        lastBody: last?.body ?? null,
+        /*
+          A voice note carries no body. Falling straight through to null made
+          the inbox print "No messages yet" on a thread the client had just
+          answered — the one line the coach scans to decide who to open.
+        */
+        lastBody:
+          last?.body ??
+          (last?.attachments?.some((a) => a.type === 'voice')
+            ? 'Voice message'
+            : last
+              ? 'Attachment'
+              : null),
         lastAt: last?.at ?? null,
         waiting,
         waitingSince: waiting ? run?._min.createdAt ?? null : null,
