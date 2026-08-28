@@ -1,5 +1,6 @@
 import { requireClient } from '@/lib/auth';
 import { BottomNav } from '@/components/client/bottom-nav';
+import { SideNav } from '@/components/client/side-nav';
 import { backgroundOf } from '@/lib/backgrounds';
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -36,10 +37,15 @@ export default async function ClientLayout({ children }: { children: React.React
       {/* Inside the themed element, so the frame is lit in whatever colour
           this client is wearing rather than in the default blue. */}
       <div aria-hidden className="viewport-frame" />
-      <main className="mx-auto w-full max-w-md px-4 pb-24 pt-6 lg:max-w-5xl lg:px-10 lg:pb-28 lg:pt-12">
+      {/* From lg the named rail replaces the five-item bar; below it, nothing
+          moves. See components/client/side-nav.tsx. */}
+      <SideNav />
+      <main className="mx-auto w-full max-w-md px-4 pb-24 pt-6 lg:max-w-5xl lg:px-10 lg:pb-12 lg:pl-64 lg:pt-12">
         {children}
       </main>
-      <BottomNav />
+      <div className="lg:hidden">
+        <BottomNav />
+      </div>
     </div>
   );
 }
