@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { MessageThread } from '@/components/messages/message-thread';
 import { Composer } from '@/components/messages/composer';
 import { signVoiceNoteUrls } from '@/lib/voice-notes';
+import { initialsOf } from '@/lib/console';
 import { sendMessageToClient, sendVoiceNoteToClient } from './actions';
 
 export default async function CoachThreadPage({ params }: { params: { clientId: string } }) {
@@ -55,9 +56,14 @@ export default async function CoachThreadPage({ params }: { params: { clientId: 
 
   const name = rel.client.profile?.fullName ?? rel.client.email;
 
+  /*
+    Mobile carries a 64px header above this (md:hidden) plus py-8; from md the
+    header goes and the padding grows to py-10. dvh rather than vh so the
+    phone's URL bar does not push the composer off the bottom of the screen.
+  */
   return (
-    <div className="flex min-h-[70vh] flex-col">
-      <header className="flex items-center gap-3 pb-4">
+    <div className="flex h-[calc(100dvh-8rem)] flex-col md:h-[calc(100dvh-5rem)]">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border/60 pb-4">
         <Link href="/coach/inbox" className="text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -80,8 +86,10 @@ export default async function CoachThreadPage({ params }: { params: { clientId: 
         meId={coach.id}
         tz={zoneOf(coach.profile)}
         audioUrls={audioUrls}
+        otherInitials={initialsOf(rel.client.profile?.fullName, rel.client.email)}
       />
       <Composer
+        className="shrink-0 pt-2"
         action={sendMessageToClient}
         voiceAction={sendVoiceNoteToClient}
         placeholder={`Message ${(name ?? '').split(' ')[0]}…`}
