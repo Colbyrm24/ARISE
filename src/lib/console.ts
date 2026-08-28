@@ -114,7 +114,9 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
       by: ['senderId', 'recipientId'],
       where: { OR: [{ senderId: coachId }, { recipientId: coachId }] },
       _max: { createdAt: true },
-    }) as Promise<
+      // Through `unknown` — see the note in lib/waiting.ts. Casting the
+      // groupBy call directly does not compile against real Prisma.
+    }) as unknown as Promise<
       Array<{ senderId: string; recipientId: string; _max: { createdAt: Date | null } }>
     >,
   ]);

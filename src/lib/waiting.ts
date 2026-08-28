@@ -27,6 +27,22 @@ export type { WaitingThread, WaitLevel } from '@/lib/waiting-shape';
   so a typecheck says nothing at all about these result shapes.
 */
 
+/*
+  Cast through `unknown`.
+
+  Casting a groupBy call straight to a Promise type looks harmless and does
+  not compile against real Prisma. Casting the call expression itself feeds the expected
+  type back into groupBy's generic inference, which then demands the ARGUMENT
+  be an array too: "Argument of type '{ by; where; _max }' is not assignable
+  to parameter of type '{...} & {...}[]'". Going through `unknown` breaks that
+  feedback loop, and awaiting first (as the count query below does) avoids it
+  entirely.
+
+  This is precisely the class of error the offline stub cannot see, because it
+  types groupBy as `(args: any) => Promise<any[]>`. It reached Vercel and
+  failed the build there.
+*/
+
 /** Both directions of every thread this coach has, as one filter. */
 function betweenCoachAnd(coachId: string, clientIds: string[]) {
   return {
@@ -57,12 +73,12 @@ export async function getWaitingThreads(coachId: string): Promise<WaitingThread[
       by: ['senderId', 'recipientId'],
       where: betweenCoachAnd(coachId, clientIds),
       _max: { createdAt: true },
-    }) as Promise<Edge[]>,
+    }) as unknown as Promise<Edge[]>,
     prisma.message.groupBy({
       by: ['senderId'],
       where: { senderId: { in: clientIds }, recipientId: coachId, readAt: null },
       _count: { _all: true },
-    }) as Promise<Array<{ senderId: string; _count: { _all: number } }>>,
+    }) as unknown as Promise<Array<{ senderId: string; _count: { _all: number } }>>,
   ]);
 
   const { mine, theirs } = splitEdges(coachId, edges);
@@ -89,7 +105,7 @@ export async function getWaitingThreads(coachId: string): Promise<WaitingThread[
           },
           _min: { createdAt: true },
           _count: { _all: true },
-        }) as Promise<Run[]>)
+        }) as unknown as Promise<Run[]>)
       : Promise.resolve([] as Run[]),
 
     /*
