@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Play } from 'lucide-react';
+import { ArrowLeft, Check, Play } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { startOfDayInstantFor } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -12,7 +13,7 @@ import {
   Count,
   Cell,
 } from '@/components/ui/system-window';
-import { watchUrlFor } from '@/lib/exercise-video';
+import { demoLinkFor } from '@/lib/exercise-video';
 import { logSet, completeWorkout } from './actions';
 
 
@@ -146,9 +147,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
       <div className="flex flex-col gap-4">
         {workout.workoutExercises.map((we) => {
           const done = we.sets.filter((s) => loggedBySetId.has(s.id)).length;
-          const demo = we.exercise.video
-            ? watchUrlFor(we.exercise.video.storageProvider, we.exercise.video.externalId)
-            : null;
+          const demo = demoLinkFor(we.exercise);
           return (
             <SystemWindow
               key={we.id}
@@ -161,13 +160,13 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                     movement, you need it before the first rep, not after. */}
                 {demo && (
                   <a
-                    href={demo}
+                    href={demo.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="readout mb-2 inline-flex items-center gap-1.5 border border-accent/40 bg-accent/[0.07] px-2 py-1 text-[10px] uppercase text-accent transition-colors hover:bg-accent/15"
                   >
                     <Play size={11} />
-                    Watch demo
+                    {demo.exact ? 'Watch demo' : 'Find a demo'}
                   </a>
                 )}
                 {/*
@@ -200,10 +199,36 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                         key={set.id}
                         className="flex items-center gap-2 border-b border-border/50 py-2.5 last:border-b-0"
                       >
-                        <span className="readout w-7 shrink-0 text-[11px] uppercase text-muted-foreground">
+                        {/*
+                          Outstanding sets read red, logged ones green.
+
+                          A set is either done or it is not, and that is the
+                          only thing you need off this screen between efforts.
+                          Everything was the same muted grey before, so telling
+                          finished from remaining meant reading every row.
+
+                          Colour is not carrying it alone: the number goes
+                          semibold and a tick appears when a set is logged, so
+                          it still reads for anyone who cannot separate the two
+                          hues.
+                        */}
+                        <span
+                          className={cn(
+                            'readout w-7 shrink-0 text-[11px] uppercase',
+                            logged ? 'text-success' : 'text-destructive'
+                          )}
+                        >
                           {String(i + 1).padStart(2, '0')}
                         </span>
-                        <span className="readout min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+                        <span
+                          className={cn(
+                            'readout min-w-0 flex-1 truncate text-[11px]',
+                            logged
+                              ? 'font-semibold text-success'
+                              : 'font-semibold text-destructive'
+                          )}
+                        >
+                          {logged ? <Check size={11} className="mr-1 inline align-[-1px]" /> : null}
                           {set.targetReps ?? '—'}
                           {set.targetWeight ? ` × ${Number(set.targetWeight)}` : ''}
                           {/* Prescribed rest was visible only on the coach's
