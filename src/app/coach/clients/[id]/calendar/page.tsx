@@ -4,6 +4,14 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { cn } from '@/lib/utils';
+import {
+  WEEKDAYS,
+  dayKey as key,
+  inMonth as inGivenMonth,
+  monthGrid,
+  monthKey,
+  parseMonth,
+} from '@/lib/month-grid';
 
 /*
   A month of a client, at a glance.
@@ -22,41 +30,6 @@ import { cn } from '@/lib/utils';
   lands on the wrong square for anybody east of London.
 */
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-function utcDay(y: number, m: number, d: number) {
-  return new Date(Date.UTC(y, m, d));
-}
-
-function addUtcDays(d: Date, n: number) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
-}
-
-function key(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-/** ISO weekday, Monday = 0. */
-function mondayIndex(d: Date) {
-  const js = d.getUTCDay();
-  return js === 0 ? 6 : js - 1;
-}
-
-/** `?m=2026-08`. Anything unparseable falls back to the current month. */
-function parseMonth(raw: string | undefined): { year: number; month: number } {
-  const now = new Date();
-  if (!raw || !/^\d{4}-\d{2}$/.test(raw)) {
-    return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
-  }
-  const [y, m] = raw.split('-').map(Number);
-  if (m < 1 || m > 12) return { year: now.getUTCFullYear(), month: now.getUTCMonth() };
-  return { year: y, month: m - 1 };
-}
-
-function monthKey(year: number, month: number) {
-  return `${year}-${String(month + 1).padStart(2, '0')}`;
-}
-
 export default async function ClientCalendarPage({
   params,
   searchParams,
@@ -72,15 +45,9 @@ export default async function ClientCalendarPage({
   if (!client) notFound();
 
   const { year, month } = parseMonth(searchParams?.m);
-  const firstOfMonth = utcDay(year, month, 1);
-
-  /*
-    Six rows always. A month can span five or six calendar weeks depending
-    on which day it starts, and a grid that changes height as you page
-    through the year reads as a bug rather than as a calendar.
-  */
-  const gridStart = addUtcDays(firstOfMonth, -mondayIndex(firstOfMonth));
-  const gridEnd = addUtcDays(gridStart, 41);
+  // The grid itself lives in @/lib/month-grid, shared with the client's own
+  // calendar so the two screens cannot disagree about which day is which.
+  const { firstOfMonth, gridStart, gridEnd, days } = monthGrid(year, month);
 
   const [scheduled, nutrition, weights] = await Promise.all([
     prisma.scheduledItem.findMany({
@@ -134,7 +101,7 @@ export default async function ClientCalendarPage({
 
   // Counts for this month only — the grid's leading and trailing days belong
   // to the neighbouring months and would inflate every total.
-  const inMonth = (d: Date) => d.getUTCMonth() === month && d.getUTCFullYear() === year;
+  const inMonth = (d: Date) => inGivenMonth(d, year, month);
   const monthSessions = scheduled.filter((s) => inMonth(s.date));
   const summary = {
     workouts: monthSessions.filter((s) => s.kind === 'workout' && s.completedAt).length,
@@ -147,7 +114,6 @@ export default async function ClientCalendarPage({
   };
 
   const todayKey = key(new Date());
-  const days = Array.from({ length: 42 }, (_, i) => addUtcDays(gridStart, i));
 
   const prev = monthKey(month === 0 ? year - 1 : year, month === 0 ? 11 : month - 1);
   const next = monthKey(month === 11 ? year + 1 : year, month === 11 ? 0 : month + 1);
