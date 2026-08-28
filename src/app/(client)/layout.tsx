@@ -1,6 +1,5 @@
 import { requireClient } from '@/lib/auth';
 import { BottomNav } from '@/components/client/bottom-nav';
-import { AiFab } from '@/components/client/ai-fab';
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   // Server-side check — a coach account can never render this layout,
@@ -25,7 +24,6 @@ export default async function ClientLayout({ children }: { children: React.React
       <main className="mx-auto w-full max-w-md px-4 pb-24 pt-6 lg:max-w-5xl lg:px-10 lg:pb-28 lg:pt-12">
         {children}
       </main>
-      <AiFab />
       <BottomNav />
     </div>
   );
