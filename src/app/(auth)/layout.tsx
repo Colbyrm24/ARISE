@@ -1,6 +1,7 @@
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-16">
+      <div aria-hidden className="viewport-frame" />
       {/*
         Light pooling up from the floor, brighter than the app-wide wash in
         globals.css. Sign-in is the first thing anyone sees, so this is the
