@@ -84,11 +84,16 @@ export async function POST(request: NextRequest) {
           id: string;
           status: string;
           current_period_end?: number | null;
+          cancel_at_period_end?: boolean | null;
         };
+        const deleted = event.type === 'customer.subscription.deleted';
         await handleSubscriptionChanged({
           id: sub.id,
-          status: event.type === 'customer.subscription.deleted' ? 'canceled' : sub.status,
+          status: deleted ? 'canceled' : sub.status,
           current_period_end: sub.current_period_end ?? null,
+          // A subscription that has actually ended is no longer waiting to
+          // end, so the scheduled flag has to come back down with it.
+          cancel_at_period_end: deleted ? false : sub.cancel_at_period_end ?? null,
         });
         break;
       }
