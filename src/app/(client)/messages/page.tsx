@@ -4,6 +4,8 @@ import { zoneOf } from '@/lib/day';
 import { MessageThread } from '@/components/messages/message-thread';
 import { Composer } from '@/components/messages/composer';
 import { signVoiceNoteUrls } from '@/lib/voice-notes';
+import { avatarSrc } from '@/lib/avatars';
+import { initialsOf } from '@/lib/console';
 import { sendMessageToCoach, sendVoiceNoteToCoach } from './actions';
 
 export default async function MessagesPage() {
@@ -62,12 +64,50 @@ export default async function MessagesPage() {
   }
 
   const coachName = rel.coach.profile?.fullName ?? 'Your coach';
+  const coachInitials = initialsOf(rel.coach.profile?.fullName, rel.coach.email);
+  const coachAvatar = avatarSrc(rel.coach.profile);
 
+  /*
+    The screen is a fixed column: header, thread, composer.
+
+    It used to be `min-h-[70vh]` with the thread growing from the top, so a
+    two-message conversation sat under the title with half a screen of nothing
+    beneath it. Pinning the whole thing to the viewport and letting only the
+    thread scroll is what every messaging app does, and it means the composer
+    is always under the thumb instead of wherever the content happened to end.
+
+    The subtraction is exactly the layout's own padding — `pt-6 pb-24`, where
+    the pb IS the bottom-nav clearance. Charging for the nav again on top of
+    that (the first attempt subtracted 11rem) left a 50-85px band of dead
+    background between the composer and the nav.
+
+    dvh, not vh: `100vh` is the LARGE viewport, so on a phone with the URL bar
+    showing the column already runs past the bottom of the screen.
+  */
   return (
-    <div className="flex min-h-[70vh] flex-col">
-      <header className="pb-4">
-        <h1 className="text-xl font-semibold">{coachName}</h1>
-        <p className="text-sm text-muted-foreground">Your coach</p>
+    <div className="flex h-[calc(100dvh-7.5rem)] flex-col lg:h-[calc(100dvh-10rem)]">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border/60 pb-4">
+        {coachAvatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={coachAvatar}
+            alt=""
+            className="h-11 w-11 shrink-0 border border-accent/30 object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="readout flex h-11 w-11 shrink-0 items-center justify-center border border-accent/30 bg-accent/10 text-xs uppercase text-accent"
+          >
+            {coachInitials}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-semibold">{coachName}</h1>
+          <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+            Your coach
+          </p>
+        </div>
       </header>
 
       <MessageThread
@@ -75,8 +115,16 @@ export default async function MessagesPage() {
         meId={user.id}
         tz={zoneOf(user.profile)}
         audioUrls={audioUrls}
+        otherInitials={coachInitials}
       />
+      {/*
+        The default Composer is `sticky bottom-20`, which was written for a
+        page that scrolls as a whole. In a fixed-height column it has no
+        scrollport to stick to and simply paints 80px up from where it sits —
+        on top of the last message. In here it is just the last row.
+      */}
       <Composer
+        className="shrink-0 pt-2"
         action={sendMessageToCoach}
         voiceAction={sendVoiceNoteToCoach}
         placeholder={`Message ${coachName.split(' ')[0]}…`}
