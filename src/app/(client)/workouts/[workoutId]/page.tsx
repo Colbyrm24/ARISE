@@ -14,6 +14,7 @@ import {
   Cell,
 } from '@/components/ui/system-window';
 import { demoLinkFor } from '@/lib/exercise-video';
+import { LogSetButton } from '@/components/client/log-set-button';
 import { logSet, completeWorkout } from './actions';
 
 
@@ -67,12 +68,16 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
   );
 
   /*
-    Narrow on purpose. This row has to fit a set number, the target, two
-    inputs, the log button and the completion cell inside a phone's width —
-    at w-20 the cell was pushed outside the panel border.
+    Bigger than it was, and it says what it wants.
+
+    These were 56px boxes with placeholder-only hints, thumbed at one-handed
+    between efforts. 64 wide and 44 tall is the smallest a tap target should
+    be on a phone, and `inputMode` gets the number pad rather than the
+    alphabet. The row stacks below sm so the extra width comes out of empty
+    space rather than out of the prescription text.
   */
   const field =
-    'readout h-9 w-14 shrink-0 rounded-none border border-input bg-secondary/40 px-2 text-sm ' +
+    'readout h-11 w-16 shrink-0 rounded-none border border-input bg-secondary/40 px-2 text-center text-sm ' +
     'transition-colors focus-visible:border-accent/60 focus-visible:outline-none ' +
     'focus-visible:ring-1 focus-visible:ring-accent/50 disabled:opacity-50';
 
@@ -195,9 +200,20 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                   {we.sets.map((set, i) => {
                     const logged = loggedBySetId.get(set.id);
                     return (
+                      /*
+                        Two lines on a phone, one from sm up.
+
+                        The inputs and the tick are 200px of fixed width. On a
+                        375px screen that left about 80px for the prescription,
+                        so "12 × 95 · 90s rest" truncated to "12 × 95 ·…" — the
+                        rest interval, which is the one number you read between
+                        efforts, was the first thing cut. Giving the
+                        prescription its own line costs nothing vertically that
+                        a 44px tap target had not already spent.
+                      */
                       <li
                         key={set.id}
-                        className="flex items-center gap-2 border-b border-border/50 py-2.5 last:border-b-0"
+                        className="flex flex-col gap-2 border-b border-border/50 py-2.5 last:border-b-0 sm:flex-row sm:items-center"
                       >
                         {/*
                           Outstanding sets read red, logged ones green.
@@ -212,6 +228,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                           it still reads for anyone who cannot separate the two
                           hues.
                         */}
+                        <div className="flex min-w-0 items-center gap-2 sm:flex-1">
                         <span
                           className={cn(
                             'readout w-7 shrink-0 text-[11px] uppercase',
@@ -236,37 +253,72 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                               saw the number they were meant to rest for. */}
                           {set.restSeconds ? ` · ${set.restSeconds}s rest` : ''}
                         </span>
-                        <form action={logSet} className="flex shrink-0 items-center gap-1.5">
+                        </div>
+                        {/*
+                          The tick IS the button.
+
+                          It used to be a decorative `Cell` sitting next to a
+                          small "LOG" caption that was the real submit. The
+                          square has a border, a fill and a glow when it is on
+                          — it looks exactly like a checkbox, so that is what
+                          gets tapped, and tapping it did nothing at all. The
+                          one control on this screen that has to work between
+                          efforts was the one piece of furniture on the row.
+
+                          Now there is a single target: a 44px square that
+                          submits, shows a tick when the set is logged, and
+                          says so to a screen reader.
+                        */}
+                        <form
+                          action={logSet}
+                          className="flex shrink-0 items-end gap-1.5 self-end pl-9 sm:self-auto sm:pl-0"
+                        >
                           <input type="hidden" name="workoutId" value={workout.id} />
                           <input type="hidden" name="workoutSetId" value={set.id} />
-                          <input
-                            type="number"
-                            step="0.5"
-                            name="actualWeight"
-                            placeholder="lb"
-                            disabled={isComplete}
-                            defaultValue={
-                              logged?.actualWeight ? Number(logged.actualWeight) : undefined
-                            }
-                            className={field}
-                          />
-                          <input
-                            type="number"
-                            name="actualReps"
-                            placeholder="reps"
-                            disabled={isComplete}
-                            defaultValue={logged?.actualReps ?? undefined}
-                            className={field}
-                          />
-                          {!isComplete && (
-                            <button
-                              type="submit"
-                              className="readout shrink-0 px-0.5 text-[11px] uppercase text-accent transition-opacity hover:opacity-70"
-                            >
-                              Log
-                            </button>
+                          {/*
+                            The unit sits above its own box rather than inside
+                            it as a placeholder. A placeholder disappears the
+                            moment you type, which is exactly when you are
+                            least sure which box you are in.
+                          */}
+                          <label className="flex flex-col items-center gap-0.5">
+                            <span className="readout text-[9px] uppercase text-muted-foreground">
+                              lb
+                            </span>
+                            <input
+                              type="number"
+                              step="0.5"
+                              inputMode="decimal"
+                              name="actualWeight"
+                              aria-label={`Weight in pounds for set ${i + 1}`}
+                              disabled={isComplete}
+                              defaultValue={
+                                logged?.actualWeight ? Number(logged.actualWeight) : undefined
+                              }
+                              className={field}
+                            />
+                          </label>
+                          <label className="flex flex-col items-center gap-0.5">
+                            <span className="readout text-[9px] uppercase text-muted-foreground">
+                              reps
+                            </span>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              name="actualReps"
+                              aria-label={`Reps for set ${i + 1}`}
+                              disabled={isComplete}
+                              defaultValue={logged?.actualReps ?? undefined}
+                              className={field}
+                            />
+                          </label>
+                          {isComplete ? (
+                            <span className="flex h-11 w-11 items-center justify-center">
+                              <Cell on={Boolean(logged)} />
+                            </span>
+                          ) : (
+                            <LogSetButton logged={Boolean(logged)} setNumber={i + 1} />
                           )}
-                          <Cell on={Boolean(logged)} />
                         </form>
                       </li>
                     );

@@ -82,6 +82,12 @@ model Profile {
   // whatever the coach wants people to join on. Copied onto each booking so
   // changing it later cannot rewrite where a past call was held.
   bookingLocation String? @map("booking_location")
+  // Which background the client picked. Null means the default.
+  //
+  // A plain string rather than an enum: the set of themes is a CSS concern
+  // that will change more often than the database should, and an unknown
+  // value falls back to the default rather than failing to render.
+  background String? @map("background")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

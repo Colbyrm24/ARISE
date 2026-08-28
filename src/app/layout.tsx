@@ -51,12 +51,20 @@ export default function RootLayout({
     <html lang="en" className={`${archivo.variable} ${dmMono.variable}`}>
       <body className="min-h-screen bg-background font-sans text-foreground">
         {/*
-          The lit frame around the viewport. Desktop only — see
-          `.viewport-frame` in globals.css. Rendered here rather than in each
-          layout so the coach console and the client app are held by the same
-          light, and so anything added later gets it without asking.
+          The lit frame moved OUT of here and into each top-level layout.
+
+          It reads --accent, --foreground and --system, and as a sibling of
+          {children} in <body> it could never inherit a client's chosen
+          background — so somebody on the orange theme got an electric-blue
+          border drawn around their whole app, which was then the loudest
+          thing on the screen and the wrong colour. Rendered inside each shell
+          it picks up whatever tokens that shell is wearing.
+
+          This layout stays sync and data-free on purpose. Reading the theme
+          here would mean an auth round trip and a database query on every
+          request for every route, sign-in included, and a build-time render
+          of the not-found page with no request to read a cookie from.
         */}
-        <div aria-hidden className="viewport-frame" />
         {children}
       </body>
     </html>
