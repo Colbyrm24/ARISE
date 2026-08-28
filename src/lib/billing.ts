@@ -174,3 +174,25 @@ export function parseCount(raw: string | null | undefined): number | null {
   if (!Number.isInteger(n) || n < 1) return null;
   return n;
 }
+
+/**
+ * Which stored reference a completed checkout could belong to.
+ *
+ * A plan priced inside ARISE creates a Checkout Session and stores that
+ * session's id. A plan backed by a real Stripe price creates a Payment Link —
+ * which does not expire — and stores the link's id instead; the session then
+ * only exists from the moment the client actually pays, so its id matches
+ * nothing on file. Anything looking a paid checkout back up has to try both,
+ * or a Payment Link payment strands the client on the finalizing screen and
+ * its subscription is never recorded.
+ */
+export function checkoutRefs(session: {
+  id: string;
+  payment_link?: string | { id: string } | null;
+}): string[] {
+  const linkRef =
+    typeof session.payment_link === 'string' ? session.payment_link : session.payment_link?.id;
+
+  // Session id first: it is the older shape and still the common one.
+  return linkRef && linkRef !== session.id ? [session.id, linkRef] : [session.id];
+}

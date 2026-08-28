@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { stripe } from '@/lib/stripe';
 import { renderAgreementTemplate, formatAgreementDate } from '@/lib/agreement';
 import { describePaymentStructure } from '@/lib/plans';
+import { checkoutRefs } from '@/lib/billing';
 import { recordSubscriptionFromCheckout } from '@/lib/subscription-sync';
 import type { PaymentLink, Plan, AgreementTemplate } from '@prisma/client';
 
@@ -103,17 +104,42 @@ async function createAgreementAndPayment(
  * the existing Agreement instead of creating a second one.
  */
 export async function finalizeStripeSession(sessionId: string) {
-  const paymentLink = await prisma.paymentLink.findFirst({
+  /*
+    Two kinds of link end up here.
+
+    A plan priced inside ARISE creates a Checkout Session, and the session id
+    itself is the PaymentLink's providerRef — one lookup and we are done.
+
+    A plan backed by a real Stripe price creates a Payment Link, which does
+    not expire. Its id is what got stored, and the session Stripe redirects
+    with is created fresh at the moment the client pays, so it matches
+    nothing here. The session has to be read back to find the link it came
+    from. Hence the second lookup rather than a `return null` that would
+    strand somebody who had just paid on the "finalizing…" screen forever.
+  */
+  let session: Awaited<ReturnType<typeof stripe.checkout.sessions.retrieve>> | null = null;
+
+  let paymentLink = await prisma.paymentLink.findFirst({
     where: { providerRef: sessionId },
     include: { plan: true, template: true },
   });
+
+  if (!paymentLink) {
+    session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    paymentLink = await prisma.paymentLink.findFirst({
+      where: { providerRef: { in: checkoutRefs(session) } },
+      include: { plan: true, template: true },
+    });
+  }
+
   if (!paymentLink) return null;
 
   if (paymentLink.status === 'paid') {
     return prisma.agreement.findUnique({ where: { paymentLinkId: paymentLink.id } });
   }
 
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  session = session ?? (await stripe.checkout.sessions.retrieve(sessionId));
   if (session.payment_status !== 'paid') return null;
 
   const providerPaymentId =

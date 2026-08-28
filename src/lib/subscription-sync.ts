@@ -8,6 +8,7 @@ import {
   mergeStatus,
   invoiceRole,
   amountFromCents,
+  checkoutRefs,
 } from '@/lib/billing';
 
 /*
@@ -103,10 +104,19 @@ async function ensureLocalSubscription(stripeSubscriptionId: string) {
       subscription: stripeSubscriptionId,
       limit: 1,
     });
-    const sessionId = sessions.data[0]?.id;
-    if (!sessionId) return null;
+    const session = sessions.data[0];
+    if (!session) return null;
 
-    const link = await prisma.paymentLink.findFirst({ where: { providerRef: sessionId } });
+    /*
+      The stored reference is the checkout session id for an ARISE-priced
+      plan, and the Payment Link id for a plan backed by a Stripe price —
+      a Payment Link mints a new session each time somebody opens it, so
+      matching only on the session id would find nothing and leave the
+      subscription unrecorded, which is how a fixed plan bills forever.
+    */
+    const link = await prisma.paymentLink.findFirst({
+      where: { providerRef: { in: checkoutRefs(session) } },
+    });
     if (!link) return null;
 
     await recordSubscriptionFromCheckout(
@@ -348,6 +358,15 @@ export async function handleSubscriptionChanged(subscription: {
   id: string;
   status: string;
   current_period_end: number | null;
+  /*
+    Whether Stripe is going to stop this at the end of the paid period.
+
+    Mirrored rather than assumed: the coach can schedule an ending from
+    ARISE, but he can also do it from the Stripe dashboard, and a client
+    ending a plan through a Stripe email does it too. Reading it off the
+    event is the only way the console tells the truth in all three cases.
+  */
+  cancel_at_period_end?: boolean | null;
 }) {
   const sub = await ensureLocalSubscription(subscription.id);
   if (!sub) return;
@@ -356,6 +375,10 @@ export async function handleSubscriptionChanged(subscription: {
     where: { id: sub.id },
     data: {
       status: mergeStatus(sub.status, localSubscriptionStatus(subscription.status)),
+      cancelAtPeriodEnd:
+        typeof subscription.cancel_at_period_end === 'boolean'
+          ? subscription.cancel_at_period_end
+          : sub.cancelAtPeriodEnd,
       currentPeriodEnd: subscription.current_period_end
         ? new Date(subscription.current_period_end * 1000)
         : sub.currentPeriodEnd,
