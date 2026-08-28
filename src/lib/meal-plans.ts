@@ -13,25 +13,21 @@ import { prisma } from '@/lib/prisma';
   make somebody feel behind by Wednesday.
 */
 
-export const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
-export type MealSlot = (typeof MEAL_SLOTS)[number];
+/*
+  The slots and the shape of a plan line live in @/lib/nutrition-day, which
+  imports no database at all. This file does — the moment it is imported, so
+  is the Prisma client — so anything that wants only the vocabulary can take
+  it from there and stay testable. Re-exported here because every existing
+  caller already reaches for it at this address.
+*/
+export {
+  MEAL_SLOTS,
+  isMealSlot,
+  type MealSlot,
+  type PlanItem,
+} from '@/lib/nutrition-day';
 
-export function isMealSlot(value: string): value is MealSlot {
-  return (MEAL_SLOTS as readonly string[]).includes(value);
-}
-
-export type PlanItem = {
-  id: string;
-  meal: MealSlot;
-  name: string;
-  quantity: number;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  note: string | null;
-  recipeId: string | null;
-};
+import { MEAL_SLOTS, isMealSlot, type MealSlot, type PlanItem } from '@/lib/nutrition-day';
 
 export type PlanTotals = {
   calories: number;
