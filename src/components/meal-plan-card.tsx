@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system-window';
 import type { ClientPlan } from '@/lib/meal-plans';
@@ -50,8 +51,24 @@ export function MealPlanCard({
                     className="flex flex-col gap-1 border-b border-border/40 py-2 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                   >
                     <div className="min-w-0">
+                      {/*
+                        The line opens the recipe when it came from the
+                        library. Every line on the live plan carries a recipe
+                        id and none of them were reachable, so the plan showed
+                        a name and a calorie count and left the cooking to
+                        guesswork.
+                      */}
                       <p className={`text-sm ${done ? 'text-muted-foreground line-through' : ''}`}>
-                        {item.name}
+                        {item.recipeId ? (
+                          <Link
+                            href={`/recipes/${item.recipeId}`}
+                            className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
+                          >
+                            {item.name}
+                          </Link>
+                        ) : (
+                          item.name
+                        )}
                         {item.quantity !== 1 && (
                           <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
                             ×{item.quantity}
