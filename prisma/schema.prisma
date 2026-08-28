@@ -270,6 +270,10 @@ model Subscription {
   // number of payments was reached and the subscription was cancelled at the
   // provider on purpose — see lib/billing.ts mergeStatus.
   status                String              @default("active")
+  // Set when the coach has ended a client but let the month they already
+  // paid for run out. Stripe keeps the subscription `active` in this state,
+  // so the intent has to be stored here or the console cannot show it.
+  cancelAtPeriodEnd     Boolean             @default(false) @map("cancel_at_period_end")
   currentPeriodEnd      DateTime?           @map("current_period_end")
   createdAt             DateTime            @default(now()) @map("created_at")
   deletedAt             DateTime?           @map("deleted_at") // soft delete only — never hard-delete billing records
