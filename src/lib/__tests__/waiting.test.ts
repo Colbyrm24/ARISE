@@ -162,3 +162,72 @@ test('input array untouched', () => {
   assert.equal(a.map((r) => r.clientId).join(','), before);
 });
 
+
+// --- the preview line on a message with no body
+//
+// A voice note has a null body. Falling straight through to null printed
+// "No messages yet" in the inbox on a thread the client had just answered —
+// beside her name, a red timer and an unread dot, all saying the opposite.
+
+function previewOnly(rows: Parameters<typeof assembleThreads>[0]['previews']) {
+  return assembleThreads({
+    coachId: COACH,
+    people: [{ clientId: 'ann', name: 'Ann Meyers' }],
+    edges: [
+      { senderId: 'ann', recipientId: COACH, _max: { createdAt: t('2026-08-25T12:30:00Z') } },
+    ],
+    runs: [],
+    previews: rows,
+    unreadBy: new Map(),
+  })[0];
+}
+
+test('a voice note previews as a voice message, not as nothing', () => {
+  const r = previewOnly([
+    {
+      senderId: 'ann',
+      recipientId: COACH,
+      body: null,
+      createdAt: t('2026-08-25T12:30:00Z'),
+      attachments: [{ type: 'voice' }],
+    },
+  ]);
+  assert.equal(r.lastBody, 'Voice message');
+});
+
+test('another kind of attachment still previews as something', () => {
+  const r = previewOnly([
+    {
+      senderId: 'ann',
+      recipientId: COACH,
+      body: null,
+      createdAt: t('2026-08-25T12:30:00Z'),
+      attachments: [{ type: 'photo' }],
+    },
+  ]);
+  assert.equal(r.lastBody, 'Attachment');
+});
+
+test('a typed message still previews as its own text', () => {
+  const r = previewOnly([
+    {
+      senderId: 'ann',
+      recipientId: COACH,
+      body: 'hit 185',
+      createdAt: t('2026-08-25T12:30:00Z'),
+    },
+  ]);
+  assert.equal(r.lastBody, 'hit 185');
+});
+
+test('a thread with no messages at all still previews as null', () => {
+  const r = assembleThreads({
+    coachId: COACH,
+    people: [{ clientId: 'eve', name: 'Eve' }],
+    edges: [],
+    runs: [],
+    previews: [],
+    unreadBy: new Map(),
+  })[0];
+  assert.equal(r.lastBody, null);
+});
