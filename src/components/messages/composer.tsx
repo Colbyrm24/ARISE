@@ -40,6 +40,7 @@ export function Composer({
     <form
       action={action}
       className={cn(
+        'composer-round',
         className ?? 'sticky bottom-20 bg-background/80 py-2 backdrop-blur',
         // relative: the recorder's review bar covers this row while a take is
         // waiting to be sent.
