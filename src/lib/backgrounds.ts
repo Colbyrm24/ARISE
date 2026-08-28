@@ -12,7 +12,16 @@
   like different rooms rather than different apps.
 */
 
-export type BackgroundId = 'beam' | 'ember' | 'tide' | 'violet' | 'slate';
+export type BackgroundId =
+  | 'beam'
+  | 'ember'
+  | 'tide'
+  | 'violet'
+  | 'slate'
+  | 'gold'
+  | 'rose'
+  | 'sand'
+  | 'midnight';
 
 export const DEFAULT_BACKGROUND: BackgroundId = 'beam';
 
@@ -36,6 +45,14 @@ export const BACKGROUNDS: {
     swatch: { ground: 'hsl(266 32% 5%)', accent: 'hsl(268 100% 78%)' },
   },
   { id: 'slate', name: 'Slate', swatch: { ground: 'hsl(220 8% 5%)', accent: 'hsl(210 12% 82%)' } },
+  { id: 'gold', name: 'Gold', swatch: { ground: 'hsl(40 24% 4%)', accent: 'hsl(42 96% 62%)' } },
+  { id: 'rose', name: 'Rose', swatch: { ground: 'hsl(340 22% 5%)', accent: 'hsl(342 92% 72%)' } },
+  { id: 'sand', name: 'Sand', swatch: { ground: 'hsl(32 12% 5%)', accent: 'hsl(36 44% 78%)' } },
+  {
+    id: 'midnight',
+    name: 'Midnight',
+    swatch: { ground: 'hsl(244 34% 4%)', accent: 'hsl(250 96% 78%)' },
+  },
 ];
 
 const IDS = new Set(BACKGROUNDS.map((b) => b.id));
