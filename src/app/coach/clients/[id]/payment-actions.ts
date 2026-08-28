@@ -57,7 +57,22 @@ export async function createPaymentLink(formData: FormData) {
   // default. This is what decides when their subscription stops, so it is
   // stored on the link rather than living only in Stripe's metadata.
   const numberOfPaymentsOverride = parseCount(numberOfPaymentsOverrideRaw);
-  const effectivePrice = priceOverride ?? Number(plan.price);
+  /*
+    A plan backed by a real Stripe price cannot be overridden here.
+
+    Stripe charges whatever that price says. If the override were honoured,
+    the agreement would render "$450.00, billed monthly, ongoing" over a
+    signature line while Stripe quietly took $300 forever — a signed document
+    disagreeing with the money. So the box is ignored for these plans, and the
+    figure that reaches both the checkout and the contract is Stripe's.
+
+    Change the amount in Stripe (or point the client at a different price) and
+    press Sync on the payments screen.
+  */
+  const usesStripePrice = provider === 'stripe' && Boolean(plan.stripePriceId);
+  const appliedPriceOverride = usesStripePrice ? null : priceOverride;
+
+  const effectivePrice = appliedPriceOverride ?? Number(plan.price);
   if (!Number.isFinite(effectivePrice) || effectivePrice <= 0) return;
 
   if (provider === 'stripe') {
@@ -72,17 +87,22 @@ export async function createPaymentLink(formData: FormData) {
       session = await stripe.checkout.sessions.create({
         mode: isRecurring ? 'subscription' : 'payment',
         line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              unit_amount: Math.round(effectivePrice * 100),
-              product_data: { name: plan.name },
-              ...(isRecurring
-                ? { recurring: FREQUENCY_TO_INTERVAL[plan.paymentFrequency as Exclude<PaymentFrequency, 'one_time'>] }
-                : {}),
-            },
-            quantity: 1,
-          },
+          plan.stripePriceId
+            ? // The price already exists in Stripe. Naming it keeps every
+              // charge attached to one product in the Stripe dashboard,
+              // instead of each link minting a new throwaway product.
+              { price: plan.stripePriceId, quantity: 1 }
+            : {
+                price_data: {
+                  currency: 'usd',
+                  unit_amount: Math.round(effectivePrice * 100),
+                  product_data: { name: plan.name },
+                  ...(isRecurring
+                    ? { recurring: FREQUENCY_TO_INTERVAL[plan.paymentFrequency as Exclude<PaymentFrequency, 'one_time'>] }
+                    : {}),
+                },
+                quantity: 1,
+              },
         ],
         ...(isRecurring && plan.billingType === 'payment_plan'
           ? {
@@ -122,7 +142,7 @@ export async function createPaymentLink(formData: FormData) {
         planId,
         agreementTemplateId,
         provider,
-        priceOverride,
+        priceOverride: appliedPriceOverride,
         termMonthsOverride,
         numberOfPaymentsOverride,
         startDate,
