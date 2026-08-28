@@ -21,6 +21,7 @@ export default async function CoachLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen">
+      <div aria-hidden className="viewport-frame" />
       <Sidebar counts={counts} />
       {/* The console had no navigation at all below 768px — the sidebar is
           md-and-up and this header held only the wordmark. */}
