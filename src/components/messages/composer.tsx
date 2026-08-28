@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ export function Composer({
   voiceAction,
   placeholder = 'Message…',
   hidden,
+  extra,
   className,
 }: {
   action: (formData: FormData) => Promise<void>;
@@ -25,6 +27,12 @@ export function Composer({
   voiceAction?: (formData: FormData) => Promise<VoiceNoteResult>;
   placeholder?: string;
   hidden?: Record<string, string>;
+  /**
+   * An extra control in the row — the coach's draft button lives here. It sits
+   * inside the form on purpose so it can reach the body field, which keeps
+   * this component a plain server component that still posts without JS.
+   */
+  extra?: ReactNode;
   /** Overrides the sticky footer positioning, which only suits a full thread. */
   className?: string;
 }) {
@@ -42,6 +50,7 @@ export function Composer({
         Object.entries(hidden).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
       <Input name="body" placeholder={placeholder} autoComplete="off" required className="flex-1" />
       <EmojiPicker targetName="body" />
+      {extra}
       {voiceAction && <VoiceRecorder action={voiceAction} hidden={hidden} />}
       <Button type="submit">Send</Button>
     </form>
