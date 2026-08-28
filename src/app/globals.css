@@ -529,3 +529,149 @@ body::before {
   --primary-foreground: 220 10% 5%;
   --accent-foreground: 220 10% 5%;
 }
+
+/*
+  ---------------------------------------------------------------------------
+  Message bubbles
+  ---------------------------------------------------------------------------
+
+  The one place in ARISE that is deliberately not a system window.
+
+  Everything else in this app is square on purpose: the radius scale is
+  collapsed to a hard 2px so panels read as machined edges. That is right for
+  a console and wrong for a conversation — a message thread is the one screen
+  a client already has a lifelong reference for, and against iMessage a square
+  bubble reads as a bug rather than as a style.
+
+  So the bubbles opt out of the scale explicitly. The tail corner stays
+  tighter than the other three, which is the shape that says "this one is
+  mine" without a label.
+*/
+.bubble {
+  border-radius: 20px;
+}
+.bubble-mine {
+  border-bottom-right-radius: 7px;
+}
+.bubble-theirs {
+  border-bottom-left-radius: 7px;
+  /*
+    Lifted off the panel.
+
+    --secondary sits at 12% lightness, which is the right weight for a surface
+    holding a form and far too dark for a block of someone's words: the text
+    was doing all the work of separating one bubble from the next. Mixing a
+    little foreground into the same token raises it to roughly the grey a dark
+    -mode messaging app uses, and because it is derived rather than hard-coded
+    it follows every background a client can pick.
+  */
+  background-color: color-mix(in srgb, hsl(var(--secondary)) 58%, hsl(var(--foreground)) 15%);
+  color: hsl(var(--foreground));
+}
+
+/*
+  The composer, rounded to match.
+
+  Square corners under a column of round bubbles is the specific thing that
+  made this screen look unfinished. Scoped to the composer rather than applied
+  to inputs generally — every other form in ARISE keeps the machined edge.
+*/
+.composer-round input,
+.composer-round button {
+  border-radius: 999px;
+}
+
+/*
+  ---------------------------------------------------------------------------
+  Four more rooms
+  ---------------------------------------------------------------------------
+
+  Same rule as the first five: no images, only token overrides, and green is
+  never an accent because green means "complete" everywhere else in the app.
+*/
+
+/* Gold. The ARISE mark's own colour, for anyone who wants the house look. */
+[data-bg='gold'] {
+  --background: 40 24% 4%;
+  --card: 38 30% 8%;
+  --secondary: 38 26% 12%;
+  --muted: 38 26% 12%;
+  --primary: 42 96% 62%;
+  --accent: 42 96% 62%;
+  --system: 36 92% 52%;
+  --ring: 42 96% 62%;
+  --border: 40 22% 18%;
+  --input: 40 22% 18%;
+  --muted-foreground: 42 14% 72%;
+  --foreground: 44 60% 94%;
+  --card-foreground: 44 60% 94%;
+  --secondary-foreground: 44 60% 94%;
+  --primary-foreground: 40 60% 4%;
+  --accent-foreground: 40 60% 4%;
+  /* Scarlet reads muddy against amber; pushed toward red-pink for separation. */
+  --destructive: 356 94% 62%;
+}
+
+/* Rose. */
+[data-bg='rose'] {
+  --background: 340 22% 5%;
+  --card: 338 30% 9%;
+  --secondary: 338 26% 13%;
+  --muted: 338 26% 13%;
+  --primary: 342 92% 72%;
+  --accent: 342 92% 72%;
+  --system: 330 88% 60%;
+  --ring: 342 92% 72%;
+  --border: 340 24% 19%;
+  --input: 340 24% 19%;
+  --muted-foreground: 342 12% 74%;
+  --foreground: 344 70% 95%;
+  --card-foreground: 344 70% 95%;
+  --secondary-foreground: 344 70% 95%;
+  --primary-foreground: 340 60% 4%;
+  --accent-foreground: 340 60% 4%;
+  /* Orange-red, so an alert cannot be mistaken for the accent it sits beside. */
+  --destructive: 12 96% 60%;
+}
+
+/* Sand. Warm and low-contrast — the quietest of the set. */
+[data-bg='sand'] {
+  --background: 32 12% 5%;
+  --card: 32 14% 9%;
+  --secondary: 32 12% 14%;
+  --muted: 32 12% 14%;
+  --primary: 36 44% 78%;
+  --accent: 36 44% 78%;
+  --system: 34 40% 60%;
+  --ring: 36 44% 78%;
+  --border: 32 12% 20%;
+  --input: 32 12% 20%;
+  --muted-foreground: 34 10% 72%;
+  --foreground: 38 30% 94%;
+  --card-foreground: 38 30% 94%;
+  --secondary-foreground: 38 30% 94%;
+  --primary-foreground: 32 30% 5%;
+  --accent-foreground: 32 30% 5%;
+  --destructive: 4 92% 62%;
+}
+
+/* Midnight. Deeper and more indigo than Beam, without going violet. */
+[data-bg='midnight'] {
+  --background: 244 34% 4%;
+  --card: 244 40% 8%;
+  --secondary: 244 34% 13%;
+  --muted: 244 34% 13%;
+  --primary: 250 96% 78%;
+  --accent: 250 96% 78%;
+  --system: 254 92% 62%;
+  --ring: 250 96% 78%;
+  --border: 244 28% 19%;
+  --input: 244 28% 19%;
+  --muted-foreground: 246 14% 74%;
+  --foreground: 248 70% 95%;
+  --card-foreground: 248 70% 95%;
+  --secondary-foreground: 248 70% 95%;
+  --primary-foreground: 244 60% 4%;
+  --accent-foreground: 244 60% 4%;
+  --destructive: 4 100% 62%;
+}
