@@ -1,23 +1,48 @@
 import Link from 'next/link';
-import { Trash2 } from 'lucide-react';
+import { Check, ChevronDown, Trash2 } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { todayFor } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  SystemWindow,
-  SystemWindowContent,
-  Count,
-} from '@/components/ui/system-window';
+import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system-window';
 import { signMealPhotoUrls } from '@/lib/meal-photos';
 import { MealPhotoLogger } from '@/components/meal-photo-logger';
-import { MealPlanCard } from '@/components/meal-plan-card';
 import { getActivePlan } from '@/lib/meal-plans';
-import { logMeal, logFood, quickAddFood, removeMealLog } from './actions';
+import {
+  daySections,
+  eatenTotals,
+  fillPercent,
+  headline,
+  loggedNameSet,
+  type LoggedEntry,
+} from '@/lib/nutrition-day';
+import { logMeal, logFood, logPlanItem, quickAddFood, removeMealLog } from './actions';
 
+/*
+  The client's nutrition screen.
+
+  It used to show everything at once and at the same size: four progress bars,
+  a list of what had been logged with four macros on every line, the plan with
+  four macros on every line, a food library with four macros on every line, a
+  photo uploader, a five-field quick-add form and the whole recipe list —
+  about sixty numbers, none of them louder than any other. A client opening it
+  at 2pm to ask "am I okay, and what do I eat next" had to work that out
+  themselves.
+
+  So the page now answers three questions in order, and only the first one is
+  loud:
+
+    1. How much room have I got left?  — one number, the size of a headline.
+    2. What does my day look like?     — the plan and the logs, merged, one
+                                         meal at a time.
+    3. How do I add something?         — folded away until it's wanted.
+
+  Nothing was removed. Carbs and fat are still here, the food library is still
+  here, the recipes are still here — they're just no longer competing with the
+  one number that decides the day.
+*/
 
 const MEAL_OPTIONS = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -40,6 +65,60 @@ const selectClass =
   'text-foreground focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 ' +
   'focus-visible:ring-accent/50';
 
+const numberClass =
+  'readout h-9 w-16 rounded-none border border-input bg-secondary/40 px-2 text-sm ' +
+  'focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50';
+
+/*
+  What the coach has (or hasn't) done with a logged photo.
+
+  The photo logger promises "your coach will confirm it", and four separate
+  paragraphs used to say how that went — one per state, each on its own line
+  under the meal. It's one word's worth of information, so it's one chip now.
+*/
+const REVIEW_NOTE: Record<string, { text: string; tone: string }> = {
+  estimated: { text: 'Estimate', tone: 'text-muted-foreground' },
+  failed: { text: 'Couldn’t read — add the numbers', tone: 'text-destructive' },
+  corrected: { text: 'Coach corrected', tone: 'text-success' },
+  confirmed: { text: 'Coach confirmed', tone: 'text-success' },
+};
+
+/**
+ * A section that stays shut until somebody wants it.
+ *
+ * Native `<details>` on purpose: this is a server component, the page has to
+ * work before any JavaScript arrives, and a client who taps "Search foods"
+ * with a dead network should still get the search box.
+ */
+function Fold({
+  label,
+  hint,
+  open,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  open?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={open} className="group border-b border-border/50 last:border-b-0">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3.5 text-sm transition-colors hover:text-accent [&::-webkit-details-marker]:hidden">
+        <span>{label}</span>
+        <span className="readout flex items-center gap-2 text-[10px] uppercase text-muted-foreground">
+          {hint}
+          <ChevronDown
+            size={14}
+            aria-hidden
+            className="transition-transform duration-200 group-open:rotate-180"
+          />
+        </span>
+      </summary>
+      <div className="pb-4">{children}</div>
+    </details>
+  );
+}
+
 export default async function NutritionPage({
   searchParams,
 }: {
@@ -59,7 +138,7 @@ export default async function NutritionPage({
     prisma.nutritionLog.findMany({
       where: { clientId: user.id, date: today },
       include: { recipe: true, food: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'asc' },
     }),
     prisma.recipe.findMany({ orderBy: { title: 'asc' } }),
     /*
@@ -85,344 +164,400 @@ export default async function NutritionPage({
     todayLogs.map((l) => l.photoPath).filter((p): p is string => Boolean(p))
   );
 
-  // Matched on name because a plan line and the log it produced carry the
-  // same one. Not an id join: a client who logs the same meal from the photo
-  // logger or the food search should still see that line come off the plan.
-  const loggedNames = new Set(
-    todayLogs.map((l) => (l.name ?? l.recipe?.title ?? l.food?.name ?? '').toLowerCase()).filter(Boolean)
-  );
+  const logs: LoggedEntry[] = todayLogs.map((l) => ({
+    id: l.id,
+    meal: l.meal,
+    name: l.recipe?.title ?? l.food?.name ?? l.name ?? 'Meal',
+    calories: l.calories,
+    protein: Number(l.protein),
+    carbs: Number(l.carbs),
+    fat: Number(l.fat),
+    photoPath: l.photoPath,
+    reviewState: l.reviewState,
+  }));
 
-  const caloriesEaten = todayLogs.reduce((sum, l) => sum + l.calories, 0);
-  const proteinEaten = todayLogs.reduce((sum, l) => sum + Number(l.protein), 0);
-  const carbsEaten = todayLogs.reduce((sum, l) => sum + Number(l.carbs), 0);
-  const fatEaten = todayLogs.reduce((sum, l) => sum + Number(l.fat), 0);
+  const eaten = eatenTotals(logs);
+  const alreadyEaten = loggedNameSet(logs);
+  const sections = daySections(plan?.items ?? [], logs);
 
-  /*
-    Protein is a floor — hit it or beat it. Calories, carbs and fat are
-    budgets, and going 900 over is not "complete". They read the same before,
-    so a blown day rendered exactly as green as a perfect one.
-  */
-  const macros = target
-    ? ([
-        { label: 'Calories', eaten: caloriesEaten, goal: target.calories, unit: '', mode: 'budget' },
-        { label: 'Protein', eaten: Math.round(proteinEaten), goal: Math.round(Number(target.protein)), unit: 'g', mode: 'reach' },
-        { label: 'Carbs', eaten: Math.round(carbsEaten), goal: Math.round(Number(target.carbs)), unit: 'g', mode: 'budget' },
-        { label: 'Fat', eaten: Math.round(fatEaten), goal: Math.round(Number(target.fat)), unit: 'g', mode: 'budget' },
-      ] as const)
-    : [];
+  const calorieGoal = target?.calories ?? null;
+  const proteinGoal = target ? Math.round(Number(target.protein)) : null;
+  const head = headline(eaten.calories, calorieGoal);
 
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <p className="readout text-[11px] uppercase text-muted-foreground">Today</p>
-        <h1 className="display mt-1.5 text-2xl">Nutrition</h1>
+        <p className="readout text-[11px] uppercase text-muted-foreground">Nutrition</p>
+        <h1 className="display mt-1.5 text-2xl">Today</h1>
       </header>
 
-      <SystemWindow title="Totals">
-        <SystemWindowContent className="flex flex-col gap-4 pt-4">
-          {target ? (
-            macros.map((m) => (
-              <div key={m.label}>
-                <div className="mb-2 flex items-baseline justify-between text-sm">
-                  <span>{m.label}</span>
-                  <Count value={m.eaten} total={`${m.goal}${m.unit}`} mode={m.mode} />
-                </div>
-                <Progress value={Math.min((m.eaten / Math.max(m.goal, 1)) * 100, 100)} />
+      {/*
+        The headline.
+
+        One number, and the word that says what it means. "1,240 left" and
+        "240 over" are the two sentences that change what somebody does next;
+        a row of four equal progress bars was neither of them.
+      */}
+      <SystemWindow>
+        <SystemWindowContent className="flex flex-col gap-5">
+          <div>
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="display text-5xl leading-none tabular-nums">
+                  {head.amount.toLocaleString('en-US')}
+                </p>
+                <p className="readout mt-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                  {head.kind === 'left'
+                    ? 'calories left'
+                    : head.kind === 'over'
+                      ? 'calories over'
+                      : 'calories eaten'}
+                </p>
               </div>
-            ))
-          ) : (
+              {calorieGoal && (
+                <p className="readout pb-1 text-right text-[11px] text-muted-foreground">
+                  {eaten.calories.toLocaleString('en-US')} of{' '}
+                  {calorieGoal.toLocaleString('en-US')}
+                </p>
+              )}
+            </div>
+            {calorieGoal && (
+              <Progress className="mt-3" value={fillPercent(eaten.calories, calorieGoal)} />
+            )}
+          </div>
+
+          {/*
+            Protein second, and the only other thing with a bar. It's the
+            number this coach actually chases, and it's a floor rather than a
+            budget — beating it is the win, so it never turns red.
+          */}
+          {proteinGoal ? (
+            <div>
+              <div className="mb-2 flex items-baseline justify-between text-sm">
+                <span>Protein</span>
+                <Count value={Math.round(eaten.protein)} total={`${proteinGoal}g`} mode="reach" />
+              </div>
+              <Progress value={fillPercent(eaten.protein, proteinGoal)} />
+            </div>
+          ) : null}
+
+          {/*
+            Carbs and fat are real, and they are not the headline. One quiet
+            line, no bars — they were never the thing a day turns on, and
+            giving them equal billing is most of why this screen felt like
+            homework.
+          */}
+          {target && (
+            <p className="readout text-[11px] text-muted-foreground">
+              Carbs {Math.round(eaten.carbs)}/{Math.round(Number(target.carbs))}g
+              <span className="px-2 opacity-40">·</span>
+              Fat {Math.round(eaten.fat)}/{Math.round(Number(target.fat))}g
+            </p>
+          )}
+
+          {!target && (
             <p className="text-sm text-muted-foreground">
-              Your coach hasn&apos;t set your targets yet.
+              Your coach hasn&apos;t set your targets yet — everything you log still counts, and
+              they&apos;ll see it.
             </p>
           )}
         </SystemWindowContent>
       </SystemWindow>
 
-      {todayLogs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Logged today</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col">
-            {todayLogs.map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between gap-3 border-b border-border/50 py-3 last:border-b-0"
-              >
-                {log.photoPath && photoUrls.get(log.photoPath) && (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={photoUrls.get(log.photoPath)}
-                    alt=""
-                    className="h-12 w-12 shrink-0 border border-border object-cover"
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {log.recipe?.title ?? log.food?.name ?? log.name ?? 'Meal'}
-                  </p>
-                  <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
-                    {log.meal ? `${log.meal} · ` : ''}
-                    {log.calories} cal · {Math.round(Number(log.protein))}p ·{' '}
-                    {Math.round(Number(log.carbs))}c · {Math.round(Number(log.fat))}f
-                  </p>
+      {/*
+        The day itself, one meal at a time.
+
+        The plan and the log used to be two separate cards, which left the
+        client doing the join in their head at every meal — scroll up to see
+        what was planned, scroll down to see whether it had been logged. Here
+        Breakfast is a heading with both underneath it: what's in, then what's
+        still to come.
+      */}
+      <SystemWindow title="Your day" meta={plan ? plan.name : undefined}>
+        <SystemWindowContent className="flex flex-col gap-5 pt-4">
+          {plan?.note && (
+            <p className="text-sm leading-relaxed text-muted-foreground">{plan.note}</p>
+          )}
+
+          {sections.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing logged yet today. The fastest way in is a photo of your plate — it&apos;s the
+              first thing below.
+            </p>
+          ) : (
+            sections.map((section) => {
+              const toEat = section.planned.filter(
+                (i) => !alreadyEaten.has(i.name.trim().toLowerCase())
+              );
+
+              return (
+                <div key={section.slot} className="flex flex-col">
+                  <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-1.5">
+                    <span className="readout text-[11px] uppercase tracking-wider text-foreground">
+                      {section.slot}
+                    </span>
+                    <span className="readout text-[10px] text-muted-foreground">
+                      {section.calories > 0
+                        ? `${section.calories.toLocaleString('en-US')} cal · ${section.protein}p`
+                        : `${section.plannedCalories.toLocaleString('en-US')} cal planned`}
+                    </span>
+                  </div>
+
+                  {section.logged.map((log) => {
+                    const note = log.reviewState ? REVIEW_NOTE[log.reviewState] : undefined;
+                    const url = log.photoPath ? photoUrls.get(log.photoPath) : undefined;
+                    return (
+                      <div key={log.id} className="flex items-center gap-3 py-2.5">
+                        {url && (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={url}
+                            alt=""
+                            className="h-10 w-10 shrink-0 border border-border object-cover"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm">{log.name}</p>
+                          <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                            {log.calories} cal · {Math.round(log.protein)}p ·{' '}
+                            {Math.round(log.carbs)}c · {Math.round(log.fat)}f
+                            {note && (
+                              <>
+                                <span className="px-1.5 opacity-40">·</span>
+                                <span className={note.tone}>{note.text}</span>
+                              </>
+                            )}
+                          </p>
+                        </div>
+                        <form action={removeMealLog} className="shrink-0">
+                          <input type="hidden" name="logId" value={log.id} />
+                          <button
+                            type="submit"
+                            aria-label={`Remove ${log.name}`}
+                            className="text-muted-foreground transition-colors hover:text-destructive"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </form>
+                      </div>
+                    );
+                  })}
+
                   {/*
-                    The photo logger promises "your coach will confirm it" and
-                    then nothing on this screen ever said whether they had. An
-                    unchecked guess and a coach-corrected number looked
-                    identical, which quietly made the promise meaningless.
+                    Planned lines that haven't been eaten. Ones that have are
+                    not repeated here — they're already above, logged, which is
+                    the same information said once instead of twice.
                   */}
-                  {log.reviewState === 'estimated' && (
-                    <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
-                      Estimate · waiting on your coach
-                    </p>
+                  {toEat.length > 0 && (
+                    <div className="mt-1 flex flex-col">
+                      {section.logged.length > 0 && (
+                        <span className="readout pt-1 text-[10px] uppercase text-muted-foreground">
+                          Still to eat
+                        </span>
+                      )}
+                      {toEat.map((item) => (
+                        <div key={item.id} className="flex items-center gap-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm text-muted-foreground">
+                              {item.recipeId ? (
+                                <Link
+                                  href={`/recipes/${item.recipeId}`}
+                                  className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
+                                >
+                                  {item.name}
+                                </Link>
+                              ) : (
+                                item.name
+                              )}
+                              {item.quantity !== 1 && (
+                                <span className="readout ml-2 text-[10px] uppercase">
+                                  ×{item.quantity}
+                                </span>
+                              )}
+                            </p>
+                            <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                              {item.calories} cal · {item.protein}p
+                              {item.note ? ` · ${item.note}` : ''}
+                            </p>
+                          </div>
+                          <form action={logPlanItem} className="shrink-0">
+                            <input type="hidden" name="itemId" value={item.id} />
+                            <button
+                              type="submit"
+                              className="readout border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent focus-visible:border-accent focus-visible:outline-none"
+                            >
+                              Log
+                            </button>
+                          </form>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                  {log.reviewState === 'failed' && (
-                    <p className="readout mt-0.5 text-[10px] uppercase text-destructive">
-                      Couldn&apos;t read this one — add the numbers or leave it for your coach
-                    </p>
-                  )}
-                  {log.reviewState === 'corrected' && (
-                    <p className="readout mt-0.5 text-[10px] uppercase text-success">
-                      Corrected by your coach
-                    </p>
-                  )}
-                  {log.reviewState === 'confirmed' && (
-                    <p className="readout mt-0.5 text-[10px] uppercase text-success">
-                      Confirmed by your coach
+
+                  {/* Every planned line for this meal is in. Say so once. */}
+                  {section.planned.length > 0 && toEat.length === 0 && (
+                    <p className="readout flex items-center gap-1.5 pt-2 text-[10px] uppercase text-success">
+                      <Check size={12} /> Meal complete
                     </p>
                   )}
                 </div>
-                <form action={removeMealLog}>
-                  <input type="hidden" name="logId" value={log.id} />
-                  <button
-                    type="submit"
-                    aria-label="Remove"
-                    className="text-muted-foreground transition-colors hover:text-destructive"
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </form>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/*
-        Search first. A client who knows what they ate types it; a client who
-        doesn't browses a category. Plain GET form so it works with no JS and
-        the result is a linkable URL.
-      */}
-      {/*
-        The plan comes before every logging control on this page. Somebody
-        opening the nutrition screen at 11am is asking what to eat, not
-        recording what they already ate — and until now the first thing they
-        met was a search box, which only helps a person who already knows the
-        answer.
-      */}
-      {plan && <MealPlanCard plan={plan} loggedNames={loggedNames} />}
-
-      {/*
-        First, because it's the way most meals actually get logged. Searching a
-        library assumes you already know what a portion weighs; a photo doesn't
-        assume anything, which is why this is the one clients will use standing
-        at a table with the food in front of them.
-      */}
-      <SystemWindow title="Log from a photo">
-        <SystemWindowContent className="pt-4">
-          <MealPhotoLogger />
+              );
+            })
+          )}
         </SystemWindowContent>
       </SystemWindow>
 
+      {/*
+        Every way of adding food, in one window, folded.
+
+        These were four separate cards stacked down the page, all open, all the
+        time — roughly two screens of form controls under the part of the page
+        anybody actually reads. The photo is open because it's how most meals
+        really get logged: searching a library assumes you already know what a
+        portion weighs, and a photo assumes nothing.
+      */}
       <SystemWindow title="Add food">
-        <SystemWindowContent className="flex flex-col gap-4 pt-4">
-          <form method="GET" className="flex gap-2">
-            <Input
-              name="q"
-              defaultValue={q}
-              placeholder="Search foods…"
-              className="flex-1"
-              aria-label="Search foods"
-            />
-            <Button type="submit" variant="outline" size="sm">
-              Search
-            </Button>
-          </form>
+        <SystemWindowContent className="flex flex-col pt-4">
+          <Fold label="Take a photo" hint="Fastest" open>
+            <MealPhotoLogger />
+          </Fold>
 
-          <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <a
-                key={c}
-                href={`/nutrition?cat=${encodeURIComponent(c)}`}
-                className={
-                  'readout border px-2 py-1 text-[10px] uppercase transition-colors ' +
-                  (cat === c && !q
-                    ? 'border-accent/50 bg-accent/10 text-accent'
-                    : 'border-border text-muted-foreground hover:border-accent/40 hover:text-accent')
-                }
-              >
-                {c}
-              </a>
-            ))}
-          </div>
+          <Fold
+            label="Search foods"
+            hint={q || cat ? 'Showing results' : undefined}
+            open={Boolean(q || cat)}
+          >
+            <div className="flex flex-col gap-4">
+              {/* Plain GET form: works with no JS, and the result is a URL
+                  somebody can bookmark or send. */}
+              <form method="GET" className="flex gap-2">
+                <Input
+                  name="q"
+                  defaultValue={q}
+                  placeholder="Search foods…"
+                  className="flex-1"
+                  aria-label="Search foods"
+                />
+                <Button type="submit" variant="outline" size="sm">
+                  Search
+                </Button>
+              </form>
 
-          <div className="flex flex-col">
-            {foods.length === 0 ? (
-              <p className="py-2 text-sm text-muted-foreground">
-                {q
-                  ? `Nothing matching “${q}”. Use quick add below and it'll count just the same.`
-                  : 'Pick a category or search to get started.'}
-              </p>
-            ) : (
-              foods.map((food) => (
-                <div
-                  key={food.id}
-                  className="flex flex-col gap-2 border-b border-border/50 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-                >
-                  <div className="min-w-0 sm:flex-1">
-                    <p className="text-sm font-medium">{food.name}</p>
-                    <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
-                      {food.servingSize} · {food.calories} cal ·{' '}
-                      {Math.round(Number(food.protein))}p · {Math.round(Number(food.carbs))}c ·{' '}
-                      {Math.round(Number(food.fat))}f
-                    </p>
-                  </div>
-                  <form action={logFood} className="flex shrink-0 items-center gap-2">
-                    <input type="hidden" name="foodId" value={food.id} />
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map((c) => (
+                  <a
+                    key={c}
+                    href={`/nutrition?cat=${encodeURIComponent(c)}`}
+                    className={
+                      'readout border px-2 py-1 text-[10px] uppercase transition-colors ' +
+                      (cat === c && !q
+                        ? 'border-accent/50 bg-accent/10 text-accent'
+                        : 'border-border text-muted-foreground hover:border-accent/40 hover:text-accent')
+                    }
+                  >
+                    {c}
+                  </a>
+                ))}
+              </div>
+
+              <div className="flex flex-col">
+                {foods.length === 0 ? (
+                  <p className="py-2 text-sm text-muted-foreground">
+                    {q
+                      ? `Nothing matching “${q}”. Enter it yourself below and it'll count just the same.`
+                      : 'Pick a category or search to get started.'}
+                  </p>
+                ) : (
+                  foods.map((food) => (
+                    <div
+                      key={food.id}
+                      className="flex flex-col gap-2 border-b border-border/40 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                    >
+                      <div className="min-w-0 sm:flex-1">
+                        <p className="text-sm">{food.name}</p>
+                        <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                          {food.servingSize} · {food.calories} cal ·{' '}
+                          {Math.round(Number(food.protein))}p · {Math.round(Number(food.carbs))}c ·{' '}
+                          {Math.round(Number(food.fat))}f
+                        </p>
+                      </div>
+                      <form action={logFood} className="flex shrink-0 items-center gap-2">
+                        <input type="hidden" name="foodId" value={food.id} />
+                        <input
+                          type="number"
+                          name="quantity"
+                          step="0.25"
+                          min="0.25"
+                          defaultValue="1"
+                          aria-label="Servings"
+                          className={numberClass}
+                        />
+                        <select
+                          name="meal"
+                          defaultValue="snack"
+                          aria-label="Meal"
+                          className={selectClass}
+                        >
+                          {MEAL_OPTIONS.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                        <Button type="submit" variant="outline" size="sm">
+                          Log
+                        </Button>
+                      </form>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </Fold>
+
+          {/* The escape hatch, for when the numbers are already known — a
+              label, a chain restaurant, something the coach macro'd earlier. */}
+          <Fold label="Enter it myself">
+            <form action={quickAddFood} encType="multipart/form-data" className="flex flex-col gap-3">
+              <Input name="name" required maxLength={120} placeholder="What did you eat?" />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  { n: 'calories', l: 'Calories', req: true },
+                  { n: 'protein', l: 'Protein g', req: false },
+                  { n: 'carbs', l: 'Carbs g', req: false },
+                  { n: 'fat', l: 'Fat g', req: false },
+                ].map((f) => (
+                  <label key={f.n} className="flex flex-col gap-1">
+                    <span className="readout text-[10px] uppercase text-muted-foreground">
+                      {f.l}
+                    </span>
                     <input
                       type="number"
-                      name="quantity"
-                      step="0.25"
-                      min="0.25"
-                      defaultValue="1"
-                      aria-label="Servings"
-                      className="readout h-9 w-16 rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                      name={f.n}
+                      min="0"
+                      step="1"
+                      required={f.req}
+                      defaultValue={f.req ? undefined : 0}
+                      className="readout h-10 w-full rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
                     />
-                    <select name="meal" defaultValue="snack" aria-label="Meal" className={selectClass}>
-                      {MEAL_OPTIONS.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <Button type="submit" variant="outline" size="sm">
-                      Log
-                    </Button>
-                  </form>
-                </div>
-              ))
-            )}
-          </div>
-        </SystemWindowContent>
-      </SystemWindow>
-
-      {/*
-        The escape hatch, for when the numbers are already known — a label, a
-        chain restaurant, something the coach macro'd earlier.
-      */}
-      <SystemWindow title="Quick add">
-        <SystemWindowContent className="pt-4">
-          <form action={quickAddFood} encType="multipart/form-data" className="flex flex-col gap-3">
-            <Input name="name" required maxLength={120} placeholder="What did you eat?" />
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[
-                { n: 'calories', l: 'Calories', req: true },
-                { n: 'protein', l: 'Protein g', req: false },
-                { n: 'carbs', l: 'Carbs g', req: false },
-                { n: 'fat', l: 'Fat g', req: false },
-              ].map((f) => (
-                <label key={f.n} className="flex flex-col gap-1">
-                  <span className="readout text-[10px] uppercase text-muted-foreground">{f.l}</span>
-                  <input
-                    type="number"
-                    name={f.n}
-                    min="0"
-                    step="1"
-                    required={f.req}
-                    defaultValue={f.req ? undefined : 0}
-                    className="readout h-10 w-full rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-                  />
-                </label>
-              ))}
-            </div>
-            <label className="flex flex-col gap-1">
-              <span className="readout text-[10px] uppercase text-muted-foreground">
-                Photo (optional)
-              </span>
-              <input
-                type="file"
-                name="photo"
-                accept="image/*"
-                capture="environment"
-                className="readout w-full rounded-none border border-input bg-secondary/40 p-2 text-[11px] file:mr-3 file:rounded-none file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:text-foreground"
-              />
-            </label>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <select name="meal" defaultValue="snack" aria-label="Meal" className={selectClass}>
-                  {MEAL_OPTIONS.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="save"
-                    className="h-4 w-4 rounded-none border-border bg-secondary accent-[hsl(var(--accent))]"
-                  />
-                  <span className="readout text-[10px] uppercase text-muted-foreground">
-                    Save for next time
-                  </span>
-                </label>
+                  </label>
+                ))}
               </div>
-              <Button type="submit" size="sm">
-                Add
-              </Button>
-            </div>
-          </form>
-        </SystemWindowContent>
-      </SystemWindow>
+              <label className="flex flex-col gap-1">
+                <span className="readout text-[10px] uppercase text-muted-foreground">
+                  Photo (optional)
+                </span>
+                <input
+                  type="file"
+                  name="photo"
+                  accept="image/*"
+                  capture="environment"
+                  className="readout w-full rounded-none border border-input bg-secondary/40 p-2 text-[11px] file:mr-3 file:rounded-none file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:text-foreground"
+                />
+              </label>
 
-      {recipes.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Coach recipes</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col">
-            {recipes.map((recipe) => (
-              <div
-                key={recipe.id}
-                className="flex flex-col gap-2 border-b border-border/50 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
-              >
-                <div className="min-w-0 sm:flex-1">
-                  <p className="text-sm font-medium">
-                    <Link
-                      href={`/recipes/${recipe.id}`}
-                      className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
-                    >
-                      {recipe.title}
-                    </Link>
-                  </p>
-                  <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
-                    {recipe.calories} cal · {Math.round(Number(recipe.protein))}p ·{' '}
-                    {Math.round(Number(recipe.carbs))}c · {Math.round(Number(recipe.fat))}f
-                  </p>
-                </div>
-                <form action={logMeal} className="flex shrink-0 items-center gap-2">
-                  <input type="hidden" name="recipeId" value={recipe.id} />
-                  <input
-                    type="number"
-                    name="quantity"
-                    step="0.25"
-                    min="0.25"
-                    defaultValue="1"
-                    aria-label="Servings"
-                    className="readout h-9 w-16 rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-                  />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                   <select name="meal" defaultValue="snack" aria-label="Meal" className={selectClass}>
                     {MEAL_OPTIONS.map((m) => (
                       <option key={m} value={m}>
@@ -430,15 +565,80 @@ export default async function NutritionPage({
                       </option>
                     ))}
                   </select>
-                  <Button type="submit" variant="outline" size="sm">
-                    Log
-                  </Button>
-                </form>
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="save"
+                      className="h-4 w-4 rounded-none border-border bg-secondary accent-[hsl(var(--accent))]"
+                    />
+                    <span className="readout text-[10px] uppercase text-muted-foreground">
+                      Save for next time
+                    </span>
+                  </label>
+                </div>
+                <Button type="submit" size="sm">
+                  Add
+                </Button>
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+            </form>
+          </Fold>
+
+          {recipes.length > 0 && (
+            <Fold label="Coach recipes" hint={`${recipes.length}`}>
+              <div className="flex flex-col">
+                {recipes.map((recipe) => (
+                  <div
+                    key={recipe.id}
+                    className="flex flex-col gap-2 border-b border-border/40 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                  >
+                    <div className="min-w-0 sm:flex-1">
+                      <p className="text-sm">
+                        <Link
+                          href={`/recipes/${recipe.id}`}
+                          className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
+                        >
+                          {recipe.title}
+                        </Link>
+                      </p>
+                      <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                        {recipe.calories} cal · {Math.round(Number(recipe.protein))}p ·{' '}
+                        {Math.round(Number(recipe.carbs))}c · {Math.round(Number(recipe.fat))}f
+                      </p>
+                    </div>
+                    <form action={logMeal} className="flex shrink-0 items-center gap-2">
+                      <input type="hidden" name="recipeId" value={recipe.id} />
+                      <input
+                        type="number"
+                        name="quantity"
+                        step="0.25"
+                        min="0.25"
+                        defaultValue="1"
+                        aria-label="Servings"
+                        className={numberClass}
+                      />
+                      <select
+                        name="meal"
+                        defaultValue="snack"
+                        aria-label="Meal"
+                        className={selectClass}
+                      >
+                        {MEAL_OPTIONS.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                      <Button type="submit" variant="outline" size="sm">
+                        Log
+                      </Button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            </Fold>
+          )}
+        </SystemWindowContent>
+      </SystemWindow>
     </div>
   );
 }
