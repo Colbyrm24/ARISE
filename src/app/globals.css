@@ -414,9 +414,11 @@ body::before {
   the app already reads from these, so a theme is a dozen declarations rather
   than a stylesheet — and anything built later inherits it for free.
 
-  Stamped on <html> so the frame, the body ground and the overscroll area all
-  follow. `beam` has no block: it IS the :root values, and repeating them here
-  would create a second place to forget to update.
+  Stamped on the client shell, which is the highest node rendered only for a
+  signed-in client. It is a descendant of <body>, so it has to paint its own
+  ground — body keeps the :root value. `beam` has no block: it IS the :root
+  values, and repeating them here would create a second place to forget to
+  update.
 
   Two rules every theme has to keep, because the whole app is built on them:
 
@@ -431,6 +433,11 @@ body::before {
   every Button in the app, and leaving it out puts a blue halo on an orange
   button the moment somebody tabs to it.
 */
+
+/* The shell paints the ground, because body's own background is :root's. */
+[data-bg] {
+  background: hsl(var(--background));
+}
 
 [data-bg='ember'] {
   --background: 14 34% 5%;
