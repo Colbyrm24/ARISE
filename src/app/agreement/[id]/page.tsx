@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { coachOwnsClient } from '@/lib/coach-guard';
 import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,9 +25,19 @@ export default async function AgreementPage({ params }: { params: { id: string }
 
   if (!agreement) notFound();
 
+  /*
+    Both halves have to be bound to this specific agreement.
+
+    The client half already was. The coach half was a bare role test, so any
+    coach account could read any client's signed contract by id — legal name,
+    price, payment structure, term, and the signature block with the signed
+    name and timestamp. The ids are handed out on the client detail page.
+  */
   const isOwningClient = user.role === 'client' && user.id === agreement.clientId;
-  const isCoach = user.role === 'coach' || user.role === 'admin';
-  if (!isOwningClient && !isCoach) notFound();
+  const isTheirCoach =
+    (user.role === 'coach' || user.role === 'admin') &&
+    (await coachOwnsClient(user.id, agreement.clientId));
+  if (!isOwningClient && !isTheirCoach) notFound();
 
   const clientName = agreement.client.user.profile?.fullName ?? agreement.client.user.email;
   const isSigned = agreement.status === 'signed';

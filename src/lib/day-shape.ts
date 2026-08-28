@@ -34,10 +34,17 @@ export type DayContext = {
   flag: DayFlag | null;
 };
 
-/** Midnight UTC for a date, matching how NutritionLog.date is stored. */
-export function dayOf(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
+/*
+  Normalizing a date read back out of the database.
+
+  Every caller of this passes a `@db.Date` column — NutritionLog.date,
+  NutritionTarget.effectiveDate — which Postgres hands back as UTC midnight
+  of the right calendar date. So UTC is correct here and a timezone must NOT
+  be applied: re-interpreting a stored date in the client's zone would shift
+  it a day backwards. Deciding what day an *instant* falls on is the other
+  problem entirely, and lives in @/lib/day.
+*/
+export { dayOfStored as dayOf } from '@/lib/day';
 
 /**
  * Picks the one thing worth saying about the day.

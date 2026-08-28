@@ -1,3 +1,5 @@
+import { todayFor, type HasProfile } from '@/lib/day';
+
 export type CheckInQuestion = {
   key: string;
   label: string;
@@ -30,15 +32,30 @@ export const CHECK_IN_QUESTIONS: CheckInQuestion[] = [
 export const SCALE_KEYS = CHECK_IN_QUESTIONS.filter((q) => q.type === 'scale').map((q) => q.key);
 
 /**
- * Monday of the week a date falls in, normalized to UTC midnight so the same
- * week always produces the same key no matter when it's submitted.
+ * Monday of the week a given day falls in.
+ *
+ * Takes a day *label* — the UTC-midnight stamp of somebody's local calendar
+ * date, as `todayIn`/`todayFor` produce — and walks it back to Monday. The
+ * result is another label, which is what CheckIn.weekOf stores (@db.Date).
+ *
+ * This used to read the server's own UTC date instead, and so filed a
+ * check-in by wherever the server happened to be standing. A client on the
+ * west coast submitting on a Sunday evening was already Monday in UTC, so
+ * their answers landed in *next* week: their coach's "this week" queue
+ * showed nothing submitted, and the client's own screen showed an empty
+ * form for a week they had just filled in.
  */
-export function weekOf(date = new Date()) {
-  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+export function weekOf(day: Date): Date {
+  const d = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
   const dow = d.getUTCDay(); // 0 = Sunday
   const back = dow === 0 ? 6 : dow - 1;
   d.setUTCDate(d.getUTCDate() - back);
   return d;
+}
+
+/** The current week for a particular person, in their own timezone. */
+export function weekOfFor(u: HasProfile, now: Date = new Date()): Date {
+  return weekOf(todayFor(u, now));
 }
 
 export function formatWeek(d: Date) {

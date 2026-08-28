@@ -78,6 +78,9 @@ function parseEstimate(value: unknown): { estimate: MealEstimate | null; failure
   return {
     estimate: {
       name: String(v.name ?? ''),
+      // Rows written before screenshot reads existed carry no source; they
+      // were all plates, so that is the honest default rather than a guess.
+      source: v.source === 'screen' ? 'screen' : 'plate',
       items,
       calories: Number(v.calories ?? 0),
       protein: Number(v.protein ?? 0),

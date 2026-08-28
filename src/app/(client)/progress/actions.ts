@@ -3,12 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { todayFor } from '@/lib/day';
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 const MEASUREMENT_TYPES = ['waist', 'chest', 'arms', 'thighs', 'hips'] as const;
 
@@ -23,7 +19,7 @@ export async function logWeight(formData: FormData) {
   const weight = raw ? Number(raw) : NaN;
   if (!Number.isFinite(weight) || weight <= 0 || weight > 1500) return;
 
-  const date = todayDateOnly();
+  const date = todayFor(user);
   const existing = await prisma.weightLog.findFirst({ where: { clientId: user.id, date } });
 
   if (existing) {
@@ -44,7 +40,7 @@ export async function logMeasurement(formData: FormData) {
   if (!type || !MEASUREMENT_TYPES.includes(type as (typeof MEASUREMENT_TYPES)[number])) return;
   if (!Number.isFinite(value) || value <= 0 || value > 200) return;
 
-  const date = todayDateOnly();
+  const date = todayFor(user);
   const existing = await prisma.measurement.findFirst({
     where: { clientId: user.id, date, type },
   });

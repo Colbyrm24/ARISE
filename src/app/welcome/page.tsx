@@ -6,6 +6,9 @@ import { prisma } from '@/lib/prisma';
 import { SystemWindow, SystemWindowContent, Cell } from '@/components/ui/system-window';
 import { STATUS_WAITING } from '@/lib/client-status';
 import { SignOutButton } from '@/components/client/sign-out-button';
+import { Composer } from '@/components/messages/composer';
+import { sendMessageToCoach, coachIdForClient } from '@/app/(client)/messages/actions';
+import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,9 +57,30 @@ export default async function WelcomePage() {
   const waiting = STATUS_WAITING[status] ?? STATUS_WAITING.lead!;
   const done = reached(status);
 
-  const intake = await prisma.onboardingResponse.count({
-    where: { clientId: user.id, completedAt: { not: null } },
-  });
+  const coachId = await coachIdForClient(user.id);
+
+  const [intake, thread] = await Promise.all([
+    prisma.onboardingResponse.count({
+      where: { clientId: user.id, completedAt: { not: null } },
+    }),
+    // Oldest-first over the last handful, so the exchange reads top to
+    // bottom the way a conversation does.
+    coachId
+      ? prisma.message
+          .findMany({
+            where: {
+              OR: [
+                { senderId: user.id, recipientId: coachId },
+                { senderId: coachId, recipientId: user.id },
+              ],
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 6,
+            select: { id: true, body: true, senderId: true },
+          })
+          .then((rows) => rows.reverse())
+      : Promise.resolve([]),
+  ]);
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-5 px-5 py-10">
@@ -109,10 +133,35 @@ export default async function WelcomePage() {
         </SystemWindowContent>
       </SystemWindow>
 
-      <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
-        Waiting longer than you expected? Reply to your coach&apos;s last message and they&apos;ll
-        sort it.
-      </p>
+      {/*
+        This used to be a line of copy telling them to "reply to your coach's
+        last message" — and /messages redirects anybody who isn't entitled
+        straight back to this page, so there was no reply to send and no
+        screen to send it from. The instruction was impossible to follow, on
+        the first screen most new signups ever see.
+      */}
+      <SystemWindow title="Ask your coach" plain>
+        <SystemWindowContent className="flex flex-col gap-3 pt-3">
+          {thread.length > 0 && (
+            <ul className="flex flex-col gap-2">
+              {thread.map((m) => (
+                <li
+                  key={m.id}
+                  className={cn(
+                    'max-w-[85%] px-3 py-2 text-sm',
+                    m.senderId === user.id
+                      ? 'self-end bg-secondary/50'
+                      : 'self-start border border-accent/30 bg-accent/[0.07]'
+                  )}
+                >
+                  {m.body}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Composer action={sendMessageToCoach} placeholder="Anything you need?" className="pt-1" />
+        </SystemWindowContent>
+      </SystemWindow>
 
       <div className="max-w-xs">
         <SignOutButton />

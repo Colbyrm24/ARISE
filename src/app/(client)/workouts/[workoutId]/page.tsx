@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Play } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
+import { startOfDayInstantFor } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,11 +15,6 @@ import {
 import { watchUrlFor } from '@/lib/exercise-video';
 import { logSet, completeWorkout } from './actions';
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 export default async function WorkoutSessionPage({ params }: { params: { workoutId: string } }) {
   const user = await requireEntitledClient();
@@ -44,9 +40,16 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
   });
   if (!activeProgram || activeProgram.templateId !== workout.templateId) notFound();
 
-  const today = todayDateOnly();
+    /*
+    A DateTime bound needs the INSTANT local midnight happened, not the
+    `@db.Date` label for the day. `todayFor` returns the latter — UTC midnight
+    of the local calendar date — which in New York is 8pm the previous
+    evening, so `startedAt >= it` swept up last night's unfinished session as
+    today's and appended this morning's sets to it.
+  */
+  const since = startOfDayInstantFor(user);
   const todayLog = await prisma.workoutLog.findFirst({
-    where: { clientId: user.id, workoutId: workout.id, startedAt: { gte: today } },
+    where: { clientId: user.id, workoutId: workout.id, startedAt: { gte: since } },
     orderBy: { startedAt: 'desc' },
     include: { sets: true },
   });
@@ -167,6 +170,28 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                     Watch demo
                   </a>
                 )}
+                {/*
+                  The coach's own cues and note for this movement.
+
+                  Both were written and read by nothing. `Exercise.cues` comes
+                  off a real field on the coach's exercise form labelled
+                  "Coaching cues", and `WorkoutExercise.notes` is set by the
+                  program seed — and neither had ever appeared on any screen,
+                  so every cue the coach typed went straight into the database
+                  and stopped there. This is the one place they are useful:
+                  next to the sets, before the first rep.
+                */}
+                {(we.notes || we.exercise.cues) && (
+                  <div className="mb-3 flex flex-col gap-1.5 border-l-2 border-accent/40 bg-secondary/20 py-2 pl-3 pr-2 text-xs leading-relaxed text-muted-foreground">
+                    {/* Two different things: the note is what the coach said
+                        about this movement in this program, the cues are how
+                        to perform it at all. Sharing one slot meant a seeded
+                        note silently hid the cues. */}
+                    {we.notes && <p>{we.notes}</p>}
+                    {we.exercise.cues && <p>{we.exercise.cues}</p>}
+                  </div>
+                )}
+
                 <ul className="flex flex-col">
                   {we.sets.map((set, i) => {
                     const logged = loggedBySetId.get(set.id);
@@ -181,6 +206,10 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                         <span className="readout min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
                           {set.targetReps ?? '—'}
                           {set.targetWeight ? ` × ${Number(set.targetWeight)}` : ''}
+                          {/* Prescribed rest was visible only on the coach's
+                              builder, so the person actually resting never
+                              saw the number they were meant to rest for. */}
+                          {set.restSeconds ? ` · ${set.restSeconds}s rest` : ''}
                         </span>
                         <form action={logSet} className="flex shrink-0 items-center gap-1.5">
                           <input type="hidden" name="workoutId" value={workout.id} />

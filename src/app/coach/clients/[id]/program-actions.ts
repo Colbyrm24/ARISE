@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
-import { coachOwnsClient } from '@/lib/coach-guard';
+import { coachOwnsClient, coachOwnsTemplate } from '@/lib/coach-guard';
+import { setActiveProgram } from '@/lib/program-deploy';
 
 /**
  * Assigning/unassigning a program on a client's profile. A client only
@@ -19,16 +20,15 @@ export async function assignProgram(formData: FormData) {
   const templateId = formData.get('templateId') as string | null;
   if (!clientId || !templateId) return;
   if (!(await coachOwnsClient(coach.id, clientId))) return;
+  // Both halves have to be checked, not just the client. The dropdown only
+  // offers this coach's own templates, but a form field is not a boundary —
+  // a posted id from anywhere would otherwise deploy another coach's private
+  // program onto this client, copying its days and exercises across.
+  if (!(await coachOwnsTemplate(coach.id, templateId))) return;
 
-  await prisma.$transaction([
-    prisma.clientProgram.updateMany({
-      where: { clientId, active: true },
-      data: { active: false },
-    }),
-    prisma.clientProgram.create({
-      data: { clientId, templateId, active: true },
-    }),
-  ]);
+  // Shared with the deploy path, which used to do this its own way and left
+  // two active rows when both were used on the same client.
+  await setActiveProgram(clientId, templateId);
 
   revalidatePath(`/coach/clients/${clientId}`);
 }

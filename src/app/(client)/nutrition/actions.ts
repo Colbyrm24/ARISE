@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { todayFor } from '@/lib/day';
 import {
   isAllowedMealPhoto,
   mealPhotoPath,
@@ -40,11 +41,6 @@ function mediaTypeFor(type: string): 'image/jpeg' | 'image/png' | 'image/webp' |
   return 'image/jpeg';
 }
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function refresh() {
   revalidatePath('/nutrition');
@@ -79,7 +75,7 @@ export async function logMeal(formData: FormData) {
   await prisma.nutritionLog.create({
     data: {
       clientId: user.id,
-      date: todayDateOnly(),
+      date: todayFor(user),
       meal: mealOf(formData),
       recipeId: recipe.id,
       source: 'recipe',
@@ -106,7 +102,7 @@ export async function logFood(formData: FormData) {
   await prisma.nutritionLog.create({
     data: {
       clientId: user.id,
-      date: todayDateOnly(),
+      date: todayFor(user),
       meal: mealOf(formData),
       foodId: food.id,
       source: 'library',
@@ -186,7 +182,7 @@ export async function quickAddFood(formData: FormData) {
   await prisma.nutritionLog.create({
     data: {
       clientId: user.id,
-      date: todayDateOnly(),
+      date: todayFor(user),
       meal: mealOf(formData),
       foodId,
       quantity: 1,
@@ -234,7 +230,7 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
 
   // A read costs money and a stuck loop could run all night. This is not a
   // security boundary, just a ceiling far above anything a person eats.
-  const today = todayDateOnly();
+  const today = todayFor(user);
   const readsToday = await prisma.nutritionLog.count({
     where: { clientId: user.id, date: today, source: 'photo' },
   });
@@ -253,9 +249,17 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
     description: description || null,
   });
 
-  // The read failed. Keep the photo and the row so the coach still sees the
-  // meal, and leave the numbers at zero rather than inventing any — a wrong
-  // number in a day's total is worse than a visible gap.
+  /*
+    The read didn't produce a meal. Keep the photo and the row so the coach
+    still sees it, and leave the numbers at zero rather than inventing any —
+    a wrong number in a day's total is worse than a visible gap.
+
+    `day-summary` lands here deliberately. A screenshot of a tracker's home
+    screen is perfectly readable and the client meant to send it; it just
+    isn't a meal, and adding 1,807 calories on top of the meals already logged
+    that day would double the whole day silently. The figures are carried into
+    the row so the coach can still act on them, but nothing is counted.
+  */
   if (!result.ok) {
     await prisma.nutritionLog.create({
       data: {
@@ -271,7 +275,11 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
         photoPath: path,
         source: 'photo',
         reviewState: 'failed',
-        estimate: { failed: result.reason, message: result.message },
+        estimate: {
+          failed: result.reason,
+          message: result.message,
+          ...(result.dayTotals ? { dayTotals: result.dayTotals } : {}),
+        },
       },
     });
     refresh();
@@ -332,7 +340,7 @@ export async function logPlanItem(formData: FormData) {
   await prisma.nutritionLog.create({
     data: {
       clientId: user.id,
-      date: todayDateOnly(),
+      date: todayFor(user),
       meal: item.meal,
       recipeId: item.recipeId,
       foodId: item.foodId,

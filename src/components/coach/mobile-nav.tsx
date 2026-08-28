@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
-import { NAV_ITEMS } from '@/components/coach/nav-items';
+import { NAV_ITEMS, type BadgeCounts } from '@/components/coach/nav-items';
 import { cn } from '@/lib/utils';
 
 /*
@@ -20,9 +20,13 @@ import { cn } from '@/lib/utils';
   to flick between two screens.
 */
 
-export function CoachMobileNav({ pendingMeals = 0 }: { pendingMeals?: number }) {
+export function CoachMobileNav({ counts = {} }: { counts?: BadgeCounts }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+
+  // The closed button can't show numbers, only that there is something behind
+  // it — so any backlog at all lights the dot.
+  const anyBacklog = Object.values(counts).some((n) => (n ?? 0) > 0);
 
   return (
     <>
@@ -34,7 +38,7 @@ export function CoachMobileNav({ pendingMeals = 0 }: { pendingMeals?: number }) 
         className="relative flex h-11 w-11 items-center justify-center border border-border text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
       >
         <Menu size={18} />
-        {pendingMeals > 0 && (
+        {anyBacklog && (
           <span className="absolute -right-1 -top-1 h-2 w-2 bg-accent shadow-[0_0_8px_hsl(var(--accent)/0.8)]" />
         )}
       </button>
@@ -67,7 +71,7 @@ export function CoachMobileNav({ pendingMeals = 0 }: { pendingMeals?: number }) 
               {NAV_ITEMS.map((item) => {
                 const active = pathname.startsWith(item.href);
                 const Icon = item.icon;
-                const count = item.badge === 'pendingMeals' ? pendingMeals : 0;
+                const count = item.badge ? counts[item.badge] ?? 0 : 0;
                 return (
                   <li key={item.href}>
                     <Link

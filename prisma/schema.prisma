@@ -246,18 +246,29 @@ model Subscription {
   id                    String              @id @default(uuid())
   clientId              String              @map("client_id")
   planId                String              @map("plan_id")
+  // The link that created this subscription, and therefore the agreed terms:
+  // price, frequency, and how many payments were sold. Without this there is
+  // no reliable way to know when a fixed plan has been paid off, which is how
+  // it came to bill forever.
+  paymentLinkId         String?             @map("payment_link_id")
   provider              PaymentProviderType
   providerSubscriptionId String?            @map("provider_subscription_id")
+  // active | past_due | canceled | completed. `completed` means the agreed
+  // number of payments was reached and the subscription was cancelled at the
+  // provider on purpose — see lib/billing.ts mergeStatus.
   status                String              @default("active")
   currentPeriodEnd      DateTime?           @map("current_period_end")
   createdAt             DateTime            @default(now()) @map("created_at")
   deletedAt             DateTime?           @map("deleted_at") // soft delete only — never hard-delete billing records
 
-  client   Client    @relation(fields: [clientId], references: [userId])
-  plan     Plan      @relation(fields: [planId], references: [id])
-  payments Payment[]
+  client      Client       @relation(fields: [clientId], references: [userId])
+  plan        Plan         @relation(fields: [planId], references: [id])
+  paymentLink PaymentLink? @relation(fields: [paymentLinkId], references: [id])
+  payments    Payment[]
 
+  @@unique([provider, providerSubscriptionId])
   @@index([clientId])
+  @@index([paymentLinkId])
   @@map("subscriptions")
 }
 
@@ -287,6 +298,7 @@ model PaymentLink {
   template AgreementTemplate @relation(fields: [agreementTemplateId], references: [id])
   payment  Payment?
   agreement Agreement?
+  subscriptions Subscription[]
 
   @@index([clientId])
   @@index([providerRef])
@@ -310,6 +322,11 @@ model Payment {
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
   paymentLink  PaymentLink?  @relation(fields: [paymentLinkId], references: [id])
 
+  // Idempotency for provider webhooks: Stripe retries a delivery it did not
+  // get a 2xx for, and reuses an invoice id across payment retries. Declared
+  // here as well as in the migration so a later `prisma migrate` sees it as
+  // intended rather than as drift to be dropped.
+  @@unique([provider, providerPaymentId])
   @@index([clientId])
   @@map("payments")
 }
@@ -578,6 +595,9 @@ model CardioLog {
   client     Client     @relation(fields: [clientId], references: [userId], onDelete: Cascade)
   cardioType CardioType @relation(fields: [cardioTypeId], references: [id])
 
+  // One log per type per day. The client's screen upserts against this, and
+  // without it two quick submits both insert and the duplicate is invisible.
+  @@unique([clientId, cardioTypeId, date])
   @@index([clientId, date])
   @@map("cardio_logs")
 }

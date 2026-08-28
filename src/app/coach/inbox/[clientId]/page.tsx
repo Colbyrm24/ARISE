@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { requireCoach } from '@/lib/auth';
+import { zoneOf } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
 import { MessageThread } from '@/components/messages/message-thread';
 import { Composer } from '@/components/messages/composer';
@@ -17,16 +18,24 @@ export default async function CoachThreadPage({ params }: { params: { clientId: 
   });
   if (!rel) notFound();
 
-  const messages = await prisma.message.findMany({
+  /*
+    Newest 200, then flipped for display.
+
+    Ascending with a take gives the OLDEST 200, which means a thread past two
+    hundred messages renders its opening weeks forever and never the present —
+    the coach opens a client he just heard from and sees August.
+  */
+  const recent = await prisma.message.findMany({
     where: {
       OR: [
         { senderId: coach.id, recipientId: rel.clientId },
         { senderId: rel.clientId, recipientId: coach.id },
       ],
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     take: 200,
   });
+  const messages = recent.reverse();
 
   // Opening the thread is the read receipt. Written directly rather than through
   // the server action — revalidatePath() is not allowed during a render pass.
@@ -59,7 +68,7 @@ export default async function CoachThreadPage({ params }: { params: { clientId: 
         </Link>
       </header>
 
-      <MessageThread messages={messages} meId={coach.id} />
+      <MessageThread messages={messages} meId={coach.id} tz={zoneOf(coach.profile)} />
       <Composer
         action={sendMessageToClient}
         placeholder={`Message ${(name ?? '').split(' ')[0]}…`}

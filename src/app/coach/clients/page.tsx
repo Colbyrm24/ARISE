@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { requireCoach } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
+import { getSegments } from '@/lib/console';
 import type { ClientStatus } from '@prisma/client';
 
 function initials(name: string | null | undefined, email: string) {
@@ -26,15 +28,47 @@ function initials(name: string | null | undefined, email: string) {
 export default async function CoachClientsPage({
   searchParams,
 }: {
-  searchParams: { q?: string; status?: string };
+  searchParams: { q?: string; status?: string; segment?: string };
 }) {
   const q = searchParams.q?.trim();
   const statusFilter = (CLIENT_STATUSES as string[]).includes(searchParams.status ?? '')
     ? (searchParams.status as ClientStatus)
     : undefined;
 
+  /*
+    Scoped to this coach's roster.
+
+    The second page under /coach with no auth call of its own — the layout's
+    requireCoach() answers "is a coach", and this then listed every client in
+    the database with their name, email and status. It is also where the
+    client ids that made the other gaps in this pass targetable came from,
+    and every row links to a record page that now 404s unless it's yours.
+  */
+  const coach = await requireCoach();
+
+  /*
+    A segment the coach clicked on the dashboard.
+
+    Those cards each show a named group of people — "No weigh-in this week",
+    "Not messaged in 3+ days" — and every one of them used to link to this
+    page unfiltered, dropping the coach into the full roster with no way to
+    tell which of them the card had meant. The membership is recomputed here
+    from the same function the dashboard uses, so the two can't disagree, and
+    the ids stay out of the URL.
+  */
+  const segment = searchParams.segment?.trim();
+  const segmentMatch = segment
+    ? (await getSegments(coach.id)).find((s) => s.key === segment) ?? null
+    : null;
+  const segmentIds = segmentMatch ? segmentMatch.people.map((p) => p.id) : null;
+
   const clients = await prisma.client.findMany({
     where: {
+      coachId: coach.id,
+      // An empty segment must match nobody, not everybody — `in: []` is
+      // exactly right here, where omitting the clause would silently show
+      // the whole roster under a heading saying otherwise.
+      ...(segmentIds ? { userId: { in: segmentIds } } : {}),
       ...(statusFilter ? { status: statusFilter } : {}),
       ...(q
         ? {
@@ -56,10 +90,21 @@ export default async function CoachClientsPage({
         <p className="mt-1 text-sm text-muted-foreground">
           {clients.length} {clients.length === 1 ? 'client' : 'clients'}
         </p>
+        {segmentMatch && (
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+            <span className="readout border border-accent/40 bg-accent/[0.07] px-2 py-1 text-[10px] uppercase text-accent">
+              {segmentMatch.label}
+            </span>
+            <Link href="/coach/clients" className="text-xs text-muted-foreground hover:text-accent">
+              Show everyone
+            </Link>
+          </p>
+        )}
       </header>
 
       <form className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
+        {segment && <input type="hidden" name="segment" value={segment} />}
         <div className="relative w-full sm:max-w-xs">
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -90,7 +135,7 @@ export default async function CoachClientsPage({
         {CLIENT_STATUSES.map((status) => (
           <Link
             key={status}
-            href={`/coach/clients?status=${status}`}
+            href={`/coach/clients?${new URLSearchParams({ status, ...(segment ? { segment } : {}), ...(q ? { q } : {}) })}`}
             className={cn(
               'rounded-full px-3 py-1.5 text-xs font-medium ring-1 ring-inset transition-colors',
               statusFilter === status
@@ -106,7 +151,7 @@ export default async function CoachClientsPage({
       {clients.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center text-sm text-muted-foreground">
-            {q || statusFilter
+            {q || statusFilter || segmentMatch
               ? 'No clients match that search.'
               : "No clients yet — they'll show up here as soon as someone signs up."}
           </CardContent>

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { coachOwnsClient } from '@/lib/coach-guard';
+import { todayFor } from '@/lib/day';
 import { isHabitType } from '@/lib/habits';
 import { notify } from '@/lib/notifications';
 
@@ -96,8 +97,17 @@ export async function setSteps(formData: FormData) {
   const steps = Number(raw);
   if (!Number.isFinite(steps) || steps < 0) return;
 
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
+  /*
+    "Steps today" means the client's today. The coach types these in after
+    hearing a number over text, often late in his evening — which on a UTC
+    server was already tomorrow, so the count landed on a day the client
+    hadn't lived yet and their Today screen still read zero.
+  */
+  const who = await prisma.user.findUnique({
+    where: { id: clientId },
+    select: { profile: { select: { timezone: true } } },
+  });
+  const date = todayFor(who);
 
   await prisma.stepLog.upsert({
     where: { clientId_date: { clientId, date } },

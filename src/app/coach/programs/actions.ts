@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { coachOwnsTemplate } from '@/lib/coach-guard';
 import { seedCoachProgram } from '@/lib/program-seed';
 
 /**
@@ -30,10 +31,17 @@ export async function createTemplate(formData: FormData) {
 }
 
 export async function deleteTemplate(formData: FormData) {
-  await requireCoach();
+  const coach = await requireCoach();
 
   const id = formData.get('id') as string | null;
   if (!id) return;
+  /*
+    createTemplate twenty lines above stamps coachId, and this never read it
+    back — so one POST of another coach's template id destroyed every Workout
+    under it and the template with it. The catch below swallows the error, so
+    any template not yet deployed to a client deleted cleanly and silently.
+  */
+  if (!(await coachOwnsTemplate(coach.id, id))) return;
 
   try {
     await prisma.$transaction([

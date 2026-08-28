@@ -1,18 +1,21 @@
 import Link from 'next/link';
 import { ChevronRight, Dumbbell } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
+import { startOfDayInstantFor } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 export default async function WorkoutsPage() {
   const user = await requireEntitledClient();
-  const today = todayDateOnly();
+    /*
+    A DateTime bound needs the INSTANT local midnight happened, not the
+    `@db.Date` label for the day. `todayFor` returns the latter — UTC midnight
+    of the local calendar date — which in New York is 8pm the previous
+    evening, so `startedAt >= it` swept up last night's unfinished session as
+    today's and appended this morning's sets to it.
+  */
+  const since = startOfDayInstantFor(user);
 
   const activeProgram = await prisma.clientProgram.findFirst({
     where: { clientId: user.id, active: true },
@@ -30,7 +33,7 @@ export default async function WorkoutsPage() {
 
   const completedToday = activeProgram
     ? await prisma.workoutLog.findMany({
-        where: { clientId: user.id, startedAt: { gte: today }, completedAt: { not: null } },
+        where: { clientId: user.id, startedAt: { gte: since }, completedAt: { not: null } },
         select: { workoutId: true },
       })
     : [];

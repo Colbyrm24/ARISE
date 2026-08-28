@@ -37,7 +37,19 @@ export function initialsOf(name: string | null | undefined, email: string) {
   return (email[0] ?? '?').toUpperCase();
 }
 
-/** Monday 00:00 UTC of the current week — matches weekOf() in check-in.ts. */
+/*
+  Monday 00:00 UTC of the current week.
+
+  Deliberately the server's week, not any one client's: this bounds a
+  roster-wide weigh-in query, and there is no single timezone to resolve it
+  in. The cost is that a late-Sunday weigh-in on the west coast can read as
+  "no weigh-in this week" until Monday — worth knowing, but a segment being
+  a few hours eager is a smaller problem than a per-client query per row.
+
+  This used to claim it matched weekOf() in check-in.ts. That stopped being
+  true when check-ins moved to the client's own timezone; nothing here
+  depends on the two agreeing.
+*/
 function startOfWeek() {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
@@ -47,9 +59,12 @@ function startOfWeek() {
 }
 
 /**
- * Single-coach MVP: every non-finished client belongs to the one coach, the
- * same assumption getDashboardCounts already makes. Revisit alongside
- * multi-coach assignment.
+ * Everything on the console rail, scoped to this coach's roster.
+ *
+ * The docstring here used to say "single-coach MVP: every non-finished client
+ * belongs to the one coach" — which was a description of the data, not of the
+ * code, and it stayed put after the queries underneath were scoped. Both are
+ * scoped now; nothing on this screen reads outside the roster.
  */
 export async function getSegments(coachId: string): Promise<Segment[]> {
   const now = new Date();
@@ -70,25 +85,40 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
     // Personal bests are flagged at log time by detectPr() in the workout
     // action — reading the flag here keeps this query cheap.
     prisma.workoutLogSet.findMany({
-      where: { isPr: true, workoutLog: { startedAt: { gte: weekAgo } } },
+      where: { isPr: true, workoutLog: { startedAt: { gte: weekAgo }, client: { coachId } } },
       select: { workoutLog: { select: { clientId: true } } },
     }),
 
     prisma.weightLog.findMany({
-      where: { date: { gte: weekStart } },
+      where: { date: { gte: weekStart }, client: { coachId } },
       select: { clientId: true },
       distinct: ['clientId'],
     }),
 
-    // Most recent message per thread, in either direction. Capped rather than
-    // grouped in SQL: at this client count it's one cheap read, and it keeps
-    // the "never messaged at all" case working without a second query.
-    prisma.message.findMany({
+    /*
+      Most recent message per thread, in either direction — grouped rather
+      than scanned.
+
+      This used to read the newest 2,000 messages globally and reduce them in
+      memory. At forty clients exchanging twenty messages a day that window is
+      about two and a half days deep, so a client's genuine last message falls
+      out of it almost immediately and they appear under "Not messaged in 3+
+      days" having been answered this morning. A segment that cries wolf gets
+      ignored, and this one exists precisely to be believed.
+
+      Grouping by the pair returns one row per direction per thread and is
+      exact at any volume. It's the same shape the inbox uses to work out who
+      is owed a reply.
+    */
+    prisma.message.groupBy({
+      by: ['senderId', 'recipientId'],
       where: { OR: [{ senderId: coachId }, { recipientId: coachId }] },
-      orderBy: { createdAt: 'desc' },
-      select: { senderId: true, recipientId: true, createdAt: true },
-      take: 2000,
-    }),
+      _max: { createdAt: true },
+      // Through `unknown` — see the note in lib/waiting.ts. Casting the
+      // groupBy call directly does not compile against real Prisma.
+    }) as unknown as Promise<
+      Array<{ senderId: string; recipientId: string; _max: { createdAt: Date | null } }>
+    >,
   ]);
 
   const person = (c: (typeof clients)[number]): Person => ({
@@ -100,10 +130,14 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
   const prIds = new Set(prSets.map((s) => s.workoutLog.clientId));
   const weighedIds = new Set(weighedIn.map((w) => w.clientId));
 
+  // Newest across the two directions of each thread.
   const lastMessageAt = new Map<string, Date>();
   for (const m of messages) {
+    const at = m._max.createdAt;
+    if (!at) continue;
     const other = m.senderId === coachId ? m.recipientId : m.senderId;
-    if (!lastMessageAt.has(other)) lastMessageAt.set(other, m.createdAt);
+    const held = lastMessageAt.get(other);
+    if (!held || at > held) lastMessageAt.set(other, at);
   }
 
   // Only clients actually in the middle of coaching can be "quiet" or
@@ -114,23 +148,41 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
     {
       key: 'ending',
       label: 'Coaching ends this week',
-      href: '/coach/clients',
+      href: '/coach/clients?segment=ending',
       warn: false,
+      /*
+        Status counts, not just endDate.
+
+        `Client.endDate` is declared in the schema and read right here, and
+        nothing in the entire codebase ever writes it — so this segment
+        rendered 0 permanently. Which is worse than rendering nothing: it says
+        "nobody's coaching is ending" when what it means is "we don't track
+        that", and the coach only finds out the difference when somebody's
+        term runs out unnoticed.
+
+        `ending_soon` is a real status a coach can actually set, so it is what
+        makes this segment work today. endDate still counts when it's there,
+        for whenever something starts writing it.
+      */
       people: clients
-        .filter((c) => c.endDate && c.endDate >= now && c.endDate <= inSevenDays)
+        .filter(
+          (c) =>
+            c.status === 'ending_soon' ||
+            (c.endDate && c.endDate >= now && c.endDate <= inSevenDays)
+        )
         .map(person),
     },
     {
       key: 'pbs',
       label: 'New personal bests',
-      href: '/coach/clients',
+      href: '/coach/clients?segment=pbs',
       warn: false,
       people: clients.filter((c) => prIds.has(c.userId)).map(person),
     },
     {
       key: 'quiet',
       label: 'Not messaged in 3+ days',
-      href: '/coach/inbox',
+      href: '/coach/clients?segment=quiet',
       warn: true,
       people: engaged
         .filter((c) => {
@@ -142,7 +194,7 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
     {
       key: 'noweighin',
       label: 'No weigh-in this week',
-      href: '/coach/clients',
+      href: '/coach/clients?segment=noweighin',
       warn: true,
       people: engaged.filter((c) => !weighedIds.has(c.userId)).map(person),
     },
@@ -166,12 +218,25 @@ export type ActivityItem = {
  * what the number was, so the coach can react from the rail instead of
  * opening the client to find out whether 620 calories was good.
  */
-export async function getRecentActivity(limit = 12): Promise<ActivityItem[]> {
+export async function getRecentActivity(coachId: string, limit = 12): Promise<ActivityItem[]> {
   const since = new Date(Date.now() - 7 * DAY);
+
+  /*
+    Scoped to this coach's clients.
+
+    This function didn't take a coachId at all — it read all five tables
+    unfiltered and rendered the result straight onto the dashboard. Every
+    line of another coach's activity feed was visible here: their clients'
+    names, weigh-ins, meals with the photos signed and attached, check-ins,
+    progress photos. Its siblings getSegments and getDashboardCounts have
+    both been scoped for a while; this one was missed because it never had
+    the parameter to scope by.
+  */
+  const mine = { client: { coachId } };
 
   const [meals, workouts, weights, checkIns, photos] = await Promise.all([
     prisma.nutritionLog.findMany({
-      where: { createdAt: { gte: since } },
+      where: { createdAt: { gte: since }, ...mine },
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: {
@@ -180,7 +245,7 @@ export async function getRecentActivity(limit = 12): Promise<ActivityItem[]> {
       },
     }),
     prisma.workoutLog.findMany({
-      where: { completedAt: { gte: since } },
+      where: { completedAt: { gte: since }, ...mine },
       orderBy: { completedAt: 'desc' },
       take: limit,
       select: {
@@ -193,19 +258,19 @@ export async function getRecentActivity(limit = 12): Promise<ActivityItem[]> {
       },
     }),
     prisma.weightLog.findMany({
-      where: { date: { gte: since } },
+      where: { date: { gte: since }, ...mine },
       orderBy: { date: 'desc' },
       take: limit,
       select: { id: true, date: true, clientId: true, weight: true },
     }),
     prisma.checkIn.findMany({
-      where: { submittedAt: { gte: since } },
+      where: { submittedAt: { gte: since }, ...mine },
       orderBy: { submittedAt: 'desc' },
       take: limit,
       select: { id: true, submittedAt: true, clientId: true },
     }),
     prisma.progressPhoto.findMany({
-      where: { date: { gte: since } },
+      where: { date: { gte: since }, ...mine },
       orderBy: { date: 'desc' },
       take: limit,
       select: { id: true, date: true, clientId: true, angle: true },

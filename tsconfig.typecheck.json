@@ -1,0 +1,19 @@
+{
+  // Typechecks the app against a generated stand-in for @prisma/client.
+  //
+  // `prisma generate` needs to download an engine binary from
+  // binaries.prisma.sh. Where that host is unreachable there is no
+  // @prisma/client, every `prisma.*` call quietly becomes `any`, and a plain
+  // `tsc --noEmit` passes on code Vercel will refuse to build. Running the
+  // check against a stub generated from schema.prisma closes that gap.
+  //
+  // Kept out of tsconfig.json on purpose: the stub declares the
+  // '@prisma/client' module, which would collide with the real client
+  // wherever one is installed. Only `npm run typecheck` uses this file.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".prisma-stub.d.ts"]
+}

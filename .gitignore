@@ -36,3 +36,7 @@ yarn-error.log*
 
 # prisma generated client
 /prisma/generated
+
+# Generated stand-in for @prisma/client, used only by `npm run typecheck`.
+# Never imported by the app; regenerated from prisma/schema.prisma on demand.
+.prisma-stub.d.ts

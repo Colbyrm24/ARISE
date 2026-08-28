@@ -29,8 +29,18 @@ export async function savePushSubscription(input: {
   }
 
   try {
-    // Upsert on endpoint: re-subscribing on a device we already know updates
-    // it rather than adding a duplicate that would ring twice.
+    /*
+      Upsert on endpoint: re-subscribing on a device we already know updates
+      it rather than adding a duplicate that would ring twice.
+
+      Rewriting `userId` here is deliberate, not an oversight. An endpoint is
+      issued by the browser's push service to one browser profile, so holding
+      one means being on that device — and when a device changes hands, or two
+      people share a browser, the notifications should follow whoever is
+      signed in now. Refusing the takeover would lock the second person out of
+      push on their own machine forever, which is a real cost against an
+      attack that requires already having the device.
+    */
     await prisma.pushSubscription.upsert({
       where: { endpoint },
       create: { userId: user.id, endpoint, p256dh, auth, userAgent: userAgent?.slice(0, 300) },

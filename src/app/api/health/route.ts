@@ -51,7 +51,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Body must be JSON.' }, { status: 400 });
   }
 
-  const reading = parseHealthPayload(body);
+  // The client's own zone decides which day an undated post belongs to. The
+  // token already resolved who they are, so this is one cheap lookup.
+  const who = await prisma.user.findUnique({
+    where: { id: clientId },
+    select: { profile: { select: { timezone: true } } },
+  });
+  const reading = parseHealthPayload(body, who?.profile?.timezone);
   if (!reading) {
     return NextResponse.json(
       { ok: false, error: 'Nothing usable in that. Send steps and/or weight.' },

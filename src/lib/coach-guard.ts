@@ -23,6 +23,65 @@ export async function coachFor(clientId: string | null | undefined) {
 }
 
 /**
+ * Does this coach own this program template?
+ *
+ * `WorkoutTemplate.coachId` is a required column and `deployToClient` already
+ * checked it — but the six actions that *build* a template did not, so one
+ * POST could turn Wednesday into a rest day on another coach's flagship
+ * program, or rewrite the step target on all seven days of any template in
+ * the database.
+ */
+export async function coachOwnsTemplate(coachId: string, templateId: string | null | undefined) {
+  if (!templateId) return false;
+  try {
+    const [template, actor] = await Promise.all([
+      prisma.workoutTemplate.findUnique({
+        where: { id: templateId },
+        select: { coachId: true },
+      }),
+      prisma.user.findUnique({ where: { id: coachId }, select: { role: true } }),
+    ]);
+    if (!template) return false;
+    if (actor?.role === 'admin') return true;
+    return template.coachId === coachId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A workout, resolved to its own template rather than the one on the form.
+ *
+ * The two ids arrive side by side and only one of them addresses the row that
+ * gets written, which is exactly the shape that made `markPaymentLinkPaid`
+ * exploitable: submit a template you own next to a workout you don't and the
+ * check passes while the delete lands somewhere else. So the template is
+ * derived from the workout and the submitted one is never trusted.
+ */
+export async function ownedWorkout(coachId: string, workoutId: string | null | undefined) {
+  if (!workoutId) return null;
+  const workout = await prisma.workout.findUnique({
+    where: { id: workoutId },
+    select: { id: true, templateId: true },
+  });
+  if (!workout) return null;
+  return (await coachOwnsTemplate(coachId, workout.templateId)) ? workout : null;
+}
+
+/** Same, one level down: an exercise row resolved through its workout. */
+export async function ownedWorkoutExercise(coachId: string, id: string | null | undefined) {
+  if (!id) return null;
+  const row = await prisma.workoutExercise.findUnique({
+    where: { id },
+    select: { id: true, workout: { select: { templateId: true } } },
+  });
+  if (!row) return null;
+  return (await coachOwnsTemplate(coachId, row.workout.templateId))
+    ? { id: row.id, templateId: row.workout.templateId }
+    : null;
+}
+
+/**
  * True when the relationship exists, or when the client row points at this
  * coach. Either is enough — the two are kept in step by ensureCoachAssigned,
  * and accepting both means an account that predates one of them still works.

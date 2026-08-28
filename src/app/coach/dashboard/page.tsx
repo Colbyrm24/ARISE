@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { zoneOf } from '@/lib/day';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
@@ -8,16 +9,22 @@ import { NotificationList } from '@/components/notifications/notification-list';
 import { getSegments, getRecentActivity, initialsOf, ago } from '@/lib/console';
 import { markAllNotificationsRead } from './notification-actions';
 
-// Single-coach MVP: counts and the client lists below cover every client
-// rather than filtering by an assigned coachId — there's only one coach
-// using ARISE right now, and no assignment flow exists yet to give coachId a
-// real value. Revisit once multi-coach support is built.
+/*
+  Every number on this screen counts this coach's roster only.
+
+  The comment that used to sit here said the counts "cover every client rather
+  than filtering by an assigned coachId", justified by there being one coach —
+  which describes the data, not the code, and is the kind of note that outlives
+  the fact it rests on. Three of these four counts, and the recent-clients list
+  below, read every row in the database.
+*/
 async function getDashboardCounts(coachId: string) {
+  const mine = { client: { coachId } };
   const [unreadMessages, newLeads, unsignedAgreements, failedPayments] = await Promise.all([
     prisma.message.count({ where: { recipientId: coachId, readAt: null } }),
-    prisma.client.count({ where: { status: { in: ['lead', 'payment_pending'] } } }),
-    prisma.agreement.count({ where: { signature: null } }),
-    prisma.payment.count({ where: { status: 'failed' } }),
+    prisma.client.count({ where: { coachId, status: { in: ['lead', 'payment_pending'] } } }),
+    prisma.agreement.count({ where: { signature: null, ...mine } }),
+    prisma.payment.count({ where: { status: 'failed', ...mine } }),
   ]);
 
   return { unreadMessages, newLeads, unsignedAgreements, failedPayments };
@@ -51,12 +58,18 @@ export default async function CoachDashboardPage() {
   const [counts, segments, activity, recentClients, notifications] = await Promise.all([
     user ? getDashboardCounts(user.id) : Promise.resolve(null),
     user ? getSegments(user.id) : Promise.resolve([]),
-    getRecentActivity(12),
-    prisma.client.findMany({
-      include: { user: { include: { profile: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    }),
+    user ? getRecentActivity(user.id, 12) : Promise.resolve([]),
+    // Rendered with full name, email, and a link into the client record —
+    // so unscoped this listed other coaches' clients by name, and the links
+    // now 404 against the ownership guard on that page.
+    user
+      ? prisma.client.findMany({
+          where: { coachId: user.id },
+          include: { user: { include: { profile: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        })
+      : Promise.resolve([]),
     user
       ? prisma.notification.findMany({
           where: { userId: user.id },
@@ -72,7 +85,14 @@ export default async function CoachDashboardPage() {
     <div className="flex flex-col gap-8">
       <header className="border-b border-border pb-5">
         <p className="readout text-[11px] uppercase text-muted-foreground">
-          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          {/* Server-rendered, so the zone has to be named or this flips to
+              tomorrow's date mid-evening. */}
+          {new Date().toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            timeZone: zoneOf(user?.profile),
+          })}
         </p>
         <h1 className="display mt-2 text-3xl">Who needs you today?</h1>
       </header>

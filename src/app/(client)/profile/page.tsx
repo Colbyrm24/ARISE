@@ -2,12 +2,13 @@ import Link from 'next/link';
 import { CalendarDays, Bell, LineChart, ClipboardCheck } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton } from '@/components/client/sign-out-button';
 import { PushToggle } from '@/components/push-toggle';
 import { HealthSync } from '@/components/health-sync';
 import { prisma } from '@/lib/prisma';
+import { avatarSrc } from '@/lib/avatars';
+import { AvatarUpload } from '@/components/client/avatar-upload';
 
 const statusLabels: Record<string, string> = {
   lead: 'Lead',
@@ -130,13 +131,13 @@ export default async function ProfilePage() {
 
       <Card>
         <CardContent className="flex items-center gap-4 pt-6">
-          <Avatar className="h-14 w-14">
-            <AvatarImage src={user?.profile?.avatarUrl ?? undefined} />
-            <AvatarFallback>{initials}</AvatarFallback>
-          </Avatar>
+          <AvatarUpload src={avatarSrc(user?.profile)} initials={initials} />
           <div>
             <p className="text-base font-medium">{user?.profile?.fullName ?? 'Your name'}</p>
             <p className="text-sm text-muted-foreground">{user?.email}</p>
+            <p className="readout mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+              Tap the photo to change it
+            </p>
           </div>
         </CardContent>
       </Card>

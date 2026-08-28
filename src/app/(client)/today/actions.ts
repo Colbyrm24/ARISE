@@ -3,7 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { todayFor } from '@/lib/day';
 import { isTracked } from '@/lib/habits';
+import { markScheduledDone } from '@/lib/scheduled';
 
 /*
   The client's side of the Today screen.
@@ -13,11 +15,6 @@ import { isTracked } from '@/lib/habits';
   completed — the checkbox on the busiest screen in the app did not exist.
 */
 
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function refresh() {
   revalidatePath('/today');
@@ -41,7 +38,7 @@ export async function toggleHabit(formData: FormData) {
   if (!goal || goal.clientId !== user.id || !goal.active) return;
   if (isTracked(goal.goalType)) return;
 
-  const date = todayDateOnly();
+  const date = todayFor(user);
   const existing = await prisma.dailyGoalLog.findUnique({
     where: { dailyGoalId_date: { dailyGoalId: goalId, date } },
   });
@@ -81,11 +78,75 @@ export async function logSteps(formData: FormData) {
   // and storing it would make every average and chart after it useless.
   const value = Math.round(Math.min(steps, 200000));
 
-  const date = todayDateOnly();
+  const date = todayFor(user);
   await prisma.stepLog.upsert({
     where: { clientId_date: { clientId: user.id, date } },
     create: { clientId: user.id, date, steps: value, source: 'manual' },
     update: { steps: value, source: 'manual' },
   });
+
+  /*
+    A cardio day prescribed in steps is finished by hitting the step target,
+    not by filling in a minutes box. Without this only minutes-based cardio
+    could ever tick, so the coach's "Cardio 0" header stayed wrong for every
+    client whose cardio is a step goal, which is most of them.
+  */
+  const stepCardio = await prisma.scheduledItem.findFirst({
+    where: { clientId: user.id, date, kind: 'cardio', completedAt: null },
+    select: { stepTarget: true },
+  });
+  if (stepCardio?.stepTarget && value >= stepCardio.stepTarget) {
+    await markScheduledDone(user.id, 'cardio', { day: date });
+  }
+
+  refresh();
+}
+
+/**
+ * Logs a cardio session for today and ticks it off the calendar.
+ *
+ * CardioLog had no write path anywhere in the app, which made prescribed
+ * cardio write-only end to end: the coach put a session on the day, the
+ * client was shown a bare label with no number, nothing recorded that they
+ * did it, and the coach's month header counted "Cardio 0" no matter what
+ * happened. This is the missing half.
+ */
+export async function logCardio(formData: FormData) {
+  const user = await requireClient();
+
+  const cardioTypeId = (formData.get('cardioTypeId') as string | null)?.trim();
+  const raw = (formData.get('minutes') as string | null)?.trim();
+  if (!cardioTypeId || !raw) return;
+
+  const minutes = Number(raw);
+  // A session is minutes, not hours. Anything past a few hours is a typo, and
+  // it would drag every average after it.
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 600) return;
+
+  // The type has to be one the coach actually put on this client's calendar,
+  // rather than any id that arrives in the form.
+  const date = todayFor(user);
+  const scheduled = await prisma.scheduledItem.findFirst({
+    where: { clientId: user.id, date, kind: 'cardio', cardioTypeId },
+    select: { id: true },
+  });
+  if (!scheduled) return;
+
+  /*
+    One cardio log per type per day, so logging again corrects the number
+    rather than stacking a second session on the first.
+
+    A real upsert against a unique index, not findFirst-then-create: two
+    submits a moment apart — a double tap on a slow connection — would both
+    miss the read and both insert, and the screen reads with findFirst so
+    the duplicate would be invisible to the client and to the coach.
+  */
+  await prisma.cardioLog.upsert({
+    where: { clientId_cardioTypeId_date: { clientId: user.id, cardioTypeId, date } },
+    create: { clientId: user.id, cardioTypeId, date, minutes },
+    update: { minutes },
+  });
+
+  await markScheduledDone(user.id, 'cardio', { day: date });
   refresh();
 }

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
+import { Check, ChevronRight, MessageCircle, Sparkles } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,13 +18,9 @@ import { upcomingForClient } from '@/lib/booking';
 import { scheduledToday, scheduleBetween } from '@/lib/program-deploy';
 import { LocalTime } from '@/components/local-time';
 import { WeekStrip } from '@/components/client/week-strip';
-import { toggleHabit, logSteps } from './actions';
-
-function todayDateOnly() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
+import { todayFor, hourIn, zoneOf, startOfDay } from '@/lib/day';
+import { ProgressRing, ProgressBar } from '@/components/client/progress-ring';
+import { toggleHabit, logSteps, logCardio } from './actions';
 
 /*
   Which day this screen is showing.
@@ -36,36 +32,43 @@ function todayDateOnly() {
   browser. It also means a day can be linked to — a coach can send "look at
   Saturday" and have it open on Saturday.
 */
+/*
+  All four helpers below work in UTC, and that is deliberate rather than lazy.
+
+  A calendar date has no time and no zone. Every date column here is
+  `@db.Date`, which Postgres round-trips as UTC midnight, so UTC midnight is
+  the canonical in-memory shape and these stay in it. The local-time versions
+  (`new Date(y, m-1, d)`, `getDay()`, `setHours`) happened to agree only
+  because Vercel runs the server in UTC — on any other host they would shift
+  the whole week strip by a day.
+
+  Which day it currently IS for the client is a different question, and that
+  one does need their zone. It's `todayFor(user)`.
+*/
 function dateKey(d: Date) {
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-');
+  return d.toISOString().slice(0, 10);
 }
 
 /** Anything that isn't a real YYYY-MM-DD falls back to today rather than erroring. */
 function parseDateKey(raw: string | undefined): Date | null {
   if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
   const [y, m, d] = raw.split('-').map(Number);
-  const out = new Date(y, m - 1, d);
-  out.setHours(0, 0, 0, 0);
+  const out = new Date(Date.UTC(y, m - 1, d));
   if (Number.isNaN(out.getTime())) return null;
   // Rejects 2026-02-31 and friends, which Date happily rolls into March.
-  if (out.getFullYear() !== y || out.getMonth() !== m - 1 || out.getDate() !== d) return null;
+  if (out.getUTCFullYear() !== y || out.getUTCMonth() !== m - 1 || out.getUTCDate() !== d) {
+    return null;
+  }
   return out;
 }
 
 function addLocalDays(d: Date, n: number) {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  out.setHours(0, 0, 0, 0);
-  return out;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
 }
 
 /** Monday. The training week starts where the program's week starts. */
 function startOfWeek(d: Date) {
-  const js = d.getDay(); // 0 = Sunday
+  const js = d.getUTCDay(); // 0 = Sunday
   return addLocalDays(d, -(js === 0 ? 6 : js - 1));
 }
 
@@ -90,9 +93,15 @@ function targetNumber(raw: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-/** Time-aware greeting. It said "Good morning" at 11pm before. */
-function greeting() {
-  const h = new Date().getHours();
+/*
+  Time-aware greeting, on the client's clock.
+
+  This renders on the server, where `new Date().getHours()` is the server's
+  hour — UTC on Vercel. So the bug this was written to fix was still live in a
+  different form: a client in Los Angeles opening the app at 8pm was read as
+  03:00 and greeted with "Good morning".
+*/
+function greeting(h: number) {
   if (h < 12) return 'Good morning';
   if (h < 18) return 'Good afternoon';
   return 'Good evening';
@@ -105,7 +114,8 @@ export default async function TodayPage({
 }) {
   const user = await requireEntitledClient();
   const firstName = user?.profile?.fullName?.split(' ')[0] ?? 'there';
-  const today = todayDateOnly();
+  const tz = zoneOf(user.profile);
+  const today = todayFor(user);
 
   /*
     Every query below is scoped to `viewDate`, not to today. That is the
@@ -124,6 +134,16 @@ export default async function TodayPage({
   // yet, in which case this whole block stays off the screen rather than
   // showing an empty shell.
   const scheduled = user ? await scheduledToday(user.id, viewDate) : null;
+
+  // What they have already logged against a minutes-based cardio day, so the
+  // row can show "done" instead of offering the form again.
+  const cardioLog =
+    user && scheduled?.cardioTypeId && scheduled.kind === 'cardio'
+      ? await prisma.cardioLog.findFirst({
+          where: { clientId: user.id, cardioTypeId: scheduled.cardioTypeId, date: viewDate },
+          select: { minutes: true },
+        })
+      : null;
 
   // The seven days around whichever one is open, for the strip at the top.
   const weekStart = startOfWeek(viewDate);
@@ -227,7 +247,16 @@ export default async function TodayPage({
           where: {
             clientId: user.id,
             workoutId: todaysWorkout.id,
-            startedAt: { gte: viewDate, lt: addLocalDays(viewDate, 1) },
+            /*
+              Instants, not the `@db.Date` label for the day. The label is UTC
+              midnight of that date, which in New York is 8pm the previous
+              evening — so bounding by it swept last night's unfinished
+              session into this morning and appended today's sets to it.
+            */
+            startedAt: {
+              gte: startOfDay(viewDate, tz),
+              lt: startOfDay(addLocalDays(viewDate, 1), tz),
+            },
           },
           orderBy: { startedAt: 'desc' },
         })
@@ -289,8 +318,23 @@ export default async function TodayPage({
     };
   });
 
-  const completedCount = rows.filter((r) => r.done).length;
   const stepsHabit = goals.find((g) => g.goalType === 'steps') ?? null;
+  const carbsEaten = Math.round(nutritionLogs.reduce((sum, l) => sum + Number(l.carbs), 0));
+  const fatEaten = Math.round(nutritionLogs.reduce((sum, l) => sum + Number(l.fat), 0));
+
+  /*
+    The step goal, from whichever source actually set one. The deployed
+    calendar carries a per-day target and wins when it exists — a rest day can
+    legitimately ask for more walking than a leg day. A standing steps habit is
+    the fallback. Null when neither is set, which renders as a plain count.
+  */
+  const stepGoal = scheduled?.stepTarget ?? targetNumber(stepsHabit?.targetValue) ?? null;
+
+  // A rest day has no session to finish, so its bar says so rather than
+  // sitting at 0/1 all day looking like something missed.
+  const hasSessionToday = scheduled ? scheduled.kind !== 'rest' : Boolean(todaysWorkout);
+
+  const completedCount = rows.filter((r) => r.done).length;
   const nextCall = upcomingCalls[0] ?? null;
 
   return (
@@ -306,7 +350,14 @@ export default async function TodayPage({
     <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:gap-y-6">
       <header className="lg:col-span-2">
         <p className="readout text-[11px] uppercase text-muted-foreground">
-          {viewDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          {/* Server-rendered, so the zone has to be named or this flips to
+              tomorrow's date mid-evening for anyone west of UTC. */}
+          {viewDate.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            timeZone: 'UTC',
+          })}
         </p>
         <div className="mt-1.5 flex items-center justify-between gap-3">
           {/*
@@ -317,8 +368,8 @@ export default async function TodayPage({
           */}
           <h1 className="text-2xl font-bold">
             {isToday
-              ? `${greeting()}, ${firstName}.`
-              : viewDate.toLocaleDateString('en-US', { weekday: 'long' })}
+              ? `${greeting(hourIn(tz))}, ${firstName}.`
+              : viewDate.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}
           </h1>
           {unreadUpdates > 0 && (
             <Link
@@ -397,6 +448,58 @@ export default async function TodayPage({
                   total={scheduled.stepTarget}
                   mode="reach"
                 />
+              </div>
+            )}
+
+            {/*
+              A minutes-based cardio day. The block above only ever rendered
+              when a step target was set, so somebody prescribed "Stairmaster,
+              20 minutes" saw the label and no number at all, and had nowhere
+              to say they had done it. cardioMinutes was written by the deploy
+              and read by nothing, and had no input on the coach's builder
+              either, so it was never even non-null.
+
+              Not gated on the absence of a step target: steps live on every
+              day, not just cardio days, and one "set week steps" click writes
+              the same target across all seven. A day can carry both.
+            */}
+            {scheduled.kind === 'cardio' && scheduled.cardioMinutes && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+                <span className="text-sm text-muted-foreground">
+                  {scheduled.cardioType?.name ?? 'Cardio'}{' '}
+                  <span className="readout text-[10px] uppercase">
+                    {scheduled.cardioMinutes} min
+                  </span>
+                </span>
+
+                {cardioLog?.minutes && !isToday ? (
+                  <span className="readout flex items-center gap-1 text-[10px] uppercase text-success">
+                    <Check size={12} /> {cardioLog.minutes} min done
+                  </span>
+                ) : isToday ? (
+                  <form action={logCardio} className="flex shrink-0 items-center gap-2">
+                    <input type="hidden" name="cardioTypeId" value={scheduled.cardioTypeId ?? ''} />
+                    <input
+                      type="number"
+                      name="minutes"
+                      min="1"
+                      max="600"
+                      inputMode="numeric"
+                      defaultValue={cardioLog?.minutes ?? scheduled.cardioMinutes}
+                      aria-label="Minutes done"
+                      className="readout h-9 w-20 border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none"
+                    />
+                    <button
+                      type="submit"
+                      className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                    >
+                      {cardioLog?.minutes ? 'Update' : 'Log'}
+                    </button>
+                    {cardioLog?.minutes ? (
+                      <Check size={12} className="shrink-0 text-success" />
+                    ) : null}
+                  </form>
+                ) : null}
               </div>
             )}
           </SystemWindowContent>
@@ -542,23 +645,51 @@ export default async function TodayPage({
           <SystemWindowContent className="flex flex-col gap-4 pt-4">
             {target ? (
               <>
-                <div>
-                  <div className="mb-2 flex items-baseline justify-between text-sm">
-                    <span>Calories</span>
-                    <Count value={caloriesEaten} total={target.calories} />
-                  </div>
-                  <Progress value={Math.min((caloriesEaten / target.calories) * 100, 100)} />
+                {/*
+                  Two rings and four bars, not six of the same thing.
+
+                  Calories and protein are the two numbers this client is
+                  actually coached on, so they get the shape that answers "am I
+                  close" before anything is read. Carbs, fat, steps and the
+                  session are the supporting cast: a row of bars compares them
+                  against each other at a glance, which a row of circles can't
+                  do and doesn't need to.
+
+                  Every one carries its own colour, label and figure. The
+                  colour is what lets you find the one that's behind; the label
+                  is what tells you which it is, so nothing depends on telling
+                  two hues apart. And every fill is guarded against a zero
+                  target — `eaten / 0` is Infinity, and Math.min(Infinity, 100)
+                  is a cheerful 100, which showed a FULL protein ring to
+                  somebody with no protein target at all.
+                */}
+                <div className="flex items-start justify-center gap-8">
+                  <ProgressRing metric="calories" value={caloriesEaten} target={target.calories} />
+                  <ProgressRing
+                    metric="protein"
+                    value={proteinEaten}
+                    target={Math.round(Number(target.protein))}
+                  />
                 </div>
-                <div>
-                  <div className="mb-2 flex items-baseline justify-between text-sm">
-                    <span>Protein</span>
-                    <Count
-                      value={proteinEaten}
-                      total={`${Math.round(Number(target.protein))}g`}
-                    />
-                  </div>
-                  <Progress
-                    value={Math.min((proteinEaten / Number(target.protein)) * 100, 100)}
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border/60 pt-4">
+                  <ProgressBar
+                    metric="carbs"
+                    value={carbsEaten}
+                    target={Math.round(Number(target.carbs))}
+                  />
+                  <ProgressBar
+                    metric="fat"
+                    value={fatEaten}
+                    target={Math.round(Number(target.fat))}
+                  />
+                  <ProgressBar metric="steps" value={stepLog?.steps ?? 0} target={stepGoal} />
+                  <ProgressBar
+                    metric="workout"
+                    value={workoutDone ? 1 : 0}
+                    target={hasSessionToday ? 1 : null}
+                    label={hasSessionToday ? 'Workout' : 'Rest day'}
+                    done="Nothing to hit"
                   />
                 </div>
               </>

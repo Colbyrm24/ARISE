@@ -10,7 +10,12 @@ import { bookableSlots, groupByDay, type Availability, type Slot } from '@/lib/s
   list of times.
 */
 
-export const DEFAULT_TZ = 'America/New_York';
+/*
+  Timezone handling lives in @/lib/day. Re-exported under the names this
+  module already used so its callers don't all have to change — but there is
+  one implementation, not two identical ones drifting apart.
+*/
+export { DEFAULT_TZ, zoneOf as timeZoneOf } from '@/lib/day';
 export const BOOK_AHEAD_DAYS = 14;
 
 /**
@@ -99,16 +104,3 @@ export async function upcomingForCoach(coachId: string, now = new Date()) {
   }));
 }
 
-/** Coach timezone, with a default rather than a crash when it's unset. */
-export function timeZoneOf(profile: { timezone?: string | null } | null | undefined) {
-  const tz = profile?.timezone?.trim();
-  if (!tz) return DEFAULT_TZ;
-  try {
-    // A bad string here would throw inside Intl on every render, which is a
-    // much worse outcome than quietly using the default.
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return tz;
-  } catch {
-    return DEFAULT_TZ;
-  }
-}

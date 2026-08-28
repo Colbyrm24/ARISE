@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
+import { daysAgoIn, zoneOf } from '@/lib/day';
+import { weekOverWeek } from '@/lib/weight-trend';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { PhotoGrid } from '@/components/progress/photo-grid';
 import { PHOTO_ANGLES, signPhotoUrls } from '@/lib/progress-photos';
-import { weekOf, formatWeek } from '@/lib/check-in';
+import { weekOfFor, formatWeek } from '@/lib/check-in';
 import { logWeight, logMeasurement, removeWeightLog } from './actions';
 import { uploadProgressPhoto, deleteProgressPhoto } from './photo-actions';
 
@@ -20,16 +22,13 @@ const MEASUREMENTS = [
   { type: 'hips', label: 'Hips' },
 ] as const;
 
-function daysAgo(n: number) {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - n);
-  return d;
-}
 
 export default async function ProgressPage() {
   const user = await requireEntitledClient();
-  const since = daysAgo(90);
+  const since = daysAgoIn(90, zoneOf(user.profile));
+  // Their week, not the server's — a Sunday-evening check-in on the west
+  // coast is already Monday in UTC.
+  const thisWeek = weekOfFor(user);
 
   const [logs, measurements, photos, thisWeeksCheckIn] = await Promise.all([
     prisma.weightLog.findMany({
@@ -45,7 +44,7 @@ export default async function ProgressPage() {
       orderBy: { date: 'desc' },
       take: 24,
     }),
-    prisma.checkIn.findFirst({ where: { clientId: user.id, weekOf: weekOf() } }),
+    prisma.checkIn.findFirst({ where: { clientId: user.id, weekOf: thisWeek } }),
   ]);
 
   const signed = await signPhotoUrls(photos.map((p) => p.storagePath));
@@ -59,15 +58,10 @@ export default async function ProgressPage() {
   const points = logs.map((l) => ({ date: l.date, weight: Number(l.weight) }));
   const latest = points[points.length - 1] ?? null;
 
-  // Compare the last 7 days against the 7 before it — one weigh-in against
-  // one weigh-in is mostly water, a week against a week is the real trend.
-  const cut = daysAgo(7).getTime();
-  const prevCut = daysAgo(14).getTime();
-  const recent = points.filter((p) => p.date.getTime() >= cut);
-  const prior = points.filter((p) => p.date.getTime() >= prevCut && p.date.getTime() < cut);
-  const mean = (a: typeof points) => a.reduce((s, p) => s + p.weight, 0) / a.length;
-  const weekChange =
-    recent.length > 0 && prior.length > 0 ? mean(recent) - mean(prior) : null;
+  // One weigh-in against one weigh-in is mostly water; a week against a week
+  // is the real trend. Shared with the coach's card so the client and the
+  // coach are never looking at two different numbers for the same person.
+  const { change: weekChange } = weekOverWeek(points, zoneOf(user.profile));
 
   // Newest reading per measurement type.
   const latestByType = new Map<string, (typeof measurements)[number]>();
@@ -216,7 +210,7 @@ export default async function ProgressPage() {
               <p className="mt-1 text-base font-medium">
                 {thisWeeksCheckIn ? 'Submitted' : 'Not sent yet'}
               </p>
-              <p className="text-xs text-muted-foreground">{formatWeek(weekOf())}</p>
+              <p className="text-xs text-muted-foreground">{formatWeek(thisWeek)}</p>
             </div>
             <ChevronRight size={16} className="text-muted-foreground" />
           </CardContent>

@@ -19,18 +19,29 @@ import {
   sheet — sharing the array through either of them would drag one into the
   other's bundle for no reason.
 */
+/**
+ * What a badge is allowed to count.
+ *
+ * Every one of these means "things waiting on the coach" and nothing else. A
+ * badge showing a total rather than a backlog is one he learns to ignore
+ * within a week, and once he ignores one he ignores all of them.
+ */
+export type BadgeKey = 'pendingMeals' | 'waitingThreads';
+
+/** Read once in the layout so every screen shows the same numbers. */
+export type BadgeCounts = Partial<Record<BadgeKey, number>>;
+
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  /** Only the meals queue carries one today; typed so more can. */
-  badge?: 'pendingMeals';
+  badge?: BadgeKey;
 };
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/coach/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/coach/clients', label: 'Clients', icon: Users },
-  { href: '/coach/inbox', label: 'Inbox', icon: Inbox },
+  { href: '/coach/inbox', label: 'Inbox', icon: Inbox, badge: 'waitingThreads' },
   { href: '/coach/meals', label: 'Meals', icon: Camera, badge: 'pendingMeals' },
   { href: '/coach/schedule', label: 'Schedule', icon: CalendarDays },
   { href: '/coach/programs', label: 'Programs', icon: ClipboardList },

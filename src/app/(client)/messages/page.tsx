@@ -1,5 +1,6 @@
 import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { zoneOf } from '@/lib/day';
 import { MessageThread } from '@/components/messages/message-thread';
 import { Composer } from '@/components/messages/composer';
 import { sendMessageToCoach } from './actions';
@@ -24,16 +25,25 @@ export default async function MessagesPage() {
     );
   }
 
-  const messages = await prisma.message.findMany({
+  /*
+    Newest 200, then flipped for display.
+
+    Ascending with a take gives the OLDEST 200 — so the moment a thread passes
+    two hundred messages it freezes on its opening weeks and stops showing the
+    present entirely, including the message just sent. At the rate a coaching
+    thread runs that is a few weeks in.
+  */
+  const recent = await prisma.message.findMany({
     where: {
       OR: [
         { senderId: user.id, recipientId: rel.coachId },
         { senderId: rel.coachId, recipientId: user.id },
       ],
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     take: 200,
   });
+  const messages = recent.reverse();
 
   // Opening the thread is the read receipt. Written directly rather than through
   // the server action — revalidatePath() is not allowed during a render pass.
@@ -53,7 +63,7 @@ export default async function MessagesPage() {
         <p className="text-sm text-muted-foreground">Your coach</p>
       </header>
 
-      <MessageThread messages={messages} meId={user.id} />
+      <MessageThread messages={messages} meId={user.id} tz={zoneOf(user.profile)} />
       <Composer action={sendMessageToCoach} placeholder={`Message ${coachName.split(' ')[0]}…`} />
     </div>
   );

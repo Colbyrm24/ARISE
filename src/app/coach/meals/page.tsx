@@ -157,10 +157,21 @@ function MealCard({ meal }: { meal: PendingMeal }) {
               <>
                 <div>
                   <p className="text-sm font-medium">{est.name}</p>
+                  {/*
+                    A transcription and an estimate are different claims, and
+                    the coach checks them differently. "High confidence" on a
+                    screenshot reads as the model being sure of its guess; it
+                    is actually the app's own printed figures, which is a much
+                    stronger thing and takes about a second to verify.
+                  */}
                   <p
-                    className={`readout mt-0.5 text-[10px] uppercase ${CONFIDENCE_TONE[est.confidence]}`}
+                    className={`readout mt-0.5 text-[10px] uppercase ${
+                      est.source === 'screen' ? 'text-accent' : CONFIDENCE_TONE[est.confidence]
+                    }`}
                   >
-                    {est.confidence} confidence
+                    {est.source === 'screen'
+                      ? 'read off their tracker'
+                      : `${est.confidence} confidence`}
                     {est.adjusted && ' · totals were reconciled'}
                   </p>
                 </div>

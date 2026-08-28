@@ -149,6 +149,25 @@ async function candidates(today: Date): Promise<Candidate[]> {
 
     const theirLast = spokeAt.get(userId) ?? null;
 
+    /*
+      Never speak over a question that hasn't been answered.
+
+      If their message is the newest in the thread, they are owed a real
+      reply, and an automatic "how we feelin, whats on the agenda today" is
+      the worst possible thing to send — it reads as having been ignored by a
+      person and then greeted by a robot.
+
+      It also silently clears the inbox's waiting signal, which is derived
+      from exactly this comparison: the auto-message writes a Message from the
+      coach's account, so `mine` becomes newer than `theirs`, the row drops
+      out of "Waiting on you" and the nav badge, and it can never go cold. A
+      client who asked something at 11pm would vanish from the queue at 8am
+      the next morning without anyone having read it — which is the precise
+      failure the inbox change exists to prevent, walking back in through a
+      different door.
+    */
+    if (theirLast && (!coachLast || theirLast > coachLast)) continue;
+
     if (!theirLast || theirLast < quietCutoff) {
       out.push({ clientId: userId, coachId, trigger: GONE_QUIET });
     } else if (resting.has(userId)) {
@@ -203,14 +222,36 @@ export async function runAutoMessages(now = new Date()): Promise<AutoRun> {
 
       const line = pick(lines, today, clientOffset(clientId));
 
+      /*
+        Claim the day BEFORE sending, not after.
+
+        The unique index is what stops a duplicate, and it only stops one if
+        it is reached first. Written the other way round — message, then claim
+        — the message was already in the client's thread and the push already
+        fired by the time the index rejected the second run; the throw landed
+        in the catch below and was counted as `skipped`, so the run reported
+        success. A Vercel retry after a timeout, or the coach re-hitting
+        /api/cron/rest-day by hand, sent every client the identical
+        "how we feelin, whats on the agenda today" twice and answered
+        `{ sent: 0, skipped: 40 }`.
+
+        messageId is nullable, so the claim can be staked with nothing behind
+        it and filled in once the message actually exists. A claim whose send
+        then fails costs that client one skipped auto-message for the day,
+        which is the right way round: silence is recoverable, a double text
+        from their coach is not.
+      */
+      const claim = await prisma.autoMessageSend.create({
+        data: { id: randomUUID(), clientId, trigger, date: today },
+      });
+
       const message = await prisma.message.create({
         data: { senderId: coachId, recipientId: clientId, body: line.body },
       });
 
-      // Claim the day. The unique index means a concurrent second run loses
-      // here rather than sending a duplicate.
-      await prisma.autoMessageSend.create({
-        data: { id: randomUUID(), clientId, trigger, date: today, messageId: message.id },
+      await prisma.autoMessageSend.update({
+        where: { id: claim.id },
+        data: { messageId: message.id },
       });
 
       await notify(clientId, 'message', `Message from your coach: ${line.body.slice(0, 60)}`).catch(

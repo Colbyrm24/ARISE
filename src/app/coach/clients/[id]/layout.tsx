@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, MessageCircle } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
+import { requireCoach } from '@/lib/auth';
+import { coachOwnsClient } from '@/lib/coach-guard';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
@@ -44,6 +46,23 @@ export default async function ClientLayout({
     pulling the client's whole graph here would make every tab pay for data
     it doesn't render.
   */
+  /*
+    Nothing under /coach/clients/[id] had an ownership check.
+
+    The coach layout above answers "is this person a coach", never "is this
+    their client" — and this is the deepest record in the product: email,
+    private coach notes, the signed agreement and its price, the payment link,
+    the program, training history, macros, the intake form. Any coach account
+    could read any client's by typing the id, and the clients list and the
+    dashboard both hand those ids out.
+
+    Guarded here rather than on each tab, because there are six of them now
+    and a seventh would arrive unguarded. The sibling /coach/inbox/[clientId]
+    has always done this correctly.
+  */
+  const coach = await requireCoach();
+  if (!(await coachOwnsClient(coach.id, params.id))) notFound();
+
   const client = await prisma.client.findUnique({
     where: { userId: params.id },
     select: {

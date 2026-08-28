@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { NAV_ITEMS as items } from '@/components/coach/nav-items';
+import { NAV_ITEMS as items, type BadgeCounts } from '@/components/coach/nav-items';
 import { cn } from '@/lib/utils';
 
-export function Sidebar({ pendingMeals = 0 }: { pendingMeals?: number }) {
+export function Sidebar({ counts = {} }: { counts?: BadgeCounts }) {
   const pathname = usePathname();
 
   return (
@@ -28,9 +28,7 @@ export function Sidebar({ pendingMeals = 0 }: { pendingMeals?: number }) {
           {items.map((item) => {
             const { href, label, icon: Icon } = item;
             const active = pathname.startsWith(href);
-            // Only ever a count of things waiting on him. A badge that shows a
-            // total rather than a backlog is one he learns to ignore.
-            const count = 'badge' in item && item.badge === 'pendingMeals' ? pendingMeals : 0;
+            const count = item.badge ? counts[item.badge] ?? 0 : 0;
             return (
               <li key={href}>
                 <Link

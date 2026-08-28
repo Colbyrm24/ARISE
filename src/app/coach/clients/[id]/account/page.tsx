@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CopyLinkButton } from '@/components/copy-link-button';
 import { IntakeCard } from '@/components/onboarding/intake-card';
+import { BillingCard } from '@/components/coach/billing-card';
 import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS } from '@/lib/client-status';
 import { PROVIDER_LABELS } from '@/lib/plans';
@@ -220,6 +221,18 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                 <Input name="startDate" type="date" required />
                 <Input name="priceOverride" type="number" step="0.01" min="0" placeholder="Override price ($, optional)" />
                 <Input name="termMonthsOverride" type="number" min="1" placeholder="Override duration (months, optional)" />
+                {/*
+                  On a fixed payment plan this is the number that ends the
+                  billing — when this many payments have gone through, the
+                  subscription is cancelled at Stripe. Leave it blank to use
+                  whatever the plan says.
+                */}
+                <Input
+                  name="numberOfPaymentsOverride"
+                  type="number"
+                  min="1"
+                  placeholder="Override number of payments (optional)"
+                />
                 <Input
                   name="manualCheckoutUrl"
                   placeholder="FanBasis checkout link (FanBasis only)"
@@ -227,9 +240,10 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Stripe links are generated automatically. For FanBasis, paste the checkout link you
-                created in FanBasis&apos;s own dashboard — see the note on the Payments settings page
-                for why.
+                Stripe links are generated automatically, and a payment plan stops billing on its
+                own once the agreed number of payments has gone through. For FanBasis, paste the
+                checkout link you created in FanBasis&apos;s own dashboard — FanBasis has no API
+                integration here yet, so those payments are confirmed by hand.
               </p>
               <Button type="submit" size="sm" className="w-fit">
                 Generate Payment Link
@@ -238,6 +252,9 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
           )}
         </CardContent>
       </Card>
+
+      {/* What they have actually paid — see components/coach/billing-card.tsx. */}
+      <BillingCard clientId={client.userId} />
 
       <IntakeCard clientId={client.userId} />
     </div>

@@ -32,9 +32,20 @@ export type EstimateItem = {
   fat: number;
 };
 
+/**
+ * Where the numbers came from.
+ *
+ * A photograph of a plate is estimated; a screenshot of a tracking app is
+ * transcribed. Those are different acts with different error bars, and the
+ * coach should be told which one he is looking at before he decides how hard
+ * to check it.
+ */
+export type EstimateSource = 'plate' | 'screen';
+
 export type MealEstimate = {
   /** A short name for the whole plate, e.g. "Grilled chicken with rice". */
   name: string;
+  source: EstimateSource;
   items: EstimateItem[];
   calories: number;
   protein: number;
@@ -49,7 +60,22 @@ export type MealEstimate = {
 
 export type EstimateResult =
   | { ok: true; estimate: MealEstimate }
-  | { ok: false; reason: 'not-food' | 'unreadable' | 'unavailable'; message: string };
+  | {
+      ok: false;
+      /*
+        `day-summary` is its own refusal and not a kind of failure.
+
+        Clients send a screenshot of their tracker's home screen — "1,807 of
+        2,100, 131g protein" — as often as they send a plate. Logging that as
+        a meal would add a whole day on top of the meals already logged that
+        day and silently double everything. The read has to come back and say
+        so rather than record a 1,807-calorie lunch.
+      */
+      reason: 'not-food' | 'unreadable' | 'unavailable' | 'day-summary';
+      message: string;
+      /** For day-summary: what the screen said, so the coach can still use it. */
+      dayTotals?: { calories: number; protein: number; carbs: number; fat: number };
+    };
 
 /** Photos go to the model at this longest edge; see downscale() in the action. */
 export const ESTIMATE_MAX_EDGE = 1024;
@@ -70,7 +96,11 @@ COUNT WHAT HIDES. Cooking oil, butter, dressing, sauce, cheese and mayonnaise ar
 
 CONFIDENCE IS ABOUT THE PORTION, NOT THE FOOD. Use high when the items are clear and the portion is bounded by something you can see. Use medium when you know the food but are guessing at the amount. Use low when part of the plate is hidden, out of frame, or you cannot tell what a component is.
 
-If the photograph is not food, or is too dark or blurred to read, say so instead of guessing — an invented number is worse for this client than no number.`;
+SCREENSHOTS ARE READ, NOT ESTIMATED. Clients photograph their food, but they also screenshot their tracking app — MyFitnessPal, MacroFactor, Cronometer, a coaching app's home screen. If the image is a screen rather than a plate, set kind to "screen" and TRANSCRIBE the figures shown. Do not estimate anything, do not adjust what is printed, and do not add items the screen does not list. The numbers on a screen are facts; the numbers on a plate are judgments.
+
+ON A SCREEN, SAY WHAT IT COVERS. A tracker screenshot is either ONE entry (a meal card headed "Breakfast", a single logged food) or the WHOLE DAY (a home screen, a daily total, a ring or bar showing progress against a goal, anything reading "1,807 / 2,100"). Set scope to "meal" or "day" accordingly. Getting this wrong is the most expensive mistake available here: a day recorded as a meal doubles everything the client logged. When a screen shows both a daily total and individual entries, and the client did not say which they mean, scope is "day".
+
+If the photograph is not food and is not a tracking screen, or is too dark or blurred to read, say so instead of guessing — an invented number is worse for this client than no number.`;
 
 const TOOL = {
   name: TOOL_NAME,
@@ -80,7 +110,18 @@ const TOOL = {
     properties: {
       readable: {
         type: 'boolean',
-        description: 'False if this is not food, or is too dark or blurred to read.',
+        description: 'False if this is not food or a tracking screen, or is too dark to read.',
+      },
+      kind: {
+        type: 'string',
+        enum: ['plate', 'screen'],
+        description: 'A photograph of food, or a screenshot of a tracking app.',
+      },
+      scope: {
+        type: 'string',
+        enum: ['meal', 'day'],
+        description:
+          'Screens only: whether the figures cover one entry or the client\'s whole day.',
       },
       problem: {
         type: 'string',
@@ -107,6 +148,10 @@ const TOOL = {
         },
       },
       confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+      dayCalories: { type: 'number', description: 'Day screens only: total calories shown.' },
+      dayProtein: { type: 'number', description: 'Day screens only: total protein shown, grams.' },
+      dayCarbs: { type: 'number', description: 'Day screens only: total carbs shown, grams.' },
+      dayFat: { type: 'number', description: 'Day screens only: total fat shown, grams.' },
       note: {
         type: 'string',
         description:
@@ -119,11 +164,17 @@ const TOOL = {
 
 type ToolInput = {
   readable?: boolean;
+  kind?: string;
+  scope?: string;
   problem?: string;
   name?: string;
   items?: Partial<EstimateItem>[];
   confidence?: string;
   note?: string;
+  dayCalories?: number;
+  dayProtein?: number;
+  dayCarbs?: number;
+  dayFat?: number;
 };
 
 function clean(n: unknown, max: number): number {
@@ -155,7 +206,9 @@ const ALCOHOL = /\b(beer|lager|ale|ipa|stout|pilsner|cider|wine|prosecco|champag
  * Alcohol is carried at its stated calories and excluded from the comparison,
  * so one drink on the plate can't drag the whole meal's check off.
  */
-function reconcile(items: EstimateItem[]) {
+// Exported for tests. The 4/4/9 check and the screen exemption are the two
+// places a wrong rule silently changes what a client is told they ate.
+export function reconcile(items: EstimateItem[], source: EstimateSource = 'plate') {
   const protein = items.reduce((s, i) => s + i.protein, 0);
   const carbs = items.reduce((s, i) => s + i.carbs, 0);
   const fat = items.reduce((s, i) => s + i.fat, 0);
@@ -171,7 +224,20 @@ function reconcile(items: EstimateItem[]) {
   // allow a flat 60 as well — rounding across several items moves a small
   // plate by that much on its own.
   const slack = Math.max(60, fromMacros * 0.15);
-  const adjusted = Math.abs(stated - fromMacros) > slack;
+
+  /*
+    Screens are never reconciled.
+
+    The 4/4/9 check exists to catch a model that estimated the calories and
+    the macros independently and got two different answers. A transcription
+    has no such disagreement to catch: the app printed both figures, and if
+    they don't reconcile that is the app's rounding, or fibre, or sugar
+    alcohols — none of which are ours to overwrite. Rewriting a printed 537
+    to 522 would mean the coach's number never matches what the client is
+    looking at on their own phone, which is the one thing that must not
+    happen.
+  */
+  const adjusted = source !== 'screen' && Math.abs(stated - fromMacros) > slack;
 
   return {
     protein: Math.round(protein),
@@ -184,7 +250,7 @@ function reconcile(items: EstimateItem[]) {
 
 function buildPrompt(description: string | null) {
   const lines = [
-    'Read this meal and record the macros.',
+    'Read this and record the macros. It may be a photograph of food or a screenshot of a tracking app.',
     description?.trim()
       ? `The client says this is: ${description.trim()}. Trust that for what the food IS; still judge the portion from the photograph.`
       : 'The client sent no description, so identify everything from the photograph alone.',
@@ -255,6 +321,32 @@ export async function estimateMealFromPhoto(input: {
     };
   }
 
+  const source: EstimateSource = raw.kind === 'screen' ? 'screen' : 'plate';
+
+  /*
+    A whole day, stopped here rather than logged.
+
+    The totals still come back with it: they are the most useful thing on that
+    screen and the coach can act on them immediately — they just must not
+    become a NutritionLog row, because the day they describe already has rows.
+  */
+  if (source === 'screen' && raw.scope === 'day') {
+    const dayTotals = {
+      calories: clean(raw.dayCalories, 20000),
+      protein: clean(raw.dayProtein, 1000),
+      carbs: clean(raw.dayCarbs, 2000),
+      fat: clean(raw.dayFat, 1000),
+    };
+    return {
+      ok: false,
+      reason: 'day-summary',
+      message: dayTotals.calories
+        ? `That's a whole day, not a meal — ${dayTotals.calories.toLocaleString()} cal, ${dayTotals.protein}g protein.`
+        : "That's a screenshot of a whole day rather than one meal.",
+      dayTotals,
+    };
+  }
+
   const items: EstimateItem[] = (raw.items ?? [])
     .filter((i) => i && typeof i.name === 'string' && i.name.trim())
     .map((i) => ({
@@ -267,19 +359,39 @@ export async function estimateMealFromPhoto(input: {
     }))
     .slice(0, 20);
 
-  // A readable photo with nothing on it is a failed read, not an empty meal.
+  // A readable image with nothing on it is a failed read, not an empty meal.
   if (items.length === 0) {
-    return { ok: false, reason: 'unreadable', message: "Couldn't make out the food in that one." };
+    return {
+      ok: false,
+      reason: 'unreadable',
+      message:
+        source === 'screen'
+          ? "Couldn't make out the numbers on that screen."
+          : "Couldn't make out the food in that one.",
+    };
   }
 
-  const totals = reconcile(items);
-  const confidence =
+  const totals = reconcile(items, source);
+  const stated =
     raw.confidence === 'high' || raw.confidence === 'low' ? raw.confidence : 'medium';
+
+  /*
+    A transcription is high confidence by construction.
+
+    Confidence here has always meant "how sure am I of the portion", and on a
+    screen there is no portion to be unsure of — the figure is printed. Taking
+    the model's word for it would let a screen read as `low` and send the
+    coach hunting for an ambiguity that isn't there. A screen that could not
+    be read at all failed above rather than arriving here.
+  */
+  const confidence: MealEstimate['confidence'] =
+    source === 'screen' ? 'high' : totals.adjusted && stated === 'high' ? 'medium' : stated;
 
   return {
     ok: true,
     estimate: {
       name: (raw.name ?? '').trim().slice(0, 120) || items.map((i) => i.name).join(', ').slice(0, 120),
+      source,
       items,
       calories: totals.calories,
       protein: totals.protein,
@@ -287,7 +399,7 @@ export async function estimateMealFromPhoto(input: {
       fat: totals.fat,
       // A read that had to be reconciled disagreed with itself, and the coach
       // should know that before trusting the confidence it claimed.
-      confidence: totals.adjusted && confidence === 'high' ? 'medium' : confidence,
+      confidence,
       note: (raw.note ?? '').trim().slice(0, 300) || null,
       adjusted: totals.adjusted || undefined,
     },
