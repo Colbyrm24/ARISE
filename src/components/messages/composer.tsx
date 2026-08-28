@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { EmojiPicker } from '@/components/messages/emoji-picker';
 
 /**
  * Plain form post so sending works even before any JS loads — important
@@ -29,6 +30,7 @@ export function Composer({
       {hidden &&
         Object.entries(hidden).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
       <Input name="body" placeholder={placeholder} autoComplete="off" required className="flex-1" />
+      <EmojiPicker targetName="body" />
       <Button type="submit">Send</Button>
     </form>
   );
