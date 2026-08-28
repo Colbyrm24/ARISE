@@ -2,8 +2,14 @@ import { AlertTriangle, Check, RotateCw } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { requiredPayments, paymentsRemaining } from '@/lib/billing';
 import { PROVIDER_LABELS } from '@/lib/plans';
+import {
+  endBillingNow,
+  endBillingAtPeriodEnd,
+  keepBillingRunning,
+} from '@/app/coach/clients/[id]/subscription-actions';
 
 /*
   What this client has actually paid.
@@ -110,10 +116,56 @@ export async function BillingCard({ clientId }: { clientId: string }) {
                     {left && left > 0 ? ` · ${left} to go` : ' · complete'}
                   </>
                 )}
-                {sub.currentPeriodEnd && sub.status === 'active' && (
+                {sub.currentPeriodEnd && sub.status === 'active' && !sub.cancelAtPeriodEnd && (
                   <> · next charge {when(sub.currentPeriodEnd)}</>
                 )}
               </p>
+
+              {/*
+                Ending a client used to be a status change that Stripe never
+                heard about — they lost the app and their card kept being
+                charged. These are the two ways to actually stop it, and they
+                only appear while there is billing left to stop.
+              */}
+              {sub.status === 'active' && sub.providerSubscriptionId && (
+                sub.cancelAtPeriodEnd ? (
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <p className="text-xs text-accent">
+                      Ends {when(sub.currentPeriodEnd)} · no further charges
+                    </p>
+                    <form action={keepBillingRunning}>
+                      <input type="hidden" name="subscriptionId" value={sub.id} />
+                      <input type="hidden" name="clientId" value={clientId} />
+                      <Button type="submit" variant="ghost" size="sm">
+                        Keep it running
+                      </Button>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <form action={endBillingAtPeriodEnd}>
+                      <input type="hidden" name="subscriptionId" value={sub.id} />
+                      <input type="hidden" name="clientId" value={clientId} />
+                      <Button type="submit" variant="secondary" size="sm">
+                        End when this period runs out
+                      </Button>
+                    </form>
+                    <form action={endBillingNow}>
+                      <input type="hidden" name="subscriptionId" value={sub.id} />
+                      <input type="hidden" name="clientId" value={clientId} />
+                      <Button type="submit" variant="ghost" size="sm">
+                        End now
+                      </Button>
+                    </form>
+                    {/* Money already taken for a period they no longer get is
+                        a refund, and a refund is issued in Stripe on purpose —
+                        it can be partial, and it is the coach's call. */}
+                    <p className="text-xs text-muted-foreground">
+                      Ending now doesn&apos;t refund the current period.
+                    </p>
+                  </div>
+                )
+              )}
 
               {required !== null && (
                 <div
