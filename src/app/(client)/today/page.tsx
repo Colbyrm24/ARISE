@@ -18,6 +18,7 @@ import { upcomingForClient } from '@/lib/booking';
 import { scheduledToday, scheduleBetween } from '@/lib/program-deploy';
 import { LocalTime } from '@/components/local-time';
 import { WeekStrip } from '@/components/client/week-strip';
+import { GoalBar } from '@/components/client/goal-bar';
 import { todayFor, hourIn, zoneOf, startOfDay } from '@/lib/day';
 import { ProgressRing, ProgressBar } from '@/components/client/progress-ring';
 import { toggleHabit, logSteps, logCardio } from './actions';
@@ -539,8 +540,9 @@ export default async function TodayPage({
               {rows.map((r) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between gap-4 border-b border-border/60 py-3 last:border-b-0"
+                  className="flex flex-col gap-2 border-b border-border/60 py-3 last:border-b-0"
                 >
+                  <div className="flex items-center justify-between gap-4">
                   <span className="min-w-0 flex-1 text-[15px]">{r.label}</span>
                   <span className="flex shrink-0 items-center gap-3">
                     {r.value !== undefined && r.total !== undefined ? (
@@ -572,6 +574,28 @@ export default async function TodayPage({
                       <Cell on={r.done} className="opacity-60" />
                     )}
                   </span>
+                  </div>
+
+                  {/*
+                    How far along, as a shape.
+
+                    "[0/12000]" and "[7400/12000]" are the same width and the
+                    same colour, so a column of them tells you nothing until
+                    you have read every digit. A bar answers "am I close" at a
+                    glance and the number stays for the detail.
+
+                    A goal with nothing to be a fraction of — a manual habit
+                    like water — gets a full track at its done state instead
+                    of an empty one, because a tick box that reads 0% while
+                    ticked is a contradiction.
+                  */}
+                  <GoalBar
+                    label={r.label}
+                    value={r.value}
+                    total={r.total}
+                    mode={r.mode}
+                    done={r.done}
+                  />
                 </li>
               ))}
             </ul>
