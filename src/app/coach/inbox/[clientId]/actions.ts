@@ -11,6 +11,10 @@ import {
   voiceNotePath,
 } from '@/lib/voice-notes';
 import type { VoiceNoteResult } from '@/lib/voice-notes';
+import { draftCoachReply, type DraftResult, type DraftTurn } from '@/lib/coach-draft';
+import { getDayContext } from '@/lib/day-totals';
+import { todayFor } from '@/lib/day';
+import { THREAD_TURNS } from '@/lib/coach-draft';
 
 /** Confirms this coach actually coaches this client before anything is written. */
 async function assertOwns(coachId: string, clientId: string) {
@@ -104,4 +108,61 @@ export async function markClientMessagesRead(clientId: string) {
     data: { readAt: new Date() },
   });
   revalidatePath('/coach/inbox');
+}
+
+/**
+ * Drafts the coach's next message in this thread. Returns the text; it is
+ * never written to the database and never sent. The coach reads it in the
+ * composer and decides.
+ *
+ * Same ownership check as sending, and for the same reason: this reads a
+ * client's conversation and their food, so knowing the id must not be enough.
+ */
+export async function draftReplyToClient(formData: FormData): Promise<DraftResult> {
+  const coach = await requireCoach();
+  const clientId = formData.get('clientId') as string | null;
+  if (!clientId) return { text: null, error: 'No client on that request.' };
+  if (!(await assertOwns(coach.id, clientId))) return { text: null, error: 'That client is not yours.' };
+
+  const client = await prisma.user.findUnique({
+    where: { id: clientId },
+    include: { profile: true, clientRecord: true },
+  });
+  if (!client) return { text: null, error: 'That client is not yours.' };
+
+  const recent = await prisma.message.findMany({
+    where: {
+      OR: [
+        { senderId: coach.id, recipientId: clientId },
+        { senderId: clientId, recipientId: coach.id },
+      ],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: THREAD_TURNS,
+    include: { attachments: true },
+  });
+
+  /*
+    A voice note has no body. Saying so is better than dropping the row: a
+    thread where the last thing said was a recording reads as silence
+    otherwise, and the draft would answer the message before it.
+  */
+  const thread: DraftTurn[] = recent
+    .reverse()
+    .map((m) => ({
+      from: m.senderId === coach.id ? ('coach' as const) : ('client' as const),
+      body: m.body?.trim() || (m.attachments.length ? '[sent a voice message]' : ''),
+    }))
+    .filter((t) => t.body.length > 0);
+
+  // Their own day, in their own timezone — 9pm for them is not 9pm for him.
+  const day = await getDayContext(clientId, todayFor(client));
+
+  const full = client.profile?.fullName ?? client.email;
+  return draftCoachReply({
+    clientFirstName: (full ?? '').split(' ')[0] || 'them',
+    status: client.clientRecord?.status ?? null,
+    thread,
+    day,
+  });
 }

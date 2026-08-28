@@ -8,7 +8,8 @@ import { MessageThread } from '@/components/messages/message-thread';
 import { Composer } from '@/components/messages/composer';
 import { signVoiceNoteUrls } from '@/lib/voice-notes';
 import { initialsOf } from '@/lib/console';
-import { sendMessageToClient, sendVoiceNoteToClient } from './actions';
+import { DraftReplyButton } from '@/components/coach/draft-reply';
+import { sendMessageToClient, sendVoiceNoteToClient, draftReplyToClient } from './actions';
 
 export default async function CoachThreadPage({ params }: { params: { clientId: string } }) {
   const coach = await requireCoach();
@@ -94,6 +95,7 @@ export default async function CoachThreadPage({ params }: { params: { clientId: 
         voiceAction={sendVoiceNoteToClient}
         placeholder={`Message ${(name ?? '').split(' ')[0]}…`}
         hidden={{ clientId: rel.clientId }}
+        extra={<DraftReplyButton action={draftReplyToClient} clientId={rel.clientId} />}
       />
     </div>
   );
