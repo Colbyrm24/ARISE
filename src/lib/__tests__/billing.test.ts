@@ -10,6 +10,7 @@ import {
   amountFromCents,
   parsePrice,
   parseCount,
+  checkoutRefs,
 } from '../billing';
 
 describe('requiredPayments', () => {
@@ -204,4 +205,22 @@ describe('the payment-plan lifecycle end to end', () => {
       assert.equal(isPaidInFull(paid, required), false);
     }
   });
+});
+
+test('a checkout is looked up by its session id and by the payment link behind it', () => {
+  // ARISE-priced plan: only the session id was ever stored.
+  assert.deepEqual(checkoutRefs({ id: 'cs_1', payment_link: null }), ['cs_1']);
+
+  // Stripe-price plan: the Payment Link id is what is on file, and the
+  // session did not exist until the client paid.
+  assert.deepEqual(checkoutRefs({ id: 'cs_2', payment_link: 'plink_9' }), ['cs_2', 'plink_9']);
+
+  // Expanded rather than a bare id, depending on what Stripe was asked for.
+  assert.deepEqual(checkoutRefs({ id: 'cs_3', payment_link: { id: 'plink_7' } }), [
+    'cs_3',
+    'plink_7',
+  ]);
+
+  // No duplicates — an `in` clause with the same value twice is just noise.
+  assert.deepEqual(checkoutRefs({ id: 'cs_4', payment_link: 'cs_4' }), ['cs_4']);
 });
