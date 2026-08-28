@@ -233,6 +233,13 @@ model Plan {
   id               String              @id @default(uuid())
   name             String
   price            Decimal             @db.Decimal(10, 2)
+  // When set, this plan sells a Price that already exists in Stripe, and the
+  // checkout session names it directly instead of building a throwaway one.
+  // Stripe then owns the amount and the interval, so they cannot drift from
+  // what ARISE prints on the agreement. Null = an ARISE-only plan, priced by
+  // hand, billed through generated price_data as before.
+  stripePriceId    String?             @unique @map("stripe_price_id")
+  stripeProductId  String?             @map("stripe_product_id")
   billingType      BillingType         @map("billing_type")
   paymentFrequency PaymentFrequency?   @map("payment_frequency") // null when billingType = one_time
   numberOfPayments Int?                @map("number_of_payments") // null = ongoing subscription with no fixed count
