@@ -8,7 +8,8 @@
   generic inference, which then demands the argument be an array as well.
   It passed every local check and failed the Vercel build.
 
-  Write `as unknown as Promise<T>`, or await first and cast the value.
+  Write `as unknown as T`. Awaiting first does NOT avoid it — the expected
+  type still flows back through the await.
 */
 import { readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
@@ -25,7 +26,10 @@ for (const f of files) {
     // Skip comment lines so the note explaining this rule doesn't trip it.
     const code = line.trim();
     if (code.startsWith('*') || code.startsWith('//')) return;
-    if (/\}\)\s*as\s+Promise</.test(line) && !/as\s+unknown\s+as/.test(line)) {
+    // `}) as Promise<T>` and `})) as T[]` both feed the expected type back
+    // into groupBy's generics. Awaiting first does not help.
+    const casts = /\}\)+\s*as\s+(?!unknown\b)/.test(line);
+    if (casts) {
       bad.push(`${f}:${i + 1}  ${line.trim()}`);
     }
   });
@@ -33,7 +37,7 @@ for (const f of files) {
 
 if (bad.length) {
   console.error('Casting a Prisma call expression to Promise<T> does not compile on Vercel.');
-  console.error('Use `as unknown as Promise<T>`, or await first and cast the value.\n');
+  console.error('Use `as unknown as T`. Awaiting first does not avoid it.\n');
   for (const b of bad) console.error('  ' + b);
   process.exit(1);
 }
