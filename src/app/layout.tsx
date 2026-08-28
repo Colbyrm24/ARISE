@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from 'next';
+import { getCurrentUser } from '@/lib/auth';
+import { backgroundOf } from '@/lib/backgrounds';
 import { Archivo, DM_Mono } from 'next/font/google';
 import './globals.css';
 
@@ -42,13 +44,36 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  /*
+    The signed-in person's background, stamped on <html>.
+
+    It started on the client shell, which was wrong in two ways that only show
+    up once a non-default theme is picked. The lit viewport frame below is a
+    sibling of {children} in <body>, so it never inherited the override and
+    drew an electric-blue border around an orange app. And `body` keeps its
+    own `bg-background` from :root, so rubber-banding the top of the page on
+    iOS revealed a band of the default navy behind the theme.
+
+    Both are the same mistake — theming a descendant of the elements that
+    actually paint the ground — and both go away by putting it at the root.
+
+    getCurrentUser, not requireClient: this layout renders for the sign-in
+    screen too, and a redirect from here would make the app unreachable.
+  */
+  const user = await getCurrentUser();
+  const background = backgroundOf(user?.profile?.background);
+
   return (
-    <html lang="en" className={`${archivo.variable} ${dmMono.variable}`}>
+    <html
+      lang="en"
+      data-bg={background}
+      className={`${archivo.variable} ${dmMono.variable}`}
+    >
       <body className="min-h-screen bg-background font-sans text-foreground">
         {/*
           The lit frame around the viewport. Desktop only — see

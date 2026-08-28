@@ -406,3 +406,119 @@ body::before {
       0 0 60px 4px hsl(var(--system) / 0.45);
   }
 }
+
+/*
+  Choosable backgrounds.
+
+  Only the tokens change. Every window edge, heading bloom and accent glow in
+  the app already reads from these, so a theme is a dozen declarations rather
+  than a stylesheet — and anything built later inherits it for free.
+
+  Stamped on <html> so the frame, the body ground and the overscroll area all
+  follow. `beam` has no block: it IS the :root values, and repeating them here
+  would create a second place to forget to update.
+
+  Two rules every theme has to keep, because the whole app is built on them:
+
+    - green means complete, and nothing else. So no theme may use an accent
+      close enough to --success to be confused with it. That is why there is
+      no green theme here.
+    - red means wrong or outstanding. Ember's accent IS orange, so Ember
+      moves --destructive to crimson rather than leaving it a shade of the
+      accent — otherwise the red/green scan on a set row goes flat.
+
+  --ring is overridden alongside --accent everywhere. It is the focus ring on
+  every Button in the app, and leaving it out puts a blue halo on an orange
+  button the moment somebody tabs to it.
+*/
+
+[data-bg='ember'] {
+  --background: 14 34% 5%;
+  --card: 12 40% 9%;
+  --secondary: 12 34% 13%;
+  --muted: 12 34% 13%;
+  --primary: 18 100% 66%;
+  --accent: 18 100% 66%;
+  --system: 6 90% 58%;
+  --ring: 18 100% 66%;
+  --border: 14 30% 18%;
+  --input: 14 30% 18%;
+  --muted-foreground: 18 18% 72%;
+  --foreground: 26 100% 94%;
+  --card-foreground: 26 100% 94%;
+  --secondary-foreground: 26 100% 94%;
+  --primary-foreground: 14 60% 4%;
+  --accent-foreground: 14 60% 4%;
+  /* Crimson, not the global scarlet. At 4° it sat 14° from this accent and
+     an outstanding set read as ambient glow rather than as something owed. */
+  --destructive: 344 92% 62%;
+}
+
+/*
+  Tide. Teal rather than green on purpose — see the note above about
+  --success. A green accent here would make a landed goal and an unstarted
+  one the same colour on the busiest card in the app.
+*/
+[data-bg='tide'] {
+  --background: 196 40% 4%;
+  --card: 194 46% 8%;
+  --secondary: 194 38% 12%;
+  --muted: 194 38% 12%;
+  --primary: 186 84% 56%;
+  --accent: 186 84% 56%;
+  --system: 196 90% 48%;
+  --ring: 186 84% 56%;
+  --border: 194 32% 18%;
+  --input: 194 32% 18%;
+  --muted-foreground: 190 16% 73%;
+  --foreground: 186 80% 94%;
+  --card-foreground: 186 80% 94%;
+  --secondary-foreground: 186 80% 94%;
+  --primary-foreground: 196 60% 4%;
+  --accent-foreground: 196 60% 4%;
+}
+
+[data-bg='violet'] {
+  --background: 266 32% 5%;
+  --card: 266 38% 10%;
+  --secondary: 266 32% 14%;
+  --muted: 266 32% 14%;
+  --primary: 268 100% 78%;
+  --accent: 268 100% 78%;
+  --system: 286 90% 66%;
+  --ring: 268 100% 78%;
+  --border: 266 28% 20%;
+  --input: 266 28% 20%;
+  --muted-foreground: 268 16% 74%;
+  --foreground: 270 100% 95%;
+  --card-foreground: 270 100% 95%;
+  --secondary-foreground: 270 100% 95%;
+  --primary-foreground: 266 60% 5%;
+  --accent-foreground: 266 60% 5%;
+}
+
+/*
+  Slate is the quiet one: no hue at all, and the accent is a near-white rather
+  than a colour. For anyone who finds the glow a lot to look at, or who trains
+  somewhere bright enough that saturation stops helping. Red and green keep
+  their global values and are the only colour on the screen, which makes the
+  done/outstanding read stronger here than anywhere else.
+*/
+[data-bg='slate'] {
+  --background: 220 8% 5%;
+  --card: 220 8% 9%;
+  --secondary: 220 7% 14%;
+  --muted: 220 7% 14%;
+  --primary: 210 12% 82%;
+  --accent: 210 12% 82%;
+  --system: 210 8% 60%;
+  --ring: 210 12% 82%;
+  --border: 220 7% 20%;
+  --input: 220 7% 20%;
+  --muted-foreground: 215 8% 72%;
+  --foreground: 210 20% 95%;
+  --card-foreground: 210 20% 95%;
+  --secondary-foreground: 210 20% 95%;
+  --primary-foreground: 220 10% 5%;
+  --accent-foreground: 220 10% 5%;
+}
