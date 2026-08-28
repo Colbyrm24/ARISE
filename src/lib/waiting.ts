@@ -174,7 +174,9 @@ export async function countWaitingThreads(coachId: string): Promise<number> {
     by: ['senderId', 'recipientId'],
     where: betweenCoachAnd(coachId, clientIds),
     _max: { createdAt: true },
-  })) as Edge[];
+    // Through `unknown` as well: awaiting first does not stop the expected
+    // type flowing back into groupBy's generic inference.
+  })) as unknown as Edge[];
 
   const { mine, theirs } = splitEdges(coachId, edges);
   return waitingIdsFrom(clientIds, mine, theirs).length;
