@@ -8,6 +8,7 @@ import {
   formatRange,
   headline,
   loggedNameSet,
+  nextOpenSlot,
   rangeOf,
   rangeVerdict,
   slotOf,
@@ -151,6 +152,35 @@ test('a planned line counts as eaten when it was logged under any other name cas
   const eaten = loggedNameSet([{ name: '  Chicken And Rice ' }, { name: '' }]);
   assert.equal(eaten.has('chicken and rice'), true);
   assert.equal(eaten.size, 1, 'a blank name should not become an entry that matches nothing');
+});
+
+test('the first meal you have not eaten is the one that opens', () => {
+  const sections = daySections(
+    [
+      planItem({ meal: 'breakfast', name: 'Pancakes' }),
+      planItem({ meal: 'lunch', name: 'Chicken bowl' }),
+      planItem({ meal: 'dinner', name: 'Steak' }),
+    ],
+    [log({ meal: 'breakfast', name: 'Pancakes' })]
+  );
+  assert.equal(nextOpenSlot(sections), 'lunch');
+});
+
+test('with nothing eaten yet it opens on the first meal of the day', () => {
+  const sections = daySections(
+    [planItem({ meal: 'breakfast' }), planItem({ meal: 'dinner' })],
+    []
+  );
+  assert.equal(nextOpenSlot(sections), 'breakfast');
+});
+
+test('a fully logged day opens nothing', () => {
+  const sections = daySections(
+    [planItem({ meal: 'lunch', name: 'Chicken bowl' })],
+    [log({ meal: 'lunch', name: 'Chicken bowl' })]
+  );
+  assert.equal(nextOpenSlot(sections), null);
+  assert.equal(nextOpenSlot([]), null);
 });
 
 test('totals add up across every meal at once', () => {
