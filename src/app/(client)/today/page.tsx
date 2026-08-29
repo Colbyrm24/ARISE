@@ -161,6 +161,7 @@ export default async function TodayPage({
     latestMessage,
     activeProgram,
     latestWeight,
+    healthSync,
   ] = await Promise.all([
     // What the program says this day is. Null when nobody has deployed one
     // yet, in which case that whole block stays off the screen rather than
@@ -192,6 +193,16 @@ export default async function TodayPage({
       where: { clientId: user.id },
       orderBy: { date: 'desc' },
     }),
+    /*
+      Whether their phone is sending steps over on its own.
+
+      Automatic step sync has existed the whole time — Apple Health posts to
+      /api/health with a key — but the only thing that ever mentioned it was
+      a button on the profile screen, so nobody found it and everybody typed
+      their steps in by hand. This is here purely so the steps card can say
+      the feature exists, at the moment somebody is typing.
+    */
+    prisma.healthToken.findUnique({ where: { clientId: user.id }, select: { id: true } }),
   ]);
   /*
     Scheduled rows are stored at UTC midnight; the dates on this page are
@@ -782,6 +793,23 @@ export default async function TodayPage({
                 Save
               </button>
             </form>
+            {/*
+              Said where the typing happens.
+
+              The sync has been built and working the whole time and lived
+              behind an unlabelled button on the profile screen, so the people
+              it was for never knew. One line, only while they are still doing
+              it by hand, and it disappears the moment they set it up.
+            */}
+            {!healthSync && (
+              <Link
+                href="/profile"
+                className="readout mt-2 inline-flex items-center gap-1 text-[10px] uppercase leading-relaxed text-muted-foreground transition-colors hover:text-accent"
+              >
+                Sync from your phone instead
+                <ChevronRight size={11} />
+              </Link>
+            )}
           </CardContent>
         </Card>
 
