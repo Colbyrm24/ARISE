@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS } from '@/lib/client-status';
 import { PROVIDER_LABELS } from '@/lib/plans';
 import { updateClientStatus, addCoachNote, toggleCoachNotePin } from '../actions';
-import { createPaymentLink, markPaymentLinkPaid } from '../payment-actions';
+import { createPaymentLink, markPaymentLinkPaid, cancelPaymentLink } from '../payment-actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -144,7 +144,14 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
           <CardTitle>Payment & Agreement</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          {latestAgreement ? (
+          {/*
+            These used to be one ternary chain, which meant the generate-link
+            form was unreachable the moment any agreement existed — so a
+            second term, a renewal or a price change could not be sent at all
+            from the console. They are separate blocks now: the agreement and
+            any live link are shown, and the form is always underneath them.
+          */}
+          {latestAgreement && (
             <Link
               href={`/agreement/${latestAgreement.id}`}
               className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-3 transition-colors hover:bg-secondary/40"
@@ -165,7 +172,9 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                 {latestAgreement.status === 'signed' ? 'Signed' : 'Pending'}
               </Badge>
             </Link>
-          ) : latestLink && latestLink.status === 'pending' ? (
+          )}
+
+          {latestLink && latestLink.status === 'pending' && (
             <div className="flex flex-col gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">Payment link sent</p>
@@ -184,8 +193,23 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                   </Button>
                 </form>
               )}
+
+              {/* A link he no longer wants live. Cancelling it stops it being
+                  payable and clears the way for a fresh one. */}
+              <form action={cancelPaymentLink}>
+                <input type="hidden" name="paymentLinkId" value={latestLink.id} />
+                <input type="hidden" name="clientId" value={client.userId} />
+                <button
+                  type="submit"
+                  className="readout self-start text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-destructive"
+                >
+                  Cancel this link
+                </button>
+              </form>
             </div>
-          ) : plans.length === 0 || templates.length === 0 ? (
+          )}
+
+          {plans.length === 0 || templates.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Set up at least one{' '}
               <Link href="/coach/payments" className="text-accent hover:underline">
