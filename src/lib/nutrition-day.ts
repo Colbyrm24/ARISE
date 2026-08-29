@@ -213,6 +213,23 @@ export function daySections(plan: PlanItem[], logs: LoggedEntry[]): DaySection[]
   }).filter((s) => s.planned.length > 0 || s.logged.length > 0);
 }
 
+/**
+ * The one meal to open on arrival.
+ *
+ * Three meals with seven options each is twenty-one rows, and a client who
+ * opens the app at 8am scrolls past all of them to find breakfast. So the
+ * screen answers "what do I eat right now" by opening the first meal that
+ * hasn't been eaten yet and leaving the rest as one line each — everything
+ * still one tap away, nothing stacked up in front of it.
+ *
+ * Deliberately not clock-based. A night-shift client eating breakfast at 4pm
+ * would have the app disagree with them about what meal it is, and being told
+ * you're wrong about your own day is worse than one extra tap.
+ */
+export function nextOpenSlot(sections: DaySection[]): MealSlot | null {
+  return sections.find((s) => s.logged.length === 0)?.slot ?? null;
+}
+
 /** Totals across everything logged, in one pass rather than four reduces. */
 export function eatenTotals(logs: LoggedEntry[]) {
   return logs.reduce(

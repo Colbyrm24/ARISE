@@ -4,6 +4,8 @@ import { renderAgreementTemplate, formatAgreementDate } from '@/lib/agreement';
 import { describePaymentStructure } from '@/lib/plans';
 import { checkoutRefs } from '@/lib/billing';
 import { recordSubscriptionFromCheckout } from '@/lib/subscription-sync';
+import { isEntitled } from '@/lib/auth';
+import { notifyCoach } from '@/lib/notifications';
 import type { PaymentLink, Plan, AgreementTemplate } from '@prisma/client';
 
 type PaymentLinkWithRelations = PaymentLink & { plan: Plan; template: AgreementTemplate };
@@ -106,11 +108,41 @@ async function createAgreementAndPayment(
         termMonths,
       },
     }),
+    /*
+      A renewal must not lock an active client out of the app.
+
+      createPaymentLink already refuses to demote an entitled client to
+      payment_pending, and the note above that guard calls the alternative "a
+      live trap". The trap had two doors: this writer set agreement_pending
+      unconditionally, so a client on month six who paid a second link lost
+      every screen until they signed again — and until the fix on /welcome
+      they had no way to reach the new agreement at all.
+
+      A client who is already entitled keeps their access and signs when they
+      get to it. Only somebody who has not yet been let in is moved to
+      agreement_pending.
+    */
     prisma.client.update({
       where: { userId: paymentLink.clientId },
-      data: { status: 'agreement_pending', startDate: paymentLink.startDate },
+      data: {
+        ...(isEntitled(client?.status) ? {} : { status: 'agreement_pending' as const }),
+        startDate: paymentLink.startDate,
+      },
     }),
   ]);
+
+  /*
+    Tell the coach the money arrived.
+
+    Signing up notified, signing notified, finishing intake notified, a failed
+    payment notified — the one event that was silent was a payment landing.
+    So a client could pay and sit unsigned with nothing anywhere saying so.
+  */
+  await notifyCoach(
+    paymentLink.clientId,
+    'account',
+    `paid ${formattedPrice} (${paymentStructure}) — the agreement is waiting on their signature.`
+  );
 
   return agreement;
 }

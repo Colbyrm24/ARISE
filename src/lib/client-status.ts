@@ -72,15 +72,18 @@ export const STATUS_WAITING: Partial<Record<ClientStatus, { title: string; body:
   },
   payment_pending: {
     title: 'Payment link sent',
-    body: 'Check your email for the link your coach sent. Everything opens up the moment it goes through.',
+    body: 'Your coach has sent you a payment link. Everything opens up the moment it goes through — message them below if it never arrived.',
   },
   paid: {
     title: 'Payment received',
     body: 'Your coaching agreement is on its way. Once you have signed it, the app opens up.',
   },
   agreement_pending: {
+    // No promise of an email. There is no email in this product, and telling
+    // somebody who has already paid to go and check one is how they end up
+    // stranded with their money spent. The agreement is linked on /welcome.
     title: 'One signature to go',
-    body: 'Your coaching agreement is waiting to be signed — the link is in your email. Everything opens up once it is done.',
+    body: 'Your payment went through. Read and sign your agreement below and the app opens up.',
   },
   cancelled: {
     title: 'Coaching ended',
