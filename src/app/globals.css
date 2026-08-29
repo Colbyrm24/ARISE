@@ -97,8 +97,28 @@
     still glows, and sign-in still pools light up from the floor in its own
     layout. That light now has somewhere dark to land.
   */
+  /*
+    Vertical scrolling only, forever.
+
+    The grain overlay above is the bug that made this necessary, but it is
+    not the last element that will ever be a few pixels too wide — one long
+    unbroken word, one flex row that refuses to shrink, and the whole app
+    rocks sideways again. So the rule is stated once, here.
+
+    `clip` rather than `hidden` on purpose: `overflow: hidden` on html/body
+    turns them into scroll containers, which silently kills every
+    `position: sticky` descendant in the app. `clip` cuts the overflow off
+    without creating a scrollport, so sticky headers keep working.
+  */
+  html,
+  body {
+    overflow-x: clip;
+  }
   body {
     @apply bg-background text-foreground antialiased;
+    /* A pasted URL or a 40-character food name can't push the page wider
+       than the phone it's being read on. */
+    overflow-wrap: break-word;
   }
   h1, h2, h3, h4 {
     @apply tracking-tight;
@@ -139,12 +159,23 @@
   The grain stays. It's what stops a large flat near-black fill reading as
   "rendered" rather than as a surface, and it carries no pattern of its own.
 */
+/*
+  This used to be `inset: -50%`, which made the grain layer twice as wide as
+  the screen and hung half a viewport off each side. A fixed element sticking
+  out past the right edge still counts as scrollable width, so every page in
+  the app — client and coach — could be dragged sideways by half a screen and
+  sprang back when you let go. On a desktop it hid behind the scrollbar. On a
+  phone it was the whole app rocking side to side under your thumb.
+
+  `inset: 0` covers the viewport exactly, which is all a fixed overlay ever
+  needed. The grain is unchanged; it just stops inventing a second screen.
+*/
 body::before {
   content: '';
   position: fixed;
   z-index: 60;
   pointer-events: none;
-  inset: -50%;
+  inset: 0;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='220' height='220' filter='url(%23n)' opacity='0.42'/></svg>");
   opacity: 0.16;
   mix-blend-mode: overlay;
