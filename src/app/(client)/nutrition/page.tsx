@@ -14,6 +14,7 @@ import {
   daySections,
   eatenTotals,
   fillPercent,
+  formatRange,
   headline,
   loggedNameSet,
   type LoggedEntry,
@@ -270,8 +271,15 @@ export default async function NutritionPage({
         The plan and the log used to be two separate cards, which left the
         client doing the join in their head at every meal — scroll up to see
         what was planned, scroll down to see whether it had been logged. Here
-        Breakfast is a heading with both underneath it: what's in, then what's
-        still to come.
+        Breakfast is a heading with both underneath it: the choices, then what
+        you actually had.
+
+        A plan line is a CHOICE. Seven breakfasts under Breakfast means seven
+        things you could have this morning, one of which you will — reading
+        them as a stack of courses is what made a client's screen announce
+        18,485 calories. So an uneaten meal reads "pick one", and the moment
+        something is logged the rest fold away behind a swap link instead of
+        sitting there looking like homework.
       */}
       <SystemWindow title="Your day" meta={plan ? plan.name : undefined}>
         <SystemWindowContent className="flex flex-col gap-5 pt-4">
@@ -299,7 +307,7 @@ export default async function NutritionPage({
                     <span className="readout text-[10px] text-muted-foreground">
                       {section.calories > 0
                         ? `${section.calories.toLocaleString('en-US')} cal · ${section.protein}p`
-                        : `${section.plannedCalories.toLocaleString('en-US')} cal planned`}
+                        : `${formatRange(section.plannedCalories)} cal`}
                     </span>
                   </div>
 
@@ -344,17 +352,37 @@ export default async function NutritionPage({
                   })}
 
                   {/*
-                    Planned lines that haven't been eaten. Ones that have are
-                    not repeated here — they're already above, logged, which is
-                    the same information said once instead of twice.
+                    The choices. Ones already eaten aren't repeated — they're
+                    above, logged, which is the same fact said once instead of
+                    twice.
+
+                    Once anything is logged for this meal the choices collapse.
+                    A client who has had breakfast does not need seven
+                    breakfasts on their screen, but a client adding a second
+                    thing to the same meal still needs to reach them, so it's a
+                    fold rather than a deletion.
                   */}
                   {toEat.length > 0 && (
-                    <div className="mt-1 flex flex-col">
-                      {section.logged.length > 0 && (
-                        <span className="readout pt-1 text-[10px] uppercase text-muted-foreground">
-                          Still to eat
+                    <details
+                      open={section.logged.length === 0}
+                      className="group/opts mt-1 flex flex-col"
+                    >
+                      <summary className="flex cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden">
+                        <span className="readout text-[10px] uppercase text-muted-foreground">
+                          {section.logged.length === 0
+                            ? toEat.length === 1
+                              ? 'Planned'
+                              : `Pick one · ${toEat.length} options`
+                            : `${toEat.length} other ${toEat.length === 1 ? 'option' : 'options'}`}
                         </span>
-                      )}
+                        {section.logged.length > 0 && (
+                          <ChevronDown
+                            size={12}
+                            aria-hidden
+                            className="text-muted-foreground transition-transform duration-200 group-open/opts:rotate-180"
+                          />
+                        )}
+                      </summary>
                       {toEat.map((item) => (
                         <div key={item.id} className="flex items-center gap-3 py-2.5">
                           <div className="min-w-0 flex-1">
@@ -386,18 +414,21 @@ export default async function NutritionPage({
                               type="submit"
                               className="readout border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent focus-visible:border-accent focus-visible:outline-none"
                             >
-                              Log
+                              {/* Not "Log" — this is a choice being made, and
+                                  "had this" is the sentence the client is
+                                  actually saying when they tap it. */}
+                              Had this
                             </button>
                           </form>
                         </div>
                       ))}
-                    </div>
+                    </details>
                   )}
 
-                  {/* Every planned line for this meal is in. Say so once. */}
-                  {section.planned.length > 0 && toEat.length === 0 && (
+                  {/* Nothing left to choose from and something is in. */}
+                  {section.planned.length > 0 && toEat.length === 0 && section.logged.length > 0 && (
                     <p className="readout flex items-center gap-1.5 pt-2 text-[10px] uppercase text-success">
-                      <Check size={12} /> Meal complete
+                      <Check size={12} /> That&apos;s the meal in
                     </p>
                   )}
                 </div>

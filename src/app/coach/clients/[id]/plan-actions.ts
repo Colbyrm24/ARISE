@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
-import { assignWeekPlan } from '@/lib/recipe-seed';
+import { assignOptionPlan } from '@/lib/recipe-seed';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { isMealSlot } from '@/lib/meal-plans';
 import { notify } from '@/lib/notifications';
@@ -188,18 +188,18 @@ export async function retirePlan(formData: FormData) {
 }
 
 /**
- * Drops the seven-day plan onto this client in one press.
+ * Drops the standard plan onto this client in one press.
  *
- * The long way round — twenty-one lines typed in by hand — is still there
- * above. This is the same thing for the common case, where the answer is "put
- * them on the standard plan and adjust it after".
+ * The long way round — every option typed in by hand — is still there above.
+ * This is the same thing for the common case, where the answer is "put them
+ * on the standard plan and adjust it after".
  */
-export async function assignStandardWeek(formData: FormData) {
+export async function assignStandardPlan(formData: FormData) {
   const coach = await requireCoach();
   const clientId = formData.get('clientId') as string | null;
   if (!clientId) return;
   if (!(await coachOwnsClient(coach.id, clientId))) return;
 
-  await assignWeekPlan(coach.id, clientId);
+  await assignOptionPlan(coach.id, clientId);
   revalidatePath(`/coach/clients/${clientId}`);
 }

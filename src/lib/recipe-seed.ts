@@ -253,7 +253,7 @@ export const RECIPES: SeedRecipe[] = [
   },
 ];
 
-export const PLAN_NAME = '7-Day Plan';
+export const PLAN_NAME = 'Your Meals';
 
 /** Totals per day, so the plan screen can say what it adds up to. */
 export function dayTotals(day: number) {
@@ -307,14 +307,20 @@ export async function seedRecipeLibrary(coachId: string) {
 }
 
 /**
- * Builds the seven-day plan onto one client and makes it their active one.
+ * Puts a client on the standard plan and makes it their active one.
+ *
+ * Twenty-one lines, but not twenty-one meals: three meals with seven options
+ * under each, and the client picks one of every meal. That distinction was
+ * only ever implied by this function's old name, and both screens that read
+ * the result added the twenty-one lines together — which is how a normal plan
+ * came to announce 18,485 calories.
  *
  * Every line carries its own macros rather than pointing at the recipe for
  * them, so editing a recipe in November cannot rewrite what someone was told
  * to eat in September. recipeId still rides along so the client can open the
  * full method from the plan.
  */
-export async function assignWeekPlan(coachId: string, clientId: string) {
+export async function assignOptionPlan(coachId: string, clientId: string) {
   const { byTitle } = await seedRecipeLibrary(coachId);
 
   // One active plan at a time, or the client's screen has to guess.
@@ -325,7 +331,7 @@ export async function assignWeekPlan(coachId: string, clientId: string) {
       clientId,
       coachId,
       name: PLAN_NAME,
-      note: 'Seven days, three meals a day, about 2,600 calories and 190g of protein.',
+      note: 'Seven ways to do each meal. Pick one from every meal and the day lands around 2,600 calories and 190g of protein.',
       active: true,
     },
   });
@@ -334,9 +340,10 @@ export async function assignWeekPlan(coachId: string, clientId: string) {
     data: RECIPES.map((r, i) => ({
       planId: plan.id,
       meal: r.meal,
-      // Ordered day-major so the plan reads Monday breakfast, Monday lunch,
-      // Monday dinner rather than all seven breakfasts in a row.
-      position: (r.day - 1) * 3 + { breakfast: 0, lunch: 1, dinner: 2 }[r.meal],
+      // Grouped by meal, so the options under Breakfast read in a stable
+      // order. `day` survives only as that ordering — it is not a day any
+      // more, and nothing downstream should treat it as one.
+      position: { breakfast: 0, lunch: 1, dinner: 2 }[r.meal] * 100 + r.day,
       recipeId: byTitle.get(r.title) ?? null,
       name: r.title,
       quantity: 1,
@@ -344,7 +351,9 @@ export async function assignWeekPlan(coachId: string, clientId: string) {
       protein: r.protein,
       carbs: r.carbs,
       fat: r.fat,
-      note: `Day ${r.day}`,
+      // No "Day 3" note. It printed under the line on the client's screen as
+      // if it meant something, and under an options plan it means nothing.
+      note: null,
     })),
   });
 

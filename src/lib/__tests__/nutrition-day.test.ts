@@ -1,11 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  dayRange,
   daySections,
   eatenTotals,
   fillPercent,
+  formatRange,
   headline,
   loggedNameSet,
+  rangeOf,
+  rangeVerdict,
   slotOf,
   type LoggedEntry,
 } from '../nutrition-day';
@@ -89,7 +93,58 @@ test('a meal totals what was eaten, not what was planned', () => {
   assert.equal(lunch!.calories, 600);
   assert.equal(lunch!.protein, 46);
   // The plan's own number is kept alongside so the meal can be compared.
-  assert.equal(lunch!.plannedCalories, 700);
+  assert.deepEqual(lunch!.plannedCalories, { min: 700, max: 700 });
+});
+
+test('seven breakfasts on a plan are seven choices, not seven breakfasts', () => {
+  // The real shape of the seeded plan, and the reason a client's screen once
+  // read 18,485 cal: three meals, seven options each, all summed.
+  const [breakfast] = daySections(
+    [
+      planItem({ meal: 'breakfast', name: 'Pancakes', calories: 935 }),
+      planItem({ meal: 'breakfast', name: 'Steak burrito', calories: 950 }),
+      planItem({ meal: 'breakfast', name: 'Yogurt bowl', calories: 900 }),
+    ],
+    []
+  );
+  assert.deepEqual(breakfast!.plannedCalories, { min: 900, max: 950 });
+});
+
+test('a day is one pick per meal, floor to ceiling', () => {
+  const range = dayRange([
+    { items: [{ calories: 900, protein: 65, carbs: 105, fat: 20 }, { calories: 950, protein: 60, carbs: 78, fat: 40 }] },
+    { items: [{ calories: 910, protein: 70, carbs: 76, fat: 32 }, { calories: 970, protein: 68, carbs: 90, fat: 34 }] },
+    { items: [{ calories: 760, protein: 65, carbs: 58, fat: 26 }, { calories: 780, protein: 60, carbs: 52, fat: 34 }] },
+  ]);
+  // Not 5,270 — that is the sum of all six, which nobody eats.
+  assert.deepEqual(range.calories, { min: 2570, max: 2700 });
+  assert.deepEqual(range.protein, { min: 188, max: 200 });
+});
+
+test('an empty meal contributes nothing to the day', () => {
+  assert.deepEqual(rangeOf([]), { min: 0, max: 0 });
+  assert.deepEqual(dayRange([{ items: [] }]).calories, { min: 0, max: 0 });
+});
+
+test('a range with one value prints as one number', () => {
+  assert.equal(formatRange({ min: 2600, max: 2600 }), '2,600');
+  assert.equal(formatRange({ min: 2430, max: 2700 }), '2,430–2,700');
+});
+
+test('the verdict asks whether the target is reachable, not what the plan sums to', () => {
+  // 2,600 target sits inside 2,570–2,700, so some combination lands it.
+  assert.deepEqual(rangeVerdict({ min: 2570, max: 2700 }, 2600, 100), { kind: 'covers' });
+  // Every option is small: even the biggest day falls short.
+  assert.deepEqual(rangeVerdict({ min: 1600, max: 1800 }, 2600, 100), { kind: 'under', by: 800 });
+  // Every option is large: even the smallest day is over.
+  assert.deepEqual(rangeVerdict({ min: 3200, max: 3600 }, 2600, 100), { kind: 'over', by: 600 });
+});
+
+test('the tolerance stops a near miss being reported as a problem', () => {
+  // 80 calories short of target across the whole range — inside the noise of
+  // anybody's portioning, so it must not light up red.
+  assert.deepEqual(rangeVerdict({ min: 2480, max: 2520 }, 2600, 100), { kind: 'covers' });
+  assert.deepEqual(rangeVerdict({ min: 2400, max: 2450 }, 2600, 100), { kind: 'under', by: 150 });
 });
 
 test('a planned line counts as eaten when it was logged under any other name casing', () => {
