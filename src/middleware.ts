@@ -52,9 +52,56 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /*
+    The whole app used to go down when this one call was slow.
+
+    Middleware runs on every request, so a hanging getUser() is not a slow
+    page — it is a 504 on every page at once, which is exactly what ARISE did
+    four times in one day: MIDDLEWARE_INVOCATION_TIMEOUT everywhere, while
+    /api/health (excluded from the matcher) answered fine and Supabase itself
+    replied in under 140ms to anything asked directly.
+
+    So this call gets a deadline, and missing it fails OPEN rather than
+    hanging. That is safe here and only here: nothing above is a security
+    boundary. As the note at the top of this file says, role routing happens
+    one layer in — every page calls requireCoach()/requireClient() itself and
+    always did. Skipping the middleware costs a signed-out visitor a prettier
+    redirect, not access to anything.
+
+    Fail-closed would mean choosing to 504 the entire product rather than
+    lose the `?next=` parameter, which is the wrong trade.
+  */
+  const AUTH_DEADLINE_MS = 2500;
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
+  let authTimedOut = false;
+
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), AUTH_DEADLINE_MS)),
+    ]);
+    if (result === 'timeout') {
+      authTimedOut = true;
+    } else {
+      user = result.data.user;
+    }
+  } catch (err) {
+    // A thrown auth error is the same situation as a slow one: let the
+    // request through and let the page decide.
+    authTimedOut = true;
+    console.error('middleware auth check failed', {
+      pathname: request.nextUrl.pathname,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  if (authTimedOut) {
+    console.error('middleware auth check exceeded its deadline; passing through', {
+      pathname: request.nextUrl.pathname,
+      deadlineMs: AUTH_DEADLINE_MS,
+    });
+    return response;
+  }
 
   // Getting the user above may have refreshed an expired session and
   // queued fresh cookies onto `response` via the `set`/`remove` callbacks
