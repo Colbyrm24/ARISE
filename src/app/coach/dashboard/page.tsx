@@ -30,10 +30,24 @@ async function getDashboardCounts(coachId: string) {
   return { unreadMessages, newLeads, unsignedAgreements, failedPayments };
 }
 
+/*
+  Every card has to land somewhere that shows the people it counted.
+
+  "Agreements Waiting" and "New Leads" both pointed at pages that do not
+  list them — payments shows plans and templates, and the unfiltered roster
+  shows everybody. Clicking a number and being unable to find out who it
+  meant is worse than not having the number.
+
+  The roster already filters by status, so these are just the right URLs.
+*/
 const summaryCards = [
   { key: 'unreadMessages', label: 'Unread Messages', href: '/coach/inbox' },
-  { key: 'newLeads', label: 'New Leads', href: '/coach/clients' },
-  { key: 'unsignedAgreements', label: 'Agreements Waiting', href: '/coach/payments' },
+  { key: 'newLeads', label: 'New Leads', href: '/coach/clients?status=lead' },
+  {
+    key: 'unsignedAgreements',
+    label: 'Agreements Waiting',
+    href: '/coach/clients?status=agreement_pending',
+  },
   { key: 'failedPayments', label: 'Failed Payments', href: '/coach/payments' },
 ] as const;
 
