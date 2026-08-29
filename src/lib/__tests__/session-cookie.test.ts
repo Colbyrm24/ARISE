@@ -134,6 +134,34 @@ test('middleware never calls getUser() unconditionally', () => {
   assert.ok(guardLine < getUserLine, 'the needs-supabase check must come before getUser()');
 });
 
+test('a dead session is cleared rather than retried forever', () => {
+  /*
+    An expired token that will not refresh costs the full deadline on every
+    request, and the next request finds the same dead cookie and pays again.
+    Clearing it turns an endless loop into one sign-in. Only for `expired` —
+    signing somebody out because Supabase wobbled would be its own bug.
+  */
+  const source = readFileSync(join(process.cwd(), 'src/middleware.ts'), 'utf8');
+  const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+  assert.match(
+    withoutComments,
+    /state\.reason === 'expired'[\s\S]{0,200}clearedSession\(/,
+    'an expired-and-unrefreshable session must be cleared'
+  );
+  assert.match(
+    withoutComments,
+    /maxAge:\s*0/,
+    'clearing must actually expire the cookie, not just blank it'
+  );
+
+  assert.match(
+    withoutComments,
+    /startsWith\('sb-'\)/,
+    'every Supabase session cookie must be cleared, chunked ones included'
+  );
+});
+
 test('the refresh deadline leaves room for a refresh to actually land', () => {
   /*
     It was 2500ms, and a refresh took about 2500ms — so the response went out
