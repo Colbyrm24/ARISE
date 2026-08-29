@@ -187,7 +187,20 @@ export default async function NutritionPage({
       include: { recipe: true, food: true },
       orderBy: { createdAt: 'asc' },
     }),
-    prisma.recipe.findMany({ orderBy: { title: 'asc' } }),
+    /*
+      Six columns, not the whole recipe.
+
+      This list shows a title and a macro line, and nothing else — but it was
+      selecting every column, which on this model means the full method text,
+      the ingredients JSON and the tags, for every recipe there is. All of it
+      was fetched, serialised into the page and sent to a phone, so that a
+      client could read a name and four numbers. The method is on the recipe's
+      own page, which is where the link goes.
+    */
+    prisma.recipe.findMany({
+      select: { id: true, title: true, calories: true, protein: true, carbs: true, fat: true },
+      orderBy: { title: 'asc' },
+    }),
     /*
       Search wins over category when both are present. With no search term and
       no category we show a small slice rather than all 247 — a wall of food is
