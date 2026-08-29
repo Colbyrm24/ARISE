@@ -47,9 +47,16 @@ function readIngredients(json: unknown): string[] {
 }
 
 export default async function RecipePage({ params }: { params: { id: string } }) {
-  await requireEntitledClient();
-
-  const recipe = await prisma.recipe.findUnique({ where: { id: params.id } });
+  /*
+    The access check and the recipe at the same time. The check has to pass
+    before anything renders — and it does, because nothing is returned until
+    both settle — but the recipe lookup never needed to wait for it. It only
+    needs the id in the URL.
+  */
+  const [, recipe] = await Promise.all([
+    requireEntitledClient(),
+    prisma.recipe.findUnique({ where: { id: params.id } }),
+  ]);
   if (!recipe) notFound();
 
   const ingredients = readIngredients(recipe.ingredientsJson);
