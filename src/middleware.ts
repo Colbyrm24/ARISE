@@ -22,6 +22,63 @@ import { sessionStateFrom } from '@/lib/session-cookie';
  * which are the real boundary anyway — every page re-checks identity on its
  * own and always did.
  */
+/*
+  Every signed-in-only path, so an expired session lands on login with the
+  destination remembered rather than dumping the person on /today. The four
+  at the end were missing, which is why a stale session on a check-in link
+  silently lost the link.
+*/
+const CLIENT_PREFIXES = [
+  '/today',
+  '/workouts',
+  '/nutrition',
+  '/messages',
+  '/profile',
+  '/ai',
+  '/onboarding',
+  '/book',
+  '/check-in',
+  '/progress',
+  '/notifications',
+];
+
+/** Every cookie Supabase keeps a session in, including the chunked ones. */
+function sessionCookieNames(request: NextRequest) {
+  return request.cookies
+    .getAll()
+    .map((c) => c.name)
+    .filter((name) => name.startsWith('sb-') && name.includes('-auth-token'));
+}
+
+/**
+ * Throw away a session that is over, and send the person somewhere useful.
+ *
+ * Used only when an expired token could not be refreshed. Clearing is the
+ * whole point: leaving the dead cookie in place means the next request
+ * repeats the same failed refresh, which is how one stale session turns into
+ * a permanently slow app.
+ */
+function clearedSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const protectedPath = pathname.startsWith('/coach') || CLIENT_PREFIXES.some((p) => pathname.startsWith(p));
+
+  let cleared: NextResponse;
+  if (protectedPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.search = '';
+    url.searchParams.set('next', pathname);
+    cleared = NextResponse.redirect(url);
+  } else {
+    cleared = NextResponse.next();
+  }
+
+  for (const name of sessionCookieNames(request)) {
+    cleared.cookies.set({ name, value: '', path: '/', maxAge: 0 });
+  }
+  return cleared;
+}
+
 export async function middleware(request: NextRequest) {
   // The path, forwarded so server components can read it. Next doesn't give
   // a page its own pathname, and auth.ts needs it to send somebody back where
@@ -118,19 +175,44 @@ export async function middleware(request: NextRequest) {
     }
 
     if (timedOut) {
-      /*
-        Fail OPEN, and only here. Nothing above is a security boundary: as
-        the note at the top says, role routing happens one layer in, and
-        every page calls requireCoach()/requireClient() against Supabase
-        itself. Letting the request through costs a signed-out visitor a
-        prettier redirect, not access to anything. Failing closed would mean
-        choosing to break the whole product to protect a `?next=` parameter.
-      */
-      console.error('middleware auth check exceeded its deadline; passing through', {
+      console.error('middleware auth check exceeded its deadline', {
         pathname: request.nextUrl.pathname,
         reason: state.reason,
         deadlineMs: AUTH_DEADLINE_MS,
       });
+
+      if (state.reason === 'expired') {
+        /*
+          Give up on a session that is already over, and say so.
+
+          An expired token that will not refresh is not a slow session, it is
+          a dead one — and carrying it costs eight seconds on every single
+          request, forever, because the next request finds the same dead
+          cookie and tries again. That is not theoretical: Supabase's
+          /auth/v1/token endpoint on this project stopped answering refresh
+          requests altogether (a call with a deliberately invalid token, made
+          straight from a browser, hung past 45 seconds), and one session sat
+          fifteen hours past expiry with every page load piling another
+          attempt onto the queue. The app was feeding the jam that was
+          breaking it.
+
+          So the cookie gets cleared. Signing in again costs one screen and
+          fixes it completely, and every request after that is fast. Only for
+          `expired`: an unreadable cookie or a wobble on a live session is
+          not proof the session is over, and signing someone out on a hiccup
+          is its own kind of broken.
+        */
+        return clearedSession(request);
+      }
+
+      /*
+        Otherwise fail OPEN, and only here. Nothing above is a security
+        boundary: as the note at the top says, role routing happens one layer
+        in, and every page calls requireCoach()/requireClient() against
+        Supabase itself. Letting the request through costs a signed-out
+        visitor a prettier redirect, not access to anything. Failing closed
+        would mean breaking the whole product to protect a `?next=` parameter.
+      */
       return response;
     }
   }
@@ -152,23 +234,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/signup');
   const isCoachRoute = pathname.startsWith('/coach');
-  // Every signed-in-only path, so an expired session lands on login with the
-  // destination remembered rather than dumping the person on /today. The four
-  // at the end were missing, which is why a stale session on a check-in link
-  // silently lost the link.
-  const isClientRoute = [
-    '/today',
-    '/workouts',
-    '/nutrition',
-    '/messages',
-    '/profile',
-    '/ai',
-    '/onboarding',
-    '/book',
-    '/check-in',
-    '/progress',
-    '/notifications',
-  ].some((p) => pathname.startsWith(p));
+  const isClientRoute = CLIENT_PREFIXES.some((p) => pathname.startsWith(p));
 
   // Not logged in, trying to reach a protected area -> send to login.
   if (!signedIn && (isCoachRoute || isClientRoute)) {
