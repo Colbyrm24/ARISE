@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { sessionStateFrom } from '@/lib/session-cookie';
 
 /**
  * Runs on every request.
@@ -53,54 +54,85 @@ export async function middleware(request: NextRequest) {
   );
 
   /*
-    The whole app used to go down when this one call was slow.
+    Almost every request answers this without touching the network.
 
-    Middleware runs on every request, so a hanging getUser() is not a slow
-    page — it is a 504 on every page at once, which is exactly what ARISE did
-    four times in one day: MIDDLEWARE_INVOCATION_TIMEOUT everywhere, while
-    /api/health (excluded from the matcher) answered fine and Supabase itself
-    replied in under 140ms to anything asked directly.
+    Middleware runs on every request, so what it costs, the whole app costs.
+    Asking Supabase "who is this?" every time was 2.4 seconds of a 2.56-second
+    page load — the same page with no cookies came back in 120ms — and it is
+    the entire reason ARISE felt slow. It also went down four times in one day
+    when that call hung: MIDDLEWARE_INVOCATION_TIMEOUT on every route at once,
+    while /api/health (excluded from the matcher) answered fine.
 
-    So this call gets a deadline, and missing it fails OPEN rather than
-    hanging. That is safe here and only here: nothing above is a security
-    boundary. As the note at the top of this file says, role routing happens
-    one layer in — every page calls requireCoach()/requireClient() itself and
-    always did. Skipping the middleware costs a signed-out visitor a prettier
-    redirect, not access to anything.
-
-    Fail-closed would mean choosing to 504 the entire product rather than
-    lose the `?next=` parameter, which is the wrong trade.
+    The token in the cookie says when it expires, in the clear. While it has
+    time left on it, that is all this file needs — see lib/session-cookie.ts
+    for why reading it is safe here and nowhere else. Supabase is asked only
+    when the token is actually expiring, which is roughly once an hour per
+    person instead of once per request.
   */
-  const AUTH_DEADLINE_MS = 2500;
+  const state = sessionStateFrom(
+    (name) => request.cookies.get(name)?.value,
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    Math.floor(Date.now() / 1000)
+  );
+
   let user: Awaited<ReturnType<typeof supabase.auth.getUser>>['data']['user'] = null;
-  let authTimedOut = false;
+  let signedIn = state.kind === 'live';
 
-  try {
-    const result = await Promise.race([
-      supabase.auth.getUser(),
-      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), AUTH_DEADLINE_MS)),
-    ]);
-    if (result === 'timeout') {
-      authTimedOut = true;
-    } else {
-      user = result.data.user;
+  if (state.kind === 'needs-supabase') {
+    /*
+      The refresh, and the deadline it gets.
+
+      This used to be 2500ms, which was almost exactly what a refresh took —
+      so the response went out a fraction before Supabase answered, the fresh
+      cookie set by the callbacks above landed on a response nobody would
+      ever see, and the token stayed expired. Which meant the next request
+      refreshed again. Colby's session sat fifteen hours past expiry while
+      Supabase logged a successful `token_refreshed` for every page he opened.
+
+      Now that this runs about once an hour rather than on every request, it
+      can afford to wait properly. Eight seconds is long enough for the
+      refresh to come back and its cookie to ride out on `response`, and far
+      short of the 25s ceiling that turns a slow middleware into a 504.
+    */
+    const AUTH_DEADLINE_MS = 8000;
+    let timedOut = false;
+
+    try {
+      const result = await Promise.race([
+        supabase.auth.getUser(),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), AUTH_DEADLINE_MS)),
+      ]);
+      if (result === 'timeout') {
+        timedOut = true;
+      } else {
+        user = result.data.user;
+        signedIn = Boolean(user);
+      }
+    } catch (err) {
+      timedOut = true;
+      console.error('middleware auth check failed', {
+        pathname: request.nextUrl.pathname,
+        reason: state.reason,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
-  } catch (err) {
-    // A thrown auth error is the same situation as a slow one: let the
-    // request through and let the page decide.
-    authTimedOut = true;
-    console.error('middleware auth check failed', {
-      pathname: request.nextUrl.pathname,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
 
-  if (authTimedOut) {
-    console.error('middleware auth check exceeded its deadline; passing through', {
-      pathname: request.nextUrl.pathname,
-      deadlineMs: AUTH_DEADLINE_MS,
-    });
-    return response;
+    if (timedOut) {
+      /*
+        Fail OPEN, and only here. Nothing above is a security boundary: as
+        the note at the top says, role routing happens one layer in, and
+        every page calls requireCoach()/requireClient() against Supabase
+        itself. Letting the request through costs a signed-out visitor a
+        prettier redirect, not access to anything. Failing closed would mean
+        choosing to break the whole product to protect a `?next=` parameter.
+      */
+      console.error('middleware auth check exceeded its deadline; passing through', {
+        pathname: request.nextUrl.pathname,
+        reason: state.reason,
+        deadlineMs: AUTH_DEADLINE_MS,
+      });
+      return response;
+    }
   }
 
   // Getting the user above may have refreshed an expired session and
@@ -139,7 +171,7 @@ export async function middleware(request: NextRequest) {
   ].some((p) => pathname.startsWith(p));
 
   // Not logged in, trying to reach a protected area -> send to login.
-  if (!user && (isCoachRoute || isClientRoute)) {
+  if (!signedIn && (isCoachRoute || isClientRoute)) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
@@ -148,7 +180,7 @@ export async function middleware(request: NextRequest) {
 
   // Logged in and sitting on an auth page -> hand off to the root, which can
   // read the real role from the database and route accordingly.
-  if (user && isAuthRoute) {
+  if (signedIn && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     url.search = '';
