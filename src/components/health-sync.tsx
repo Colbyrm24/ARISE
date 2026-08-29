@@ -68,8 +68,10 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
       )}
 
       {!hasToken && !token && (
-        <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
-          Sends your daily steps and weight straight over, so you stop typing them in.
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Your iPhone sends your steps and weight over every evening, so you stop typing them
+          in. Takes about three minutes to set up once, using a free app. Tap{' '}
+          <span className="text-foreground">Set up</span> and the instructions come with it.
         </p>
       )}
 
@@ -88,31 +90,85 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
             {token}
           </button>
 
+          {/*
+            Rewritten because nobody was ever going to do the old version.
+
+            It opened with "make a new shortcut", then "add Get Contents of
+            URL", then "add a header Authorization" — instructions for a
+            developer, given to somebody who hired a coach. The app below does
+            the same job with two fields to paste into and no shortcut to
+            build, and it was already the intended route; it just wasn't the
+            one on screen. The hand-built shortcut stays, second, for anyone
+            who would rather not install anything.
+          */}
           <details open={open} className="text-xs">
             <summary className="readout cursor-pointer text-[10px] uppercase tracking-wider text-muted-foreground">
-              How to set it up
+              How to set it up — about 3 minutes
             </summary>
-            <ol className="mt-2 flex list-decimal flex-col gap-1.5 pl-4 leading-relaxed text-muted-foreground">
-              <li>Open Shortcuts on your iPhone and make a new shortcut.</li>
+
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-accent">
+              The easy way
+            </p>
+            <ol className="mt-1.5 flex list-decimal flex-col gap-1.5 pl-4 leading-relaxed text-muted-foreground">
               <li>
-                Add <span className="text-foreground">Get Contents of URL</span> and point it at{' '}
-                <span className="readout break-all text-foreground">{origin}/api/health</span>.
+                On your iPhone, install <span className="text-foreground">Health Auto Export</span>{' '}
+                from the App Store. It&apos;s free for this.
               </li>
               <li>
-                Set the method to <span className="text-foreground">POST</span>, add a header{' '}
-                <span className="readout text-foreground">Authorization</span> with the value{' '}
-                <span className="readout break-all text-foreground">Bearer {token}</span>.
+                Open it, go to <span className="text-foreground">Automations</span>, and add one.
+                Choose <span className="text-foreground">REST API</span>.
               </li>
               <li>
-                Set the request body to JSON with{' '}
-                <span className="readout text-foreground">steps</span> and{' '}
-                <span className="readout text-foreground">weight</span>, filled from Health.
+                Paste this as the URL:
+                <button
+                  type="button"
+                  onClick={() => copy(`${origin}/api/health`)}
+                  className="readout mt-1 block w-full break-all border border-border bg-secondary/40 p-1.5 text-left text-[10px] text-foreground transition-colors hover:border-accent/60"
+                >
+                  {origin}/api/health
+                </button>
               </li>
               <li>
-                Under Automation, run it once a day — evening works best, since the step count is
-                finished by then.
+                Add one header. Name it <span className="readout text-foreground">Authorization</span>
+                , and paste this as the value:
+                <button
+                  type="button"
+                  onClick={() => copy(`Bearer ${token}`)}
+                  className="readout mt-1 block w-full break-all border border-border bg-secondary/40 p-1.5 text-left text-[10px] text-foreground transition-colors hover:border-accent/60"
+                >
+                  Bearer {token}
+                </button>
+              </li>
+              <li>
+                Pick <span className="text-foreground">Steps</span> and{' '}
+                <span className="text-foreground">Weight</span> as the data, set it to run{' '}
+                <span className="text-foreground">daily in the evening</span>, and turn the
+                automation on. Evening matters — the day&apos;s step count isn&apos;t finished
+                before then.
               </li>
             </ol>
+
+            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Or without installing anything
+            </p>
+            <ol className="mt-1.5 flex list-decimal flex-col gap-1.5 pl-4 leading-relaxed text-muted-foreground">
+              <li>Open the Shortcuts app and make a new shortcut.</li>
+              <li>
+                Add <span className="text-foreground">Get Contents of URL</span>, point it at the
+                URL above, set the method to <span className="text-foreground">POST</span> and add
+                the <span className="readout text-foreground">Authorization</span> header above.
+              </li>
+              <li>
+                Set the body to JSON with <span className="readout text-foreground">steps</span> and{' '}
+                <span className="readout text-foreground">weight</span>, filled from Health.
+              </li>
+              <li>Under Automation, run it once a day in the evening.</li>
+            </ol>
+
+            <p className="mt-3 leading-relaxed text-muted-foreground">
+              On Android, or would rather not bother? Typing your steps into the Today screen works
+              exactly the same — this only saves you the typing.
+            </p>
           </details>
 
           {copied && (
