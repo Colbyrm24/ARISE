@@ -85,6 +85,10 @@ export const STATUS_WAITING: Partial<Record<ClientStatus, { title: string; body:
     title: 'One signature to go',
     body: 'Your payment went through. Read and sign your agreement below and the app opens up.',
   },
+  paused: {
+    title: 'Coaching is on hold',
+    body: 'Your last payment did not go through, so things are paused rather than cancelled — nothing has been lost. Message your coach below and it goes straight back on.',
+  },
   cancelled: {
     title: 'Coaching ended',
     body: 'Your coaching has been cancelled. Message your coach if that is not right.',

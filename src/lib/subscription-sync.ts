@@ -385,7 +385,38 @@ export async function handleInvoicePaymentFailed(invoice: {
     data: { status: mergeStatus(sub.status, 'past_due') },
   });
 
+  /*
+    One declined charge does not lock anybody out.
+
+    Stripe retries a failed invoice several times over about two weeks, and
+    most first failures are an expired card or a bank being twitchy — not
+    somebody who has stopped paying. Locking a paying client out of their
+    training on the first retry is a worse outcome than a few free days, so
+    this notifies and nothing more. The lockout lives in
+    handleSubscriptionChanged, which fires once Stripe has actually given up.
+  */
   await notifyCoach(sub.clientId, 'A payment failed. Their card was declined.');
+}
+
+/**
+ * Put a client on hold because their billing stopped.
+ *
+ * Only ever moves somebody who is currently being coached. A client who is
+ * already `cancelled`, or who never got past `agreement_pending`, must not be
+ * dragged into `paused` by a late webhook — that would rewrite a status the
+ * coach set by hand, and in the agreement_pending case it would strand
+ * somebody mid-funnel under copy about a payment that never happened.
+ */
+async function pauseForBilling(clientId: string, reason: string) {
+  const client = await prisma.client.findUnique({
+    where: { userId: clientId },
+    select: { status: true },
+  });
+  if (!client || !['onboarding', 'active', 'ending_soon'].includes(client.status)) return false;
+
+  await prisma.client.update({ where: { userId: clientId }, data: { status: 'paused' } });
+  await notifyCoach(clientId, reason);
+  return true;
 }
 
 /** Stripe's own view of the subscription changed — status, or the period end. */
@@ -419,6 +450,28 @@ export async function handleSubscriptionChanged(subscription: {
         : sub.currentPeriodEnd,
     },
   });
+
+  /*
+    Billing has actually stopped — so does access.
+
+    Nothing in this file used to touch the client's own status, which meant a
+    subscription Stripe had cancelled, or one that had exhausted its retries,
+    left the client with the full paid product forever. The only thing that
+    ever ended access was the coach noticing and clicking a chip.
+
+    `unpaid` is Stripe's end state after every retry has failed; `canceled` is
+    the subscription being over. Both mean the money has stopped. A client
+    scheduled to end at period end is untouched — they paid for that period
+    and it isn't over yet.
+  */
+  if (subscription.status === 'canceled' || subscription.status === 'unpaid') {
+    await pauseForBilling(
+      sub.clientId,
+      subscription.status === 'unpaid'
+        ? 'Billing stopped after repeated failed payments, so their access is paused.'
+        : 'Their subscription ended at Stripe, so their access is paused.'
+    );
+  }
 }
 
 /**
