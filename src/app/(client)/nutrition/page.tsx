@@ -17,7 +17,9 @@ import {
   formatRange,
   headline,
   loggedNameSet,
+  nextOpenSlot,
   type LoggedEntry,
+  type PlanItem,
 } from '@/lib/nutrition-day';
 import { logMeal, logFood, logPlanItem, quickAddFood, removeMealLog } from './actions';
 
@@ -83,6 +85,50 @@ const REVIEW_NOTE: Record<string, { text: string; tone: string }> = {
   corrected: { text: 'Coach corrected', tone: 'text-success' },
   confirmed: { text: 'Coach confirmed', tone: 'text-success' },
 };
+
+/**
+ * One thing the client could eat for this meal.
+ *
+ * Pulled out of the page because it is now rendered from two places — inside
+ * an unopened meal, and under the already-eaten lines of a meal in progress.
+ */
+function PlanOption({ item }: { item: PlanItem }) {
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-muted-foreground">
+          {item.recipeId ? (
+            <Link
+              href={`/recipes/${item.recipeId}`}
+              className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
+            >
+              {item.name}
+            </Link>
+          ) : (
+            item.name
+          )}
+          {item.quantity !== 1 && (
+            <span className="readout ml-2 text-[10px] uppercase">×{item.quantity}</span>
+          )}
+        </p>
+        <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+          {item.calories} cal · {item.protein}p{item.note ? ` · ${item.note}` : ''}
+        </p>
+      </div>
+      <form action={logPlanItem} className="shrink-0">
+        <input type="hidden" name="itemId" value={item.id} />
+        <button
+          type="submit"
+          className="readout border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent focus-visible:border-accent focus-visible:outline-none"
+        >
+          {/* Not "Log" — this is a choice being made, and "had this" is the
+              sentence the client is actually saying when they tap it. */}
+          Had this
+        </button>
+      </form>
+    </div>
+  );
+}
 
 /**
  * A section that stays shut until somebody wants it.
@@ -180,6 +226,7 @@ export default async function NutritionPage({
   const eaten = eatenTotals(logs);
   const alreadyEaten = loggedNameSet(logs);
   const sections = daySections(plan?.items ?? [], logs);
+  const openSlot = nextOpenSlot(sections);
 
   const calorieGoal = target?.calories ?? null;
   const proteinGoal = target ? Math.round(Number(target.protein)) : null;
@@ -298,6 +345,57 @@ export default async function NutritionPage({
                 (i) => !alreadyEaten.has(i.name.trim().toLowerCase())
               );
 
+              /*
+                A meal nobody has eaten yet is ONE line until it's opened.
+
+                Three meals with seven options each put twenty-one rows between
+                the client and the bottom of the screen, and the twenty of them
+                they aren't going to eat are in the way of the one they are. So
+                an untouched meal collapses to its own heading, and the meal
+                they're actually about to eat — the first one with nothing
+                logged — is the one that starts open.
+
+                A meal with something logged never collapses: what you ate is
+                the record of the day and shouldn't need a tap to see.
+              */
+              if (section.logged.length === 0) {
+                return (
+                  <details
+                    key={section.slot}
+                    open={section.slot === openSlot}
+                    className="group/meal flex flex-col"
+                  >
+                    <summary className="flex cursor-pointer list-none items-baseline justify-between gap-3 border-b border-border/60 pb-1.5 [&::-webkit-details-marker]:hidden">
+                      <span className="readout flex items-baseline gap-2 text-[11px] uppercase tracking-wider text-foreground">
+                        {section.slot}
+                        {toEat.length > 1 && (
+                          <span className="normal-case tracking-normal text-muted-foreground">
+                            {toEat.length} options
+                          </span>
+                        )}
+                        <ChevronDown
+                          size={12}
+                          aria-hidden
+                          className="self-center text-muted-foreground transition-transform duration-200 group-open/meal:rotate-180"
+                        />
+                      </span>
+                      <span className="readout text-[10px] text-muted-foreground">
+                        {formatRange(section.plannedCalories)} cal
+                      </span>
+                    </summary>
+
+                    {toEat.length > 1 && (
+                      <span className="readout pt-2 text-[10px] uppercase text-muted-foreground">
+                        Pick one
+                      </span>
+                    )}
+                    {toEat.map((item) => (
+                      <PlanOption key={item.id} item={item} />
+                    ))}
+                  </details>
+                );
+              }
+
               return (
                 <div key={section.slot} className="flex flex-col">
                   <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-1.5">
@@ -305,9 +403,7 @@ export default async function NutritionPage({
                       {section.slot}
                     </span>
                     <span className="readout text-[10px] text-muted-foreground">
-                      {section.calories > 0
-                        ? `${section.calories.toLocaleString('en-US')} cal · ${section.protein}p`
-                        : `${formatRange(section.plannedCalories)} cal`}
+                      {section.calories.toLocaleString('en-US')} cal · {section.protein}p
                     </span>
                   </div>
 
@@ -352,81 +448,31 @@ export default async function NutritionPage({
                   })}
 
                   {/*
-                    The choices. Ones already eaten aren't repeated — they're
-                    above, logged, which is the same fact said once instead of
-                    twice.
-
-                    Once anything is logged for this meal the choices collapse.
-                    A client who has had breakfast does not need seven
-                    breakfasts on their screen, but a client adding a second
-                    thing to the same meal still needs to reach them, so it's a
-                    fold rather than a deletion.
+                    What's left of the choices, shut. Somebody who has eaten
+                    breakfast doesn't need six more breakfasts on screen, but
+                    somebody adding a second thing to the same meal still needs
+                    to reach them — so it folds rather than disappearing.
                   */}
                   {toEat.length > 0 && (
-                    <details
-                      open={section.logged.length === 0}
-                      className="group/opts mt-1 flex flex-col"
-                    >
+                    <details className="group/opts mt-1 flex flex-col">
                       <summary className="flex cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden">
                         <span className="readout text-[10px] uppercase text-muted-foreground">
-                          {section.logged.length === 0
-                            ? toEat.length === 1
-                              ? 'Planned'
-                              : `Pick one · ${toEat.length} options`
-                            : `${toEat.length} other ${toEat.length === 1 ? 'option' : 'options'}`}
+                          {toEat.length} other {toEat.length === 1 ? 'option' : 'options'}
                         </span>
-                        {section.logged.length > 0 && (
-                          <ChevronDown
-                            size={12}
-                            aria-hidden
-                            className="text-muted-foreground transition-transform duration-200 group-open/opts:rotate-180"
-                          />
-                        )}
+                        <ChevronDown
+                          size={12}
+                          aria-hidden
+                          className="text-muted-foreground transition-transform duration-200 group-open/opts:rotate-180"
+                        />
                       </summary>
                       {toEat.map((item) => (
-                        <div key={item.id} className="flex items-center gap-3 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm text-muted-foreground">
-                              {item.recipeId ? (
-                                <Link
-                                  href={`/recipes/${item.recipeId}`}
-                                  className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
-                                >
-                                  {item.name}
-                                </Link>
-                              ) : (
-                                item.name
-                              )}
-                              {item.quantity !== 1 && (
-                                <span className="readout ml-2 text-[10px] uppercase">
-                                  ×{item.quantity}
-                                </span>
-                              )}
-                            </p>
-                            <p className="readout mt-0.5 text-[10px] text-muted-foreground">
-                              {item.calories} cal · {item.protein}p
-                              {item.note ? ` · ${item.note}` : ''}
-                            </p>
-                          </div>
-                          <form action={logPlanItem} className="shrink-0">
-                            <input type="hidden" name="itemId" value={item.id} />
-                            <button
-                              type="submit"
-                              className="readout border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent focus-visible:border-accent focus-visible:outline-none"
-                            >
-                              {/* Not "Log" — this is a choice being made, and
-                                  "had this" is the sentence the client is
-                                  actually saying when they tap it. */}
-                              Had this
-                            </button>
-                          </form>
-                        </div>
+                        <PlanOption key={item.id} item={item} />
                       ))}
                     </details>
                   )}
 
                   {/* Nothing left to choose from and something is in. */}
-                  {section.planned.length > 0 && toEat.length === 0 && section.logged.length > 0 && (
+                  {section.planned.length > 0 && toEat.length === 0 && (
                     <p className="readout flex items-center gap-1.5 pt-2 text-[10px] uppercase text-success">
                       <Check size={12} /> That&apos;s the meal in
                     </p>
