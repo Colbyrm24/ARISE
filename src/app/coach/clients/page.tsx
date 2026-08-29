@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
 import { getSegments } from '@/lib/console';
+import { InvitePanel } from '@/components/coach/invite-panel';
 import type { ClientStatus } from '@prisma/client';
 
 function initials(name: string | null | undefined, email: string) {
@@ -101,6 +102,10 @@ export default async function CoachClientsPage({
           </p>
         )}
       </header>
+
+      {/* The start of the funnel, above the roster, because adding somebody
+          is the thing he comes here to do that he could not do at all. */}
+      <InvitePanel coachId={coach.id} />
 
       <form className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}

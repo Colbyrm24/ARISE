@@ -50,6 +50,7 @@ model User {
   recipesCreated         Recipe[]                    @relation("RecipeCoach")
   cardioTypes            CardioType[]                @relation("CardioCoach")
   autoMessages           AutoMessage[]               @relation("AutoMessageCoach")
+  invitesCreated         ClientInvite[]              @relation("CoachInvites")
 
   @@map("users")
 }
@@ -251,6 +252,7 @@ model Plan {
   subscriptions Subscription[]
   agreements    Agreement[]
   paymentLinks  PaymentLink[]
+  invites       ClientInvite[]
 
   @@map("plans")
 }
@@ -322,6 +324,42 @@ model PaymentLink {
   @@map("payment_links")
 }
 
+// An invitation for somebody who is not a client yet.
+//
+// The funnel used to start with the client finding /signup on their own,
+// which meant the coach could not begin anything: no client row, so no
+// payment link, so nothing to send. This is the missing first step. The
+// coach writes the terms once, gets a single link, and texts it. Everything
+// after that — account, payment, agreement — runs off this row without him
+// touching it again.
+//
+// The overrides mirror PaymentLink's on purpose: they are the couple of
+// variables he tweaks per person, because real clients are on payment
+// timelines that no fixed plan describes.
+model ClientInvite {
+  id                       String            @id @default(uuid())
+  token                    String            @unique
+  coachId                  String            @map("coach_id")
+  planId                   String            @map("plan_id")
+  agreementTemplateId      String            @map("agreement_template_id")
+  name                     String? // prefills the signup form so he can say who it is for
+  priceOverride            Decimal?          @map("price_override") @db.Decimal(10, 2)
+  numberOfPaymentsOverride Int?              @map("number_of_payments_override")
+  termMonthsOverride       Int?              @map("term_months_override")
+  startDate                DateTime          @map("start_date") @db.Date
+  usedAt                   DateTime?         @map("used_at")
+  usedBy                   String?           @map("used_by") // the client id that consumed it
+  createdAt                DateTime          @default(now()) @map("created_at")
+  deletedAt                DateTime?         @map("deleted_at")
+
+  coach    User              @relation("CoachInvites", fields: [coachId], references: [id])
+  plan     Plan              @relation(fields: [planId], references: [id])
+  template AgreementTemplate @relation(fields: [agreementTemplateId], references: [id])
+
+  @@index([coachId])
+  @@map("client_invites")
+}
+
 model Payment {
   id                String              @id @default(uuid())
   clientId          String              @map("client_id")
@@ -358,6 +396,7 @@ model AgreementTemplate {
 
   agreements   Agreement[]
   paymentLinks PaymentLink[]
+  invites      ClientInvite[]
 
   @@map("agreement_templates")
 }

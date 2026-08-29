@@ -61,8 +61,14 @@ function toLogin(): never {
  * this gate the entire paid product — programs, nutrition, the AI coach,
  * booking — was reachable by anyone who created an account, because the
  * client layout only ever checked role.
+ *
+ * `paused` is deliberately NOT in here. It used to be, which meant the one
+ * status the billing code reaches for when a card dies still handed over the
+ * whole product. Pausing somebody now actually pauses them — they land on
+ * /welcome with a line telling them to sort payment out, and one click in the
+ * console puts them back. Nothing is deleted either way.
  */
-const ENTITLED = new Set(['onboarding', 'active', 'paused', 'ending_soon', 'completed']);
+const ENTITLED = new Set(['onboarding', 'active', 'ending_soon', 'completed']);
 
 export function isEntitled(status: string | null | undefined) {
   return Boolean(status && ENTITLED.has(status));

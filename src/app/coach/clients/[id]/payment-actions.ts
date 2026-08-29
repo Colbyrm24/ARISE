@@ -5,16 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { requireCoach, isEntitled } from '@/lib/auth';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { stripe } from '@/lib/stripe';
-import { getSiteUrl } from '@/lib/site-url';
+import { appliedPrice, createStripePaymentLink } from '@/lib/payment-link';
 import { finalizeManualPaymentLink } from '@/lib/payment-finalize';
 import { parsePrice, parseCount } from '@/lib/billing';
 import type { PaymentFrequency, PaymentProviderType } from '@prisma/client';
-
-const FREQUENCY_TO_INTERVAL: Record<Exclude<PaymentFrequency, 'one_time'>, { interval: 'week' | 'month'; interval_count: number }> = {
-  weekly: { interval: 'week', interval_count: 1 },
-  biweekly: { interval: 'week', interval_count: 2 },
-  monthly: { interval: 'month', interval_count: 1 },
-};
 
 /**
  * Generates the payment link a coach sends a client: creates a Stripe
@@ -58,132 +52,30 @@ export async function createPaymentLink(formData: FormData) {
   // stored on the link rather than living only in Stripe's metadata.
   const numberOfPaymentsOverride = parseCount(numberOfPaymentsOverrideRaw);
   /*
-    A plan backed by a real Stripe price cannot be overridden here.
-
-    Stripe charges whatever that price says. If the override were honoured,
-    the agreement would render "$450.00, billed monthly, ongoing" over a
-    signature line while Stripe quietly took $300 forever — a signed document
-    disagreeing with the money. So the box is ignored for these plans, and the
-    figure that reaches both the checkout and the contract is Stripe's.
-
-    Change the amount in Stripe (or point the client at a different price) and
-    press Sync on the payments screen.
+    The rule about Stripe-priced plans ignoring the override lives with the
+    money, in @/lib/payment-link. This is only the sanity check that we have
+    a number worth charging at all.
   */
-  const usesStripePrice = provider === 'stripe' && Boolean(plan.stripePriceId);
-  const appliedPriceOverride = usesStripePrice ? null : priceOverride;
-
-  const effectivePrice = appliedPriceOverride ?? Number(plan.price);
-  if (!Number.isFinite(effectivePrice) || effectivePrice <= 0) return;
+  const { effective } = appliedPrice(plan, priceOverride);
+  if (provider === 'stripe' && (!Number.isFinite(effective) || effective <= 0)) return;
 
   if (provider === 'stripe') {
-    const origin = getSiteUrl();
-    const isRecurring = plan.billingType !== 'one_time' && plan.paymentFrequency && plan.paymentFrequency !== 'one_time';
-    const successUrl = `${origin}/agreement/complete?session_id={CHECKOUT_SESSION_ID}`;
-
-    // Informational only on Stripe's side. The count that actually stops a
-    // fixed plan lives on the PaymentLink and is enforced from the invoice
-    // webhooks by lib/subscription-sync.ts.
-    const agreedPayments = String(numberOfPaymentsOverride ?? plan.numberOfPayments ?? '');
-    const fixedPlanMetadata =
-      isRecurring && plan.billingType === 'payment_plan'
-        ? { subscription_data: { metadata: { numberOfPayments: agreedPayments } } }
-        : {};
-
-    let checkoutUrl: string;
-    let providerRef: string;
-
-    if (plan.stripePriceId) {
-      /*
-        A Payment Link, not a Checkout Session.
-
-        A Checkout Session expires 24 hours after it is created — Stripe's
-        limit, not a setting — and nothing here marked one stale. So a link
-        sent on a Monday and opened on a Wednesday showed the client a Stripe
-        error page, while the coach's screen still read "Payment link sent"
-        with a copy button next to a dead URL.
-
-        A Payment Link does not expire. It is restricted to a single
-        completed checkout instead, so it stays good until the person it was
-        sent to actually uses it, and cannot be forwarded around and paid
-        twice. This path needs a real Price, which is exactly what an
-        imported plan has.
-      */
-      let link;
-      try {
-        link = await stripe.paymentLinks.create({
-          line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-          after_completion: { type: 'redirect', redirect: { url: successUrl } },
-          restrictions: { completed_sessions: { limit: 1 } },
-          metadata: { clientId, planId },
-          ...fixedPlanMetadata,
-        });
-      } catch (err) {
-        console.error('Stripe refused to create a payment link', {
-          clientId,
-          planId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return;
-      }
-      checkoutUrl = link.url;
-      providerRef = link.id;
-    } else {
-      /*
-        A plan priced by hand in ARISE has no Price at Stripe to point a
-        Payment Link at, so it still goes through a Checkout Session and
-        still expires after 24 hours. Importing the price from Stripe on the
-        payments screen is what upgrades a plan to a link that keeps.
-      */
-      let session;
-      try {
-        session = await stripe.checkout.sessions.create({
-          mode: isRecurring ? 'subscription' : 'payment',
-          line_items: [
-            {
-              price_data: {
-                currency: 'usd',
-                unit_amount: Math.round(effectivePrice * 100),
-                product_data: { name: plan.name },
-                ...(isRecurring
-                  ? { recurring: FREQUENCY_TO_INTERVAL[plan.paymentFrequency as Exclude<PaymentFrequency, 'one_time'>] }
-                  : {}),
-              },
-              quantity: 1,
-            },
-          ],
-          ...fixedPlanMetadata,
-          success_url: successUrl,
-          cancel_url: `${origin}/today`,
-          metadata: { clientId, planId },
-        });
-      } catch (err) {
-        console.error('Stripe refused to create a checkout session', {
-          clientId,
-          planId,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        return;
-      }
-
-      if (!session.url) return;
-      checkoutUrl = session.url;
-      providerRef = session.id;
-    }
-
-    await prisma.paymentLink.create({
-      data: {
-        clientId,
-        planId,
-        agreementTemplateId,
-        provider,
-        priceOverride: appliedPriceOverride,
-        termMonthsOverride,
-        numberOfPaymentsOverride,
-        startDate,
-        checkoutUrl,
-        providerRef,
-      },
+    /*
+      The Stripe half lives in @/lib/payment-link, because the join link
+      needs the identical thing. Two copies of "create the payment" would
+      eventually drift, and the drift would be one of them taking money
+      without writing the row that turns it into an agreement.
+    */
+    const link = await createStripePaymentLink({
+      clientId,
+      plan,
+      agreementTemplateId,
+      startDate,
+      priceOverride,
+      termMonthsOverride,
+      numberOfPaymentsOverride,
     });
+    if (!link) return;
   } else {
     // FanBasis: no live API integration yet, so the coach pastes the
     // checkout link they generated directly in FanBasis. ARISE still
@@ -231,6 +123,56 @@ export async function createPaymentLink(formData: FormData) {
       data: { status: 'payment_pending' },
     });
   }
+
+  revalidatePath(`/coach/clients/${clientId}`);
+}
+
+/**
+ * Take a payment link out of circulation.
+ *
+ * There was no way to do this, and the gap showed: a link the coach had
+ * changed his mind about stayed payable forever, and because the account
+ * screen only ever showed the newest pending one, a stale link also blocked
+ * the view of anything he made afterwards. Two live links for one client is
+ * also two ways to be charged.
+ *
+ * Cancelled at Stripe as well as locally where we can. A Payment Link is
+ * deactivated; a Checkout Session is expired. Either can fail harmlessly —
+ * an already-dead session is the outcome we wanted — so a Stripe error never
+ * stops the local row being closed.
+ */
+export async function cancelPaymentLink(formData: FormData) {
+  const coach = await requireCoach();
+
+  const paymentLinkId = formData.get('paymentLinkId') as string | null;
+  const clientId = formData.get('clientId') as string | null;
+  if (!paymentLinkId || !clientId) return;
+
+  const link = await prisma.paymentLink.findFirst({
+    where: { id: paymentLinkId, clientId, status: 'pending' },
+  });
+  if (!link) return;
+  if (!(await coachOwnsClient(coach.id, link.clientId))) return;
+
+  if (link.provider === 'stripe' && link.providerRef) {
+    try {
+      if (link.providerRef.startsWith('plink_')) {
+        await stripe.paymentLinks.update(link.providerRef, { active: false });
+      } else if (link.providerRef.startsWith('cs_')) {
+        await stripe.checkout.sessions.expire(link.providerRef);
+      }
+    } catch (err) {
+      console.error('Could not cancel the link at Stripe', {
+        paymentLinkId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  await prisma.paymentLink.update({
+    where: { id: link.id },
+    data: { status: 'cancelled' },
+  });
 
   revalidatePath(`/coach/clients/${clientId}`);
 }
