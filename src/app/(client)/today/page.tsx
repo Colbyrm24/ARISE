@@ -131,24 +131,68 @@ export default async function TodayPage({
   const isToday = viewDate.getTime() === today.getTime();
   const isPast = viewDate.getTime() < today.getTime();
 
-  // What the program says this day is. Null when nobody has deployed one
-  // yet, in which case this whole block stays off the screen rather than
-  // showing an empty shell.
-  const scheduled = user ? await scheduledToday(user.id, viewDate) : null;
-
-  // What they have already logged against a minutes-based cardio day, so the
-  // row can show "done" instead of offering the form again.
-  const cardioLog =
-    user && scheduled?.cardioTypeId && scheduled.kind === 'cardio'
-      ? await prisma.cardioLog.findFirst({
-          where: { clientId: user.id, cardioTypeId: scheduled.cardioTypeId, date: viewDate },
-          select: { minutes: true },
-        })
-      : null;
-
   // The seven days around whichever one is open, for the strip at the top.
   const weekStart = startOfWeek(viewDate);
-  const weekItems = user ? await scheduleBetween(user.id, weekStart, addLocalDays(weekStart, 6)) : [];
+
+  /*
+    Everything this screen can ask for at once, asked for at once.
+
+    This was seven round trips in a row — the day's schedule, then a cardio
+    log, then the week's schedule, then nine queries together, then an unread
+    count — and because each waited on the one before it, the page cost the
+    sum of them instead of the longest. None of them needed anything from the
+    others; they were sequential only because they were written on separate
+    lines. This is the home screen of the app, opened first and opened most.
+
+    The two that genuinely do depend on something come after, in one second
+    wave: a cardio log needs to know the day is a cardio day, and a workout
+    log needs to know which workout is on.
+  */
+  const [
+    scheduled,
+    weekItems,
+    unreadUpdates,
+    goals,
+    goalLogs,
+    target,
+    nutritionLogs,
+    stepLog,
+    upcomingCalls,
+    latestMessage,
+    activeProgram,
+    latestWeight,
+  ] = await Promise.all([
+    // What the program says this day is. Null when nobody has deployed one
+    // yet, in which case that whole block stays off the screen rather than
+    // showing an empty shell.
+    scheduledToday(user.id, viewDate),
+    scheduleBetween(user.id, weekStart, addLocalDays(weekStart, 6)),
+    prisma.notification.count({ where: { userId: user.id, readAt: null } }),
+    prisma.dailyGoal.findMany({ where: { clientId: user.id, active: true } }),
+    prisma.dailyGoalLog.findMany({ where: { clientId: user.id, date: viewDate } }),
+    prisma.nutritionTarget.findFirst({
+      where: { clientId: user.id, effectiveDate: { lte: viewDate } },
+      orderBy: { effectiveDate: 'desc' },
+    }),
+    prisma.nutritionLog.findMany({ where: { clientId: user.id, date: viewDate } }),
+    prisma.stepLog.findUnique({
+      where: { clientId_date: { clientId: user.id, date: viewDate } },
+    }),
+    upcomingForClient(user.id),
+    prisma.message.findFirst({
+      where: { recipientId: user.id },
+      orderBy: { createdAt: 'desc' },
+      include: { sender: { include: { profile: true } } },
+    }),
+    prisma.clientProgram.findFirst({
+      where: { clientId: user.id, active: true },
+      include: { template: { include: { workouts: { orderBy: { dayOrder: 'asc' } } } } },
+    }),
+    prisma.weightLog.findFirst({
+      where: { clientId: user.id },
+      orderBy: { date: 'desc' },
+    }),
+  ]);
   /*
     Scheduled rows are stored at UTC midnight; the dates on this page are
     local midnight. Keyed off the UTC calendar date on one side and the
@@ -184,51 +228,7 @@ export default async function TodayPage({
     };
   });
 
-  // Everything below reads real data where the feature already exists.
-  // Where the feature is later in the roadmap (water, etc.), this shows
-  // an honest empty state instead of pretending.
-  const [
-    goals,
-    goalLogs,
-    target,
-    nutritionLogs,
-    stepLog,
-    upcomingCalls,
-    latestMessage,
-    activeProgram,
-    latestWeight,
-  ] = user
-    ? await Promise.all([
-        prisma.dailyGoal.findMany({ where: { clientId: user.id, active: true } }),
-        prisma.dailyGoalLog.findMany({ where: { clientId: user.id, date: viewDate } }),
-        prisma.nutritionTarget.findFirst({
-          where: { clientId: user.id, effectiveDate: { lte: viewDate } },
-          orderBy: { effectiveDate: 'desc' },
-        }),
-        prisma.nutritionLog.findMany({ where: { clientId: user.id, date: viewDate } }),
-        prisma.stepLog.findUnique({ where: { clientId_date: { clientId: user.id, date: viewDate } } }),
-        upcomingForClient(user.id),
-        prisma.message.findFirst({
-          where: { recipientId: user.id },
-          orderBy: { createdAt: 'desc' },
-          include: { sender: { include: { profile: true } } },
-        }),
-        prisma.clientProgram.findFirst({
-          where: { clientId: user.id, active: true },
-          include: { template: { include: { workouts: { orderBy: { dayOrder: 'asc' } } } } },
-        }),
-        prisma.weightLog.findFirst({
-          where: { clientId: user.id },
-          orderBy: { date: 'desc' },
-        }),
-      ])
-    : [[], [], null, [], null, [], null, null, null];
-
   const weighedInToday = latestWeight ? latestWeight.date.getTime() === viewDate.getTime() : false;
-
-  const unreadUpdates = user
-    ? await prisma.notification.count({ where: { userId: user.id, readAt: null } })
-    : 0;
 
   const caloriesEaten = nutritionLogs.reduce((sum, l) => sum + l.calories, 0);
   const proteinEaten = Math.round(nutritionLogs.reduce((sum, l) => sum + Number(l.protein), 0));
@@ -242,9 +242,23 @@ export default async function TodayPage({
     : 0;
   const todaysWorkout = workouts.length > 0 ? workouts[daysSinceStart % workouts.length] : null;
 
-  const todaysLog =
-    user && todaysWorkout
-      ? await prisma.workoutLog.findFirst({
+  /*
+    The second and last wave: the two reads that genuinely had to wait.
+    A cardio log needs to know the day is a cardio day, and a workout log
+    needs to know which workout is on — but neither needs the other, so
+    they go together.
+  */
+  const [cardioLog, todaysLog] = await Promise.all([
+    // What they have already logged against a minutes-based cardio day, so
+    // the row can show "done" instead of offering the form again.
+    scheduled?.cardioTypeId && scheduled.kind === 'cardio'
+      ? prisma.cardioLog.findFirst({
+          where: { clientId: user.id, cardioTypeId: scheduled.cardioTypeId, date: viewDate },
+          select: { minutes: true },
+        })
+      : null,
+    todaysWorkout
+      ? prisma.workoutLog.findFirst({
           where: {
             clientId: user.id,
             workoutId: todaysWorkout.id,
@@ -261,7 +275,8 @@ export default async function TodayPage({
           },
           orderBy: { startedAt: 'desc' },
         })
-      : null;
+      : null,
+  ]);
 
   const workoutDone = Boolean(todaysLog?.completedAt);
 
