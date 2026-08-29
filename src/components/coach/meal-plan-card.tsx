@@ -3,22 +3,30 @@ import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getActivePlan, planVsTarget, MEAL_SLOTS } from '@/lib/meal-plans';
+import { formatRange } from '@/lib/nutrition-day';
 import {
   addPlanItem,
   removePlanItem,
   updatePlan,
   publishPlan,
   retirePlan,
-  assignStandardWeek,
+  assignStandardPlan,
 } from '@/app/coach/clients/[id]/plan-actions';
 
 /*
   Where the coach writes a client's day.
 
   The check against their target is the part that earns this card's place. A
-  plan that reads sensible meal by meal can still come to 2,850 against a
-  3,200 target, and that is a stall nobody diagnoses for a month because
-  nothing on any screen ever adds it up.
+  plan whose every option comes to 2,850 against a 3,200 target is a stall
+  nobody diagnoses for a month, because nothing else on any screen does that
+  arithmetic.
+
+  The lines under a meal are OPTIONS — seven breakfasts is a choice of seven,
+  not a breakfast of seven. This card used to add them all together, so a
+  perfectly ordinary plan announced "18,485 cal" and "16,285 calories over
+  target" in red. A meal is now shown as its cheapest-to-dearest range, the
+  day as what one pick per meal can come to, and the verdict asks whether the
+  target is reachable rather than what the lines sum to.
 */
 
 const selectClass =
@@ -30,7 +38,7 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
   const plan = await getActivePlan(clientId);
   const [recipes, check] = await Promise.all([
     prisma.recipe.findMany({ orderBy: { title: 'asc' }, take: 200 }),
-    plan ? planVsTarget(clientId, plan.totals) : Promise.resolve(null),
+    plan ? planVsTarget(clientId, plan.dayRange) : Promise.resolve(null),
   ]);
 
   return (
@@ -47,18 +55,18 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
               search box.
             </p>
             {/*
-              Or skip all of that. Twenty-one lines typed by hand is the long
-              way round to the answer that is right most of the time, which is
-              "put them on the standard week and adjust from there".
+              Or skip all of that. Typing every option by hand is the long way
+              round to the answer that is right most of the time, which is
+              "put them on the standard plan and adjust from there".
             */}
-            <form action={assignStandardWeek}>
+            <form action={assignStandardPlan}>
               <input type="hidden" name="clientId" value={clientId} />
               <Button type="submit" size="sm" variant="outline" className="w-full sm:w-auto">
-                <CalendarRange size={14} /> Put them on the 7-day plan
+                <CalendarRange size={14} /> Put them on the standard plan
               </Button>
             </form>
             <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
-              [7 days · 21 meals · ~2600 cal · ~190g protein]
+              [3 meals · 7 options each · ~2600 cal · ~190g protein]
             </p>
           </div>
         ) : (
@@ -88,9 +96,19 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
 
             {plan.bySlot.map((group) => (
               <div key={group.slot} className="flex flex-col gap-1">
-                <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {group.slot}
-                </span>
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {group.slot}
+                    {group.items.length > 1 && (
+                      <span className="ml-2 normal-case tracking-normal">
+                        {group.items.length} options
+                      </span>
+                    )}
+                  </span>
+                  <span className="readout text-[10px] text-muted-foreground">
+                    {formatRange(group.calories)} cal · {formatRange(group.protein)}p
+                  </span>
+                </div>
                 <ul className="flex flex-col">
                   {group.items.map((item) => (
                     <li
@@ -118,34 +136,38 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
             ))}
 
             <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
+              {/* "One pick per meal", not a sum. The distinction is the whole
+                  fix — see the header. */}
               <p className="readout text-[11px] uppercase text-muted-foreground">
-                Day totals{' '}
+                One of each{' '}
                 <span className="text-foreground">
-                  {plan.totals.calories} cal · {plan.totals.protein}p · {plan.totals.carbs}c ·{' '}
-                  {plan.totals.fat}f
+                  {formatRange(plan.dayRange.calories)} cal ·{' '}
+                  {formatRange(plan.dayRange.protein)}p · {formatRange(plan.dayRange.carbs)}c ·{' '}
+                  {formatRange(plan.dayRange.fat)}f
                 </span>
               </p>
 
-              {check && (check.calorieOff || check.proteinOff) ? (
+              {check &&
+              (check.calories.kind !== 'covers' || check.protein.kind !== 'covers') ? (
                 <p className="text-xs leading-relaxed text-destructive">
-                  Against their target this day is{' '}
-                  {check.calorieOff && (
+                  Whatever they pick off this plan, the day comes in{' '}
+                  {check.calories.kind !== 'covers' && (
                     <>
-                      {Math.abs(check.calorieGap)} calories{' '}
-                      {check.calorieGap > 0 ? 'over' : 'under'}
+                      {check.calories.by} calories {check.calories.kind}
                     </>
                   )}
-                  {check.calorieOff && check.proteinOff && ' and '}
-                  {check.proteinOff && (
+                  {check.calories.kind !== 'covers' && check.protein.kind !== 'covers' && ' and '}
+                  {check.protein.kind !== 'covers' && (
                     <>
-                      {Math.abs(check.proteinGap)}g protein{' '}
-                      {check.proteinGap > 0 ? 'over' : 'under'}
+                      {check.protein.by}g protein {check.protein.kind}
                     </>
                   )}
                   .
                 </p>
               ) : check ? (
-                <p className="text-xs text-success">Lines up with their target.</p>
+                <p className="text-xs text-success">
+                  They can hit their target off this plan.
+                </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
                   No nutrition target set, so there&apos;s nothing to check this against.
