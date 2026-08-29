@@ -74,7 +74,11 @@ export default async function WelcomePage() {
   const pendingAgreement =
     status === 'agreement_pending'
       ? await prisma.agreement.findFirst({
-          where: { clientId: user.id, signedAt: null },
+          // `status`, not a signedAt column — Agreement records signing as
+          // 'pending_signature' -> 'signed'. The offline Prisma stub types
+          // every `where` as `any`, so a wrong field name here compiles
+          // locally and only fails on Vercel. It did.
+          where: { clientId: user.id, status: 'pending_signature', deletedAt: null },
           orderBy: { createdAt: 'desc' },
           select: { id: true },
         })
