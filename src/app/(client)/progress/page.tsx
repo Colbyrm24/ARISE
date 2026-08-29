@@ -35,9 +35,16 @@ export default async function ProgressPage() {
       where: { clientId: user.id, date: { gte: since } },
       orderBy: { date: 'asc' },
     }),
+    /*
+      The only query on this page with no bound of any kind — every
+      measurement this client has ever taken, fetched and rendered on every
+      visit, growing forever. A year of weekly measurements is already fifty
+      rows to draw a trend nobody reads past the first dozen of.
+    */
     prisma.measurement.findMany({
       where: { clientId: user.id },
       orderBy: { date: 'desc' },
+      take: 52,
     }),
     prisma.progressPhoto.findMany({
       where: { clientId: user.id },
