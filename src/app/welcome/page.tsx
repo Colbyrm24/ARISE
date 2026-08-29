@@ -59,6 +59,27 @@ export default async function WelcomePage() {
 
   const coachId = await coachIdForClient(user.id);
 
+  /*
+    The agreement, for somebody who has paid and can't find it.
+
+    This screen used to tell an `agreement_pending` client "the link is in
+    your email". There is no email in this product — no sender, no service, no
+    dependency — and the only two links to an agreement live in the coach's
+    own console and in the Stripe redirect that fires once. So a client who
+    paid and closed that tab was told to check an inbox nothing had ever
+    written to, and their money was gone with no way back into the funnel.
+
+    It's one query and it ends the dead end.
+  */
+  const pendingAgreement =
+    status === 'agreement_pending'
+      ? await prisma.agreement.findFirst({
+          where: { clientId: user.id, signedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        })
+      : null;
+
   const [intake, thread] = await Promise.all([
     prisma.onboardingResponse.count({
       where: { clientId: user.id, completedAt: { not: null } },
@@ -113,6 +134,17 @@ export default async function WelcomePage() {
               </li>
             ))}
           </ul>
+
+          {/* The one action that moves them, right where they're stuck. */}
+          {pendingAgreement && (
+            <Link
+              href={`/agreement/${pendingAgreement.id}`}
+              className="glow flex items-center justify-between gap-3 border border-accent/55 bg-accent/[0.11] px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-foreground shadow-[inset_0_0_22px_hsl(var(--accent)/0.14),0_0_28px_-6px_hsl(var(--accent)/0.6)] transition-colors hover:border-accent"
+            >
+              Read and sign your agreement
+              <ArrowRight size={16} />
+            </Link>
+          )}
         </SystemWindowContent>
       </SystemWindow>
 
