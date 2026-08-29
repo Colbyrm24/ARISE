@@ -48,6 +48,9 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
   const programTemplates = await prisma.workoutTemplate.findMany({
     where: { coachId: coach.id },
     orderBy: { name: 'asc' },
+    // A dropdown. Two hundred is far past the point where a coach would
+    // scroll one, and it stops this growing into a full table read.
+    take: 200,
   });
 
   const activeProgram = client.clientPrograms[0] ?? null;
