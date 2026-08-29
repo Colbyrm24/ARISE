@@ -17,26 +17,32 @@ export default async function WorkoutsPage() {
   */
   const since = startOfDayInstantFor(user);
 
-  const activeProgram = await prisma.clientProgram.findFirst({
-    where: { clientId: user.id, active: true },
-    include: {
-      template: {
-        include: {
-          workouts: {
-            orderBy: { dayOrder: 'asc' },
-            include: { _count: { select: { workoutExercises: true } } },
+  /*
+    Both at once. Today's finished sessions were fetched only after the
+    program came back, but the query never used anything from it — the
+    program was a presence check, not a dependency — so the page waited out
+    two round trips to do the work of one.
+  */
+  const [activeProgram, completedToday] = await Promise.all([
+    prisma.clientProgram.findFirst({
+      where: { clientId: user.id, active: true },
+      include: {
+        template: {
+          include: {
+            workouts: {
+              orderBy: { dayOrder: 'asc' },
+              include: { _count: { select: { workoutExercises: true } } },
+            },
           },
         },
       },
-    },
-  });
-
-  const completedToday = activeProgram
-    ? await prisma.workoutLog.findMany({
-        where: { clientId: user.id, startedAt: { gte: since }, completedAt: { not: null } },
-        select: { workoutId: true },
-      })
-    : [];
+    }),
+    prisma.workoutLog.findMany({
+      where: { clientId: user.id, startedAt: { gte: since }, completedAt: { not: null } },
+      select: { workoutId: true },
+      take: 50,
+    }),
+  ]);
   const completedIds = new Set(completedToday.map((l) => l.workoutId));
 
   return (
