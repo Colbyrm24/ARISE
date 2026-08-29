@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
@@ -17,7 +18,21 @@ import { ensureCoachAssigned } from '@/lib/onboard-client';
  * console unreachable.
  */
 
-export async function getCurrentUser() {
+/*
+  Once per request, not once per caller.
+
+  A layout and the page inside it both call one of the require* helpers —
+  that is the point of them, each screen proving its own access rather than
+  trusting the shell around it. But every call was a full round trip to
+  Supabase Auth plus an identical query for the same user row, and on
+  /coach/clients/[id] there are three of them. React's `cache` keeps the
+  guarantee and drops the repetition: the checks still all run, they just
+  share one answer for the duration of a single request.
+
+  Scoped to one render, so it can't serve one person's identity to another —
+  a plain module-level variable here would be exactly that bug.
+*/
+export const getCurrentUser = cache(async () => {
   const supabase = createClient();
   const {
     data: { user },
@@ -31,7 +46,7 @@ export async function getCurrentUser() {
   });
 
   return dbUser;
-}
+});
 
 /**
  * Where the person was trying to go, so login can send them back.
