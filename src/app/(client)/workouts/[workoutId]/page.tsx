@@ -14,6 +14,7 @@ import {
   Cell,
 } from '@/components/ui/system-window';
 import { demoLinkFor } from '@/lib/exercise-video';
+import { describeSet, summarise, setTypeLabel, type SetType } from '@/lib/set-prescription';
 import { LogSetButton } from '@/components/client/log-set-button';
 import { logSet, completeWorkout } from './actions';
 
@@ -153,6 +154,19 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
         {workout.workoutExercises.map((we) => {
           const done = we.sets.filter((s) => loggedBySetId.has(s.id)).length;
           const demo = demoLinkFor(we.exercise);
+          /*
+            How many sets of how many reps — the question anyone actually asks
+            about a movement, which until now could only be answered by
+            reading and comparing every row.
+          */
+          const plan = summarise(
+            we.sets.map((s) => ({
+              type: s.type as SetType,
+              targetReps: s.targetReps,
+              targetWeight: s.targetWeight === null ? null : Number(s.targetWeight),
+              restSeconds: s.restSeconds,
+            }))
+          );
           return (
             <SystemWindow
               key={we.id}
@@ -161,6 +175,19 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
               meta={<Count value={done} total={we.sets.length} />}
             >
               <SystemWindowContent className="pt-4">
+                {/*
+                  The prescription, said once, in words.
+
+                  This line did not exist. The set count was a small `3`
+                  beside the name and the rep target was repeated on every
+                  row in 11px mono, so the shape of the movement — three sets
+                  of six to eight — was something you assembled yourself.
+                */}
+                {plan.headline && (
+                  <p className="mb-3 border-l-2 border-accent/60 py-1 pl-3 text-base font-semibold leading-snug text-foreground">
+                    {plan.headline}
+                  </p>
+                )}
                 {/* Sits above the sets on purpose — if you don't know the
                     movement, you need it before the first rep, not after. */}
                 {demo && (
@@ -228,31 +255,78 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                           it still reads for anyone who cannot separate the two
                           hues.
                         */}
-                        <div className="flex min-w-0 items-center gap-2 sm:flex-1">
-                        <span
-                          className={cn(
-                            'readout w-7 shrink-0 text-[11px] uppercase',
-                            logged ? 'text-success' : 'text-destructive'
-                          )}
-                        >
-                          {String(i + 1).padStart(2, '0')}
-                        </span>
-                        <span
-                          className={cn(
-                            'readout min-w-0 flex-1 truncate text-[11px]',
-                            logged
-                              ? 'font-semibold text-success'
-                              : 'font-semibold text-destructive'
-                          )}
-                        >
-                          {logged ? <Check size={11} className="mr-1 inline align-[-1px]" /> : null}
-                          {set.targetReps ?? '—'}
-                          {set.targetWeight ? ` × ${Number(set.targetWeight)}` : ''}
-                          {/* Prescribed rest was visible only on the coach's
-                              builder, so the person actually resting never
-                              saw the number they were meant to rest for. */}
-                          {set.restSeconds ? ` · ${set.restSeconds}s rest` : ''}
-                        </span>
+                        <div className="flex min-w-0 items-start gap-2.5 sm:flex-1">
+                          {/*
+                            Status lives on the marker; the instruction stays
+                            readable.
+
+                            Done-or-not was previously carried by colouring
+                            the prescription text itself, so a session opened
+                            as a column of red numbers — which reads as a list
+                            of errors, and put the one thing you have to read
+                            mid-effort in the least legible colour on the
+                            screen. The marker keeps the red/green, and the
+                            words it labels go back to plain high contrast.
+                          */}
+                          <span
+                            className={cn(
+                              'readout mt-0.5 flex h-5 w-7 shrink-0 items-center justify-center gap-0.5 border text-[10px] uppercase',
+                              logged
+                                ? 'border-success/50 bg-success/10 text-success'
+                                : 'border-destructive/40 text-destructive'
+                            )}
+                          >
+                            {logged ? (
+                              <Check size={11} />
+                            ) : (
+                              String(i + 1).padStart(2, '0')
+                            )}
+                          </span>
+
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            {/*
+                              A drop set looked exactly like a working set.
+
+                              `WorkoutSet.type` — warmup, working, drop — was
+                              stored and rendered nowhere, and every movement
+                              in Colby's own programming ends on a drop set.
+                              The one distinction that changes what you do was
+                              the one thing the screen did not say.
+                            */}
+                            {setTypeLabel(set.type as SetType) && (
+                              <span className="readout w-fit border border-accent/40 bg-accent/[0.07] px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-accent">
+                                {setTypeLabel(set.type as SetType)}
+                              </span>
+                            )}
+                            {/*
+                              Every number says what it counts. `12 × 95` has
+                              been on the screen a client trains from for
+                              months and could as easily have meant twelve
+                              sets. Prescribed rest was visible only on the
+                              coach's builder, so the person actually resting
+                              never saw the number they were resting for.
+                            */}
+                            <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              {describeSet({
+                                type: set.type as SetType,
+                                targetReps: set.targetReps,
+                                targetWeight:
+                                  set.targetWeight === null ? null : Number(set.targetWeight),
+                                restSeconds: set.restSeconds,
+                              }).map((part, n) => (
+                                <span
+                                  key={part}
+                                  className={cn(
+                                    n === 0
+                                      ? 'text-[15px] font-semibold leading-tight text-foreground'
+                                      : 'readout text-[11px] uppercase text-muted-foreground'
+                                  )}
+                                >
+                                  {part}
+                                </span>
+                              ))}
+                            </span>
+                          </div>
                         </div>
                         {/*
                           The tick IS the button.
