@@ -135,6 +135,12 @@ model Client {
   startDate   DateTime?    @map("start_date")
   endDate     DateTime?    @map("end_date")
   currentWeek Int?         @map("current_week")
+  // The person's single Stripe Customer. Nothing stored one before, so every
+  // checkout minted a fresh Customer and a client who bought twice became two
+  // people at Stripe — which also meant there was nothing to hang a billing
+  // portal off, so a declining card had no way to be fixed by the person
+  // whose card it was.
+  stripeCustomerId String?  @unique @map("stripe_customer_id")
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
