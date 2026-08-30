@@ -201,6 +201,42 @@ export async function finalizeStripeSession(sessionId: string) {
   const agreement = await createAgreementAndPayment(paymentLink, providerPaymentId);
 
   /*
+    Remember who this person is at Stripe.
+
+    Nothing stored a customer id before, so every checkout let Stripe mint a
+    fresh Customer and a client who bought twice became two people over
+    there. Worse, with no single customer there was nothing to hang a billing
+    portal off — a declining card was a dead end where the coach could watch
+    it fail and the client had no way to update anything.
+
+    Captured here rather than at link creation because a Payment Link cannot
+    be given a customer; Stripe makes one when the client actually pays, and
+    this is the first moment the id exists for both kinds of link.
+
+    Best-effort on purpose: they have paid, and failing to file this must not
+    undo that. A later checkout will catch it.
+  */
+  const stripeCustomerId =
+    typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
+
+  if (stripeCustomerId) {
+    try {
+      await prisma.client.update({
+        where: { userId: paymentLink.clientId },
+        data: { stripeCustomerId },
+      });
+    } catch (err) {
+      // A unique violation here means the id is already on somebody — which
+      // would be a real problem, so it is logged rather than ignored.
+      console.error('Could not record the Stripe customer', {
+        clientId: paymentLink.clientId,
+        stripeCustomerId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /*
     A recurring plan leaves a live subscription behind at Stripe that will
     keep charging. Record it, so the invoice webhooks have something to
     attach payments to and so a fixed plan can be counted down and stopped.
