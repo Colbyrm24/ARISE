@@ -5,6 +5,7 @@ import {
   handleInvoicePaid,
   handleInvoicePaymentFailed,
   handleSubscriptionChanged,
+  handleChargeRefunded,
 } from '@/lib/subscription-sync';
 
 /**
@@ -14,17 +15,23 @@ import {
  * secret at that point — that's STRIPE_WEBHOOK_SECRET in Vercel's
  * environment variables.
  *
- * Subscribe to all five of these:
+ * Subscribe to all six of these:
  *
  *   checkout.session.completed      — signup: creates the agreement
  *   invoice.paid                    — every charge after signup
  *   invoice.payment_failed          — a declining card
+ *   charge.refunded                 — money going back the other way
  *   customer.subscription.updated   — status changes at Stripe
  *   customer.subscription.deleted   — cancelled, by either side
  *
  * Only the first was subscribed to originally, which is how a fixed
  * six-payment plan came to bill a client every month indefinitely: nothing
  * counted the payments, so nothing ever cancelled the subscription.
+ *
+ * `charge.refunded` is the newest and the endpoint must be subscribed to it
+ * in the Stripe dashboard — the handler alone does nothing, because Stripe
+ * only delivers what the endpoint asked for. The switch below has no
+ * default, so an unsubscribed event is not an error anyone would notice.
  *
  * The raw request body (not the parsed JSON) is required for signature
  * verification, which is why this reads request.text() instead of
@@ -75,6 +82,33 @@ export async function POST(request: NextRequest) {
       // A declining card. The coach needs to know before the client does.
       case 'invoice.payment_failed': {
         await handleInvoicePaymentFailed(readInvoice(event.data.object));
+        break;
+      }
+
+      /*
+        Money going back the other way. Without this a refund issued in
+        Stripe left ARISE showing the client fully paid forever — and, worse,
+        still counting that charge toward a fixed plan, so refunding the
+        third of six payments meant they were charged five times and the
+        subscription cancelled itself a payment early.
+      */
+      case 'charge.refunded': {
+        const charge = event.data.object as {
+          id: string;
+          invoice?: string | { id: string } | null;
+          payment_intent?: string | { id: string } | null;
+          amount?: number | null;
+          amount_refunded?: number | null;
+        };
+        const idOf = (v: string | { id: string } | null | undefined) =>
+          typeof v === 'string' ? v : v?.id ?? null;
+        await handleChargeRefunded({
+          id: charge.id,
+          invoice: idOf(charge.invoice),
+          payment_intent: idOf(charge.payment_intent),
+          amount: charge.amount ?? null,
+          amount_refunded: charge.amount_refunded ?? null,
+        });
         break;
       }
 
