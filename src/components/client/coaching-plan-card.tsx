@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { requiredPayments, paymentsRemaining } from '@/lib/billing';
 import { Card, CardContent } from '@/components/ui/card';
+import { ManageBillingButton } from '@/components/client/manage-billing-button';
 
 /*
   What a client has bought, told to the client.
@@ -32,6 +33,26 @@ export async function CoachingPlanCard({ clientId }: { clientId: string }) {
     must not take down the place somebody goes to change their background or
     sign out.
   */
+  /*
+    Its own try, deliberately.
+
+    stripe_customer_id is added by a migration applied by hand, so there is a
+    window where this code is live and the column is not. Sharing a try with
+    the queries below would mean that window hid the whole card — the plan,
+    the count, all of it — over a button nobody can use yet. Alone, a missing
+    column just means no button.
+  */
+  let hasBilling = false;
+  try {
+    const billing = await prisma.client.findUnique({
+      where: { userId: clientId },
+      select: { stripeCustomerId: true },
+    });
+    hasBilling = Boolean(billing?.stripeCustomerId);
+  } catch {
+    hasBilling = false;
+  }
+
   let subscriptions;
   let counts: number[];
   try {
@@ -119,6 +140,13 @@ export async function CoachingPlanCard({ clientId }: { clientId: string }) {
             </div>
           );
         })}
+
+        {/*
+          Only shown once there is a customer to open. Anybody who paid
+          before this shipped gets one on their next payment, and a button
+          that always failed would be worse than no button.
+        */}
+        {hasBilling && <ManageBillingButton />}
 
         {/*
           Said plainly rather than left implied. Somebody reading their own
