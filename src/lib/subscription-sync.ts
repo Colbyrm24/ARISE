@@ -9,6 +9,7 @@ import {
   invoiceRole,
   amountFromCents,
   checkoutRefs,
+  refundOutcome,
 } from '@/lib/billing';
 
 /*
@@ -472,6 +473,90 @@ export async function handleSubscriptionChanged(subscription: {
         : 'Their subscription ended at Stripe, so their access is paused.'
     );
   }
+}
+
+/**
+ * Money going back the other way.
+ *
+ * ARISE recorded every charge and no refund. `PaymentStatus.refunded` sat in
+ * the schema, was rendered on the coach's billing card, and was written by
+ * nothing — `charge.refunded` was not a subscribed event, and the webhook's
+ * switch has no default, so a refund was silently acknowledged and thrown
+ * away. Refund somebody in Stripe and the app went on showing them paid.
+ *
+ * The label was the smaller half of it. `paymentsRemaining` counts succeeded
+ * payments, so a refunded charge still counted toward a fixed plan: refund
+ * the third of six and the client is charged five times and the subscription
+ * cancels itself a payment early. Flipping the row to `refunded` is what
+ * makes the count honest again, and it costs nothing extra because the count
+ * is always recomputed from the database.
+ *
+ * Deliberately does NOT touch the client's access. A refund is a
+ * conversation the coach is having, and it can mean any of several things —
+ * a goodwill gesture, a mistake, a full exit. Ending somebody's coaching
+ * because a number moved in Stripe would take that decision away from him.
+ */
+export async function handleChargeRefunded(charge: {
+  id: string;
+  invoice: string | null;
+  payment_intent: string | null;
+  amount: number | null;
+  amount_refunded: number | null;
+}) {
+  const outcome = refundOutcome(charge.amount, charge.amount_refunded);
+  if (outcome === 'none') return;
+
+  /*
+    Finding the row this charge paid for.
+
+    `providerPaymentId` holds whichever id the handler that wrote the row had
+    to hand — the invoice id after `invoice.paid`, or the checkout session id
+    if only the finalize path ever ran. A charge carries its invoice, and its
+    payment intent, but never the session. So both known ids are tried, and a
+    miss is reported rather than swallowed: a refund nobody can attribute is
+    still something the coach needs to hear about.
+  */
+  const refs = [charge.invoice, charge.payment_intent, charge.id].filter(
+    (r): r is string => Boolean(r)
+  );
+
+  const payment = await prisma.payment.findFirst({
+    where: { provider: 'stripe', providerPaymentId: { in: refs }, deletedAt: null },
+    include: { client: { include: { user: { include: { profile: true } } } } },
+  });
+
+  const back = amountFromCents(charge.amount_refunded);
+  const money = `$${back.toFixed(2)}`;
+
+  if (!payment) {
+    console.error('Refund could not be matched to a payment', { charge: charge.id, refs });
+    const coach = await prisma.user.findFirst({ where: { role: 'coach' }, select: { id: true } });
+    if (coach) {
+      await notify(
+        coach.id,
+        'account',
+        `A ${money} refund went through at Stripe and it could not be matched to a payment in ARISE. Worth a look.`
+      );
+    }
+    return;
+  }
+
+  if (outcome === 'full') {
+    // Idempotent: Stripe retries, and a second delivery finds it already
+    // refunded and writes the same value.
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: 'refunded' },
+    });
+  }
+
+  const name = payment.client.user.profile?.fullName ?? payment.client.user.email;
+  await notifyCoach(
+    payment.clientId,
+    outcome === 'full'
+      ? `${money} was refunded to ${name}. That payment no longer counts toward their plan.`
+      : `${money} of ${name}'s ${`$${Number(payment.amount).toFixed(2)}`} payment was refunded. The payment still counts — change it by hand if it shouldn't.`
+  );
 }
 
 /**

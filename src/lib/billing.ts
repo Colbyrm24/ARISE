@@ -141,6 +141,42 @@ export function amountFromCents(cents: number | null | undefined): number {
   return Math.round(cents) / 100;
 }
 
+export type RefundOutcome = 'full' | 'partial' | 'none';
+
+/**
+ * What a refund did to a charge.
+ *
+ * This mattered because nothing in ARISE knew a refund had happened at all.
+ * `PaymentStatus.refunded` was in the schema and rendered on the coach's
+ * billing card, and no code path ever wrote it — `charge.refunded` was not
+ * even a subscribed event. Refund somebody in Stripe and the app went on
+ * showing them fully paid forever.
+ *
+ * That is worse than a wrong label. `paymentsRemaining` counts succeeded
+ * payments, so a refunded charge still counted toward a fixed plan: refund
+ * the third of six and the client gets five charges and a subscription that
+ * cancels itself one payment early.
+ *
+ * Partial is deliberately its own answer rather than being rounded up to
+ * full. Half a payment back is not a payment that did not happen, and
+ * marking the row `refunded` would silently un-count money the client is
+ * still out. The coach gets told; the row stays as it is.
+ */
+export function refundOutcome(
+  amount: number | null | undefined,
+  amountRefunded: number | null | undefined
+): RefundOutcome {
+  const charged = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
+  const back =
+    typeof amountRefunded === 'number' && Number.isFinite(amountRefunded) ? amountRefunded : 0;
+
+  if (back <= 0) return 'none';
+  // A charge cannot be refunded for more than it took, so >= is the same
+  // question as == and survives a rounding difference between API versions.
+  if (charged > 0 && back >= charged) return 'full';
+  return 'partial';
+}
+
 /**
  * A price a coach typed into a form, or null if it isn't one.
  *
