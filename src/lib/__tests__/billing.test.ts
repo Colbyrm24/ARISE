@@ -10,6 +10,7 @@ import {
   amountFromCents,
   parsePrice,
   parseCount,
+  refundOutcome,
   checkoutRefs,
 } from '../billing';
 
@@ -223,4 +224,48 @@ test('a checkout is looked up by its session id and by the payment link behind i
 
   // No duplicates — an `in` clause with the same value twice is just noise.
   assert.deepEqual(checkoutRefs({ id: 'cs_4', payment_link: 'cs_4' }), ['cs_4']);
+});
+
+/*
+  Refunds. The bug this pins down is not a wrong label — it is that a
+  refunded charge kept counting toward a fixed plan, so refunding the third
+  of six payments meant the client was charged five times and the
+  subscription cancelled itself a payment early.
+*/
+
+test('a charge refunded in full is full', () => {
+  assert.equal(refundOutcome(5000, 5000), 'full');
+});
+
+test('a partial refund stays partial rather than rounding up', () => {
+  // Marking this row `refunded` would un-count money the client is still out.
+  assert.equal(refundOutcome(5000, 2500), 'partial');
+  assert.equal(refundOutcome(5000, 1), 'partial');
+});
+
+test('no money back is not a refund', () => {
+  assert.equal(refundOutcome(5000, 0), 'none');
+  assert.equal(refundOutcome(5000, null), 'none');
+  assert.equal(refundOutcome(5000, undefined), 'none');
+});
+
+test('a refund larger than the charge still reads as full', () => {
+  // Can't happen at Stripe, but a rounding difference between API versions
+  // must not make a full refund look partial.
+  assert.equal(refundOutcome(5000, 5001), 'full');
+});
+
+test('an unknown charge amount cannot be called a full refund', () => {
+  assert.equal(refundOutcome(null, 5000), 'partial');
+  assert.equal(refundOutcome(0, 5000), 'partial');
+});
+
+test('a refunded payment stops counting toward a fixed plan', () => {
+  // The whole point: the count is recomputed from succeeded payments, so
+  // flipping one row to `refunded` is what makes the plan honest again.
+  const required = requiredPayments({ billingType: 'payment_plan', numberOfPayments: 6 });
+  assert.equal(paymentsRemaining(3, required), 3);
+  // Third payment refunded -> two succeeded -> four still to collect.
+  assert.equal(paymentsRemaining(2, required), 4);
+  assert.equal(isPaidInFull(5, required), false);
 });
