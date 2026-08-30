@@ -11,6 +11,7 @@ import { HealthSync } from '@/components/health-sync';
 import { prisma } from '@/lib/prisma';
 import { avatarSrc } from '@/lib/avatars';
 import { AvatarUpload } from '@/components/client/avatar-upload';
+import { CoachingPlanCard } from '@/components/client/coaching-plan-card';
 
 const statusLabels: Record<string, string> = {
   lead: 'Lead',
@@ -42,6 +43,12 @@ export default async function ProfilePage() {
       <header>
         <h1 className="text-2xl font-semibold">Profile</h1>
       </header>
+
+      {/*
+        Above the toggles on purpose. What somebody bought and how far
+        through it they are outranks a notification switch.
+      */}
+      {user && <CoachingPlanCard clientId={user.id} />}
 
       <Card>
         <CardContent className="pt-6">
