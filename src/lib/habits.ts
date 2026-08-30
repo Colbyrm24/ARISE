@@ -84,6 +84,33 @@ export function isHabitType(value: string): value is HabitType {
 }
 
 /**
+ * The number inside a coach's free-text target.
+ *
+ * `targetValue` is a text column because a custom habit's target is its whole
+ * description, so every numeric habit has to dig its number back out of prose:
+ * "12,000 steps", "180g protein", "10k".
+ *
+ * That last one was silently wrong. Stripping every non-digit turned "10k"
+ * into 10 — a ten-step daily goal that the client cleared before getting out
+ * of bed and that read as landed all day. `10k` is how people actually write
+ * a step target, so it has to mean ten thousand.
+ */
+export function parseTarget(raw: unknown): number | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const text = String(raw).trim().toLowerCase().replace(/,/g, '');
+  if (!text) return undefined;
+
+  const shorthand = /^(\d+(?:\.\d+)?)\s*k\b/.exec(text);
+  if (shorthand) {
+    const n = Number(shorthand[1]) * 1000;
+    return Number.isFinite(n) && n > 0 ? Math.round(n) : undefined;
+  }
+
+  const n = Number(text.replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
  * Streak length in days, counting back from today.
  *
  * Today not being done yet does not break a streak — it's only mid-afternoon
