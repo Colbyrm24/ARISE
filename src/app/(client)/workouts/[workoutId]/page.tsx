@@ -60,6 +60,18 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
   const loggedBySetId = new Map(todayLog?.sets.map((s) => [s.workoutSetId, s]) ?? []);
   const isComplete = Boolean(todayLog?.completedAt);
 
+  /*
+    Personal bests, finally said out loud.
+
+    `detectPr` has run on every logged set since the beginning and writes
+    `isPr` to the row. Every single read of that flag was on the coach's side
+    — the dashboard, the activity feed, the segments. So a client would put
+    more weight on the bar than they ever had before, log it, and the app
+    said nothing at all. The one moment in the whole product that is purely
+    theirs was being collected and shown to somebody else.
+  */
+  const prCount = todayLog?.sets.filter((s) => s.isPr).length ?? 0;
+
   // Session-level progress, so the client can see how much is left without
   // counting rows themselves.
   const totalSets = workout.workoutExercises.reduce((n, we) => n + we.sets.length, 0);
@@ -104,11 +116,18 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             </p>
           )}
         </div>
-        {isComplete ? (
-          <Badge variant="success">Complete</Badge>
-        ) : (
-          <Count value={doneSets} total={totalSets} className="text-base" />
-        )}
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          {isComplete ? (
+            <Badge variant="success">Complete</Badge>
+          ) : (
+            <Count value={doneSets} total={totalSets} className="text-base" />
+          )}
+          {prCount > 0 && (
+            <span className="readout border border-success/60 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-success">
+              {prCount === 1 ? 'New PR' : `${prCount} new PRs`}
+            </span>
+          )}
+        </div>
       </header>
 
       {/*
@@ -293,11 +312,20 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                               The one distinction that changes what you do was
                               the one thing the screen did not say.
                             */}
-                            {setTypeLabel(set.type as SetType) && (
-                              <span className="readout w-fit border border-accent/40 bg-accent/[0.07] px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-accent">
-                                {setTypeLabel(set.type as SetType)}
-                              </span>
-                            )}
+                            <span className="flex flex-wrap items-center gap-1.5">
+                              {setTypeLabel(set.type as SetType) && (
+                                <span className="readout w-fit border border-accent/40 bg-accent/[0.07] px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-accent">
+                                  {setTypeLabel(set.type as SetType)}
+                                </span>
+                              )}
+                              {/* The moment worth having. Sits on the row it
+                                  happened on, not summarised somewhere else. */}
+                              {logged?.isPr && (
+                                <span className="readout w-fit border border-success/60 bg-success/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-success">
+                                  PR
+                                </span>
+                              )}
+                            </span>
                             {/*
                               Every number says what it counts. `12 × 95` has
                               been on the screen a client trains from for
