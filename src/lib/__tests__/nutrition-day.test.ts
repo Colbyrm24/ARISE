@@ -12,6 +12,7 @@ import {
   rangeOf,
   rangeVerdict,
   slotOf,
+  wholeDaySync,
   type LoggedEntry,
 } from '../nutrition-day';
 import type { PlanItem } from '../nutrition-day';
@@ -189,4 +190,63 @@ test('totals add up across every meal at once', () => {
     log({ calories: 500, protein: 45, carbs: 50, fat: 12 }),
   ]);
   assert.deepEqual(totals, { calories: 800, protein: 69, carbs: 60, fat: 30 });
+});
+
+/*
+  A synced day is not a snack.
+
+  Apple Health hands over MyFitnessPal's daily totals with no meal attached,
+  and slotOf() sends anything mealless to Snack. Without the carve-out below
+  the client's screen tells them they ate the entire day as one snack.
+*/
+
+test('a whole-day sync stays out of the meal sections', () => {
+  const sections = daySections(
+    [],
+    [
+      log({ meal: 'lunch', name: 'Chicken bowl', calories: 500 }),
+      log({ meal: null, name: 'Apple Health', calories: 2140, source: 'apple_health' }),
+    ]
+  );
+  const snack = sections.find((s) => s.slot === 'snack');
+  assert.equal(snack, undefined);
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].slot, 'lunch');
+});
+
+test('a synced row with a real meal on it does sit under that meal', () => {
+  // An exporter that can split by meal should behave like anything else.
+  const sections = daySections(
+    [],
+    [log({ meal: 'breakfast', name: 'Apple Health', calories: 600, source: 'apple_health' })]
+  );
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].slot, 'breakfast');
+  assert.equal(sections[0].calories, 600);
+});
+
+test('the whole-day sync is still found, and still counts toward the day', () => {
+  const logs = [
+    log({ meal: 'lunch', calories: 500, protein: 45, carbs: 50, fat: 12 }),
+    log({
+      meal: null,
+      name: 'Apple Health',
+      calories: 2140,
+      protein: 186,
+      carbs: 210,
+      fat: 62,
+      source: 'apple_health',
+    }),
+  ];
+  assert.equal(wholeDaySync(logs)?.calories, 2140);
+  // Totals are summed from every log, not from the sections.
+  assert.equal(eatenTotals(logs).calories, 2640);
+  assert.equal(wholeDaySync([log({ meal: 'lunch' })]), null);
+});
+
+test('a manual row with no meal is still a snack', () => {
+  // The carve-out is for synced rows only — quick-adds keep their old home.
+  const sections = daySections([], [log({ meal: null, name: 'Handful of almonds' })]);
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].slot, 'snack');
 });
