@@ -53,7 +53,7 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="flex items-center gap-3 text-sm">
           <Activity size={16} className="text-accent" />
-          Sync steps and weight
+          Sync steps, weight and food
         </span>
         <Button type="button" size="sm" variant="outline" disabled={busy} onClick={issue}>
           {busy ? '…' : hasToken ? 'New key' : 'Set up'}
@@ -70,7 +70,8 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
       {!hasToken && !token && (
         <p className="text-xs leading-relaxed text-muted-foreground">
           Your iPhone sends your steps and weight over every evening, so you stop typing them
-          in. Takes about three minutes to set up once, using a free app. Tap{' '}
+          in — and if you use MyFitnessPal, your food comes with it. Takes about three minutes to
+          set up once, using a free app. Tap{' '}
           <span className="text-foreground">Set up</span> and the instructions come with it.
         </p>
       )}
@@ -146,6 +147,22 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
                 automation on. Evening matters — the day&apos;s step count isn&apos;t finished
                 before then.
               </li>
+              {/*
+                The MyFitnessPal answer, and the reason it is a bullet point
+                rather than an integration. MFP has no self-serve API, but it
+                writes every meal you log into Apple Health — so ticking four
+                more boxes in the same export brings your food across with
+                your steps.
+              */}
+              <li>
+                Already track food in <span className="text-foreground">MyFitnessPal</span>? Tick{' '}
+                <span className="text-foreground">Dietary Energy</span>,{' '}
+                <span className="text-foreground">Protein</span>,{' '}
+                <span className="text-foreground">Carbohydrates</span> and{' '}
+                <span className="text-foreground">Total Fat</span> as well. MyFitnessPal writes
+                what you log into Apple Health, so your day&apos;s food comes over with it and you
+                stop logging twice.
+              </li>
             </ol>
 
             <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -160,7 +177,11 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
               </li>
               <li>
                 Set the body to JSON with <span className="readout text-foreground">steps</span> and{' '}
-                <span className="readout text-foreground">weight</span>, filled from Health.
+                <span className="readout text-foreground">weight</span>, filled from Health. Add{' '}
+                <span className="readout text-foreground">calories</span>,{' '}
+                <span className="readout text-foreground">protein</span>,{' '}
+                <span className="readout text-foreground">carbs</span> and{' '}
+                <span className="readout text-foreground">fat</span> if you track food.
               </li>
               <li>Under Automation, run it once a day in the evening.</li>
             </ol>
