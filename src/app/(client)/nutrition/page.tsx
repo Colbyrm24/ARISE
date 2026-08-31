@@ -18,6 +18,7 @@ import {
   headline,
   loggedNameSet,
   nextOpenSlot,
+  wholeDaySync,
   type LoggedEntry,
   type PlanItem,
 } from '@/lib/nutrition-day';
@@ -234,11 +235,13 @@ export default async function NutritionPage({
     fat: Number(l.fat),
     photoPath: l.photoPath,
     reviewState: l.reviewState,
+    source: l.source,
   }));
 
   const eaten = eatenTotals(logs);
   const alreadyEaten = loggedNameSet(logs);
   const sections = daySections(plan?.items ?? [], logs);
+  const synced = wholeDaySync(logs);
   const openSlot = nextOpenSlot(sections);
 
   const calorieGoal = target?.calories ?? null;
@@ -347,7 +350,34 @@ export default async function NutritionPage({
             <p className="text-sm leading-relaxed text-muted-foreground">{plan.note}</p>
           )}
 
-          {sections.length === 0 ? (
+          {/*
+            The day as their phone reported it.
+
+            This row is the whole day, not a thing they ate, so it sits above
+            the meals rather than inside one — put through slotOf() it would
+            have claimed they ate 2,140 calories as a snack. It is also the
+            only row on this screen nobody typed, which is why it says where
+            it came from and has no remove button: deleting it just means the
+            next sync puts it back.
+          */}
+          {synced && (
+            <div className="flex items-center justify-between gap-3 border border-dashed border-border/70 px-3 py-2.5">
+              <div className="min-w-0">
+                <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Synced from Apple Health
+                </p>
+                <p className="readout mt-1 text-[11px] text-foreground">
+                  {synced.calories.toLocaleString('en-US')} cal · {Math.round(synced.protein)}p ·{' '}
+                  {Math.round(synced.carbs)}c · {Math.round(synced.fat)}f
+                </p>
+              </div>
+              <span className="readout shrink-0 text-[10px] uppercase text-muted-foreground">
+                Whole day
+              </span>
+            </div>
+          )}
+
+          {sections.length === 0 && !synced ? (
             <p className="text-sm text-muted-foreground">
               Nothing logged yet today. The fastest way in is a photo of your plate — it&apos;s the
               first thing below.
