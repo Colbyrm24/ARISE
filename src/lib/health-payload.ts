@@ -18,7 +18,106 @@ import { dayIn, todayIn } from '@/lib/day';
  * dropped rather than stored, because a bad number in a weight chart is worse
  * than a missing one.
  */
-export type HealthReading = { date: Date; steps?: number; weight?: number };
+/**
+ * A day's eating, as a phone reported it.
+ *
+ * Calories are required and the three macros are not, which is deliberate.
+ * NutritionLog.calories is a non-null column and calories are the number the
+ * day is judged on, so a row without them would be a row that makes the
+ * headline lie. Deriving them from partial macros (4/4/9 over whatever
+ * happened to be enabled in the export) would be worse than useless: somebody
+ * exporting protein alone would see a 700-calorie day.
+ *
+ * So a nutrition payload missing calories is refused with a sentence saying
+ * so, and the fix is one toggle in their export settings.
+ */
+export type HealthNutrition = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  /** breakfast | lunch | dinner | snack, or null for a whole-day total. */
+  meal: string | null;
+};
+
+export type HealthReading = {
+  date: Date;
+  steps?: number;
+  weight?: number;
+  nutrition?: HealthNutrition;
+};
+
+/*
+  Nobody agrees what these fields are called.
+
+  MyFitnessPal writes meal totals into Apple Health; Health Auto Export reads
+  them back out under HealthKit's own identifiers, an iOS Shortcut names them
+  whatever the person building it typed, and both get rewritten between app
+  versions. Rather than pick one spelling and let a working export post
+  silently-ignored numbers, every plausible name for a quantity maps onto it.
+
+  Order matters only in that the first key present wins, so the plainest name
+  is listed first.
+*/
+const ALIASES = {
+  calories: ['calories', 'dietaryEnergy', 'dietary_energy', 'energy', 'dietary_energy_consumed'],
+  protein: ['protein', 'dietaryProtein', 'dietary_protein'],
+  carbs: [
+    'carbs',
+    'carbohydrates',
+    'dietaryCarbohydrates',
+    'dietary_carbohydrates',
+    'carbohydrate',
+  ],
+  fat: ['fat', 'totalFat', 'total_fat', 'dietaryFatTotal', 'dietary_fat_total'],
+} as const;
+
+/** The first alias actually present, as a number, or NaN if none is. */
+function pick(b: Record<string, unknown>, names: readonly string[]): number {
+  for (const name of names) {
+    if (b[name] === undefined || b[name] === null || b[name] === '') continue;
+    return Number(b[name]);
+  }
+  return NaN;
+}
+
+const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+/**
+ * Reads the eating half of a payload.
+ *
+ * Exported for its own tests — the date logic above and the number validation
+ * here fail in completely different ways and are easier to pin down apart.
+ */
+export function parseHealthNutrition(b: Record<string, unknown>): HealthNutrition | null {
+  const calories = pick(b, ALIASES.calories);
+
+  /*
+    Zero is not a day of eating, it is an export that fired at 4am. Storing it
+    would overwrite yesterday's real total through the same-day update, which
+    is exactly the bug the steps field already learned the hard way.
+  */
+  if (!Number.isFinite(calories) || calories <= 0 || calories > 20000) return null;
+
+  // A macro that is absent, unparseable or absurd counts as zero rather than
+  // rejecting the row: a calorie total with no protein figure is still a
+  // calorie total, and it is better on the screen than missing.
+  const macro = (names: readonly string[]) => {
+    const n = pick(b, names);
+    if (!Number.isFinite(n) || n < 0 || n > 2000) return 0;
+    return Math.round(n * 100) / 100;
+  };
+
+  const rawMeal = typeof b.meal === 'string' ? b.meal.trim().toLowerCase() : '';
+
+  return {
+    calories: Math.round(calories),
+    protein: macro(ALIASES.protein),
+    carbs: macro(ALIASES.carbs),
+    fat: macro(ALIASES.fat),
+    meal: MEAL_SLOTS.includes(rawMeal) ? rawMeal : null,
+  };
+}
 
 export function parseHealthPayload(
   body: unknown,
@@ -94,6 +193,11 @@ export function parseHealthPayload(
     out.weight = Math.round(weight * 100) / 100;
   }
 
-  if (out.steps === undefined && out.weight === undefined) return null;
+  const nutrition = parseHealthNutrition(b);
+  if (nutrition) out.nutrition = nutrition;
+
+  if (out.steps === undefined && out.weight === undefined && out.nutrition === undefined) {
+    return null;
+  }
   return out;
 }

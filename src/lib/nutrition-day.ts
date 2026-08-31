@@ -58,7 +58,27 @@ export type LoggedEntry = {
   fat: number;
   photoPath: string | null;
   reviewState: string | null;
+  /** manual | library | recipe | photo | apple_health. */
+  source?: string;
 };
+
+/**
+ * A row that is the whole day, not one thing eaten.
+ *
+ * Apple Health hands over MyFitnessPal's daily totals with no meal attached.
+ * Left alone that row falls through slotOf() into Snack, and the client's
+ * screen then claims they ate 2,140 calories as a snack. It is one row
+ * describing the entire day, so it belongs above the meals rather than inside
+ * one of them.
+ */
+export function isWholeDaySync(entry: LoggedEntry) {
+  return entry.source === 'apple_health' && !entry.meal;
+}
+
+/** The synced whole-day row, if a phone posted one. */
+export function wholeDaySync(logs: LoggedEntry[]): LoggedEntry | null {
+  return logs.find(isWholeDaySync) ?? null;
+}
 
 export type DaySection = {
   slot: MealSlot;
@@ -201,7 +221,9 @@ export function loggedNameSet(logs: { name: string }[]) {
 export function daySections(plan: PlanItem[], logs: LoggedEntry[]): DaySection[] {
   return MEAL_SLOTS.map((slot) => {
     const planned = plan.filter((i) => i.meal === slot);
-    const logged = logs.filter((l) => slotOf(l.meal) === slot);
+    // A whole-day sync is not a snack — see isWholeDaySync. It still counts
+    // toward the day's totals, which are summed from every log, not from here.
+    const logged = logs.filter((l) => !isWholeDaySync(l) && slotOf(l.meal) === slot);
     return {
       slot,
       planned,

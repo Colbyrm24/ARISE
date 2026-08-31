@@ -72,7 +72,19 @@ export type HealthPayload = {
   steps?: number;
   /** Kilograms or pounds — whatever the client's own logging already uses. */
   weight?: number;
+  /*
+    The eating half, which is how MyFitnessPal data reaches ARISE without a
+    MyFitnessPal integration: MFP writes meal totals into Apple Health, and
+    this endpoint already reads Apple Health. Field names vary by exporter —
+    lib/health-payload.ts holds the aliases.
+  */
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  /** breakfast | lunch | dinner | snack. Omitted means a whole-day total. */
+  meal?: string;
 };
 
-export { parseHealthPayload } from '@/lib/health-payload';
-export type { HealthReading } from '@/lib/health-payload';
+export { parseHealthPayload, parseHealthNutrition } from '@/lib/health-payload';
+export type { HealthReading, HealthNutrition } from '@/lib/health-payload';
