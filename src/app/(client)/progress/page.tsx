@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { WeightChart } from '@/components/progress/weight-chart';
 import { PhotoGrid } from '@/components/progress/photo-grid';
+import { PhotoCompare } from '@/components/progress/photo-compare';
+import { comparePairs } from '@/lib/photo-compare';
 import { PHOTO_ANGLES, signPhotoUrls } from '@/lib/progress-photos';
 import { weekOfFor, formatWeek } from '@/lib/check-in';
 import { logWeight, logMeasurement, removeWeightLog } from './actions';
@@ -30,7 +32,7 @@ export default async function ProgressPage() {
   // coast is already Monday in UTC.
   const thisWeek = weekOfFor(user);
 
-  const [logs, measurements, photos, thisWeeksCheckIn] = await Promise.all([
+  const [logs, measurements, photos, earliestPhotos, thisWeeksCheckIn] = await Promise.all([
     prisma.weightLog.findMany({
       where: { clientId: user.id, date: { gte: since } },
       orderBy: { date: 'asc' },
@@ -51,16 +53,35 @@ export default async function ProgressPage() {
       orderBy: { date: 'desc' },
       take: 24,
     }),
+    /*
+      The first shoot, fetched separately on purpose.
+
+      The grid above takes the newest 24, so for anyone who has been at this a
+      few months the earliest photos — the only ones worth comparing against —
+      are simply not in that result. Asking for the oldest few is one more
+      cheap indexed read and it is what makes the comparison possible at all.
+    */
+    prisma.progressPhoto.findMany({
+      where: { clientId: user.id },
+      orderBy: { date: 'asc' },
+      take: 6,
+    }),
     prisma.checkIn.findFirst({ where: { clientId: user.id, weekOf: thisWeek } }),
   ]);
 
-  const signed = await signPhotoUrls(photos.map((p) => p.storagePath));
-  const photoTiles = photos.map((p) => ({
+  // One signing round trip for both sets — the same photo can appear in each
+  // (a client with a single shoot), and signing it twice would be wasteful.
+  const signed = await signPhotoUrls(
+    [...photos, ...earliestPhotos].map((p) => p.storagePath)
+  );
+  const tile = (p: (typeof photos)[number]) => ({
     id: p.id,
     date: p.date,
     angle: p.angle,
     url: signed.get(p.storagePath) ?? null,
-  }));
+  });
+  const photoTiles = photos.map(tile);
+  const comparisons = comparePairs(earliestPhotos.map(tile), photoTiles);
 
   const points = logs.map((l) => ({ date: l.date, weight: Number(l.weight) }));
   const latest = points[points.length - 1] ?? null;
@@ -202,6 +223,13 @@ export default async function ProgressPage() {
               Only you and your coach can see these.
             </p>
           </form>
+
+          {/*
+            Then and now, before the roll of everything ever taken. This is
+            the question the screen exists to answer, so it is not something
+            the client has to scroll for or switch on.
+          */}
+          <PhotoCompare pairs={comparisons} />
 
           <PhotoGrid photos={photoTiles} action={deleteProgressPhoto} />
         </CardContent>
