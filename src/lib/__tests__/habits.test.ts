@@ -7,7 +7,7 @@
 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { streakFrom } from '@/lib/habits';
+import { streakFrom, habitGoalText } from '@/lib/habits';
 import { todayIn, daysAgoIn } from '@/lib/day';
 
 const TZ='America/New_York';
@@ -47,4 +47,33 @@ test('a full year of start dates never mis-counts a 14-day run',()=>{
     const s=new Set<string>(); for(let i=0;i<14;i+=1) s.add(key(daysAgoIn(i,TZ,at)));
     assert.equal(streakFrom(s,todayIn(TZ,at)),14,'day '+d);
   }
+});
+
+/*
+  The goal that had nowhere to go.
+
+  habitLabel keeps only the name for a manual habit, and the readout is "[—]"
+  because nothing measures water. So "1 gallon" was stored, shown to the coach,
+  and invisible to the person meant to drink it.
+*/
+
+test('a manual habit prints the coach target', () => {
+  assert.equal(habitGoalText('water', '1 gallon', undefined), '1 gallon');
+  assert.equal(habitGoalText('sleep', '7 hours', undefined), '7 hours');
+});
+
+test('a measured goal stays in the readout, not beside it', () => {
+  // "[7400/12000]" already says it. Repeating it would double the row.
+  assert.equal(habitGoalText('steps', '12000', 12000), null);
+  assert.equal(habitGoalText('protein', '180g', 180), null);
+});
+
+test("a custom habit's target is its label, so it is not printed twice", () => {
+  assert.equal(habitGoalText('custom', 'no alcohol', undefined), null);
+});
+
+test('no target set means nothing to print', () => {
+  assert.equal(habitGoalText('water', null, undefined), null);
+  assert.equal(habitGoalText('water', '   ', undefined), null);
+  assert.equal(habitGoalText('sleep', undefined, undefined), null);
 });
