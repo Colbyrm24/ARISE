@@ -635,6 +635,20 @@ export default async function TodayPage({
                 </li>
               ))}
             </ul>
+
+            {/*
+              The way in on a phone. The bottom bar holds five items on
+              purpose and a sixth would crowd it, so the leaderboard hangs off
+              the card it belongs to — consistency is what these rows measure
+              and what that board ranks.
+            */}
+            <Link
+              href="/leaderboard"
+              className="readout mt-1 flex items-center justify-between border-t border-border/50 pt-3 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-accent"
+            >
+              Where you stand
+              <ChevronRight size={12} />
+            </Link>
           </SystemWindowContent>
         </SystemWindow>
       ) : (
