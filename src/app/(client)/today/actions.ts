@@ -6,6 +6,8 @@ import { requireClient } from '@/lib/auth';
 import { todayFor } from '@/lib/day';
 import { isTracked } from '@/lib/habits';
 import { markScheduledDone } from '@/lib/scheduled';
+import { displayName, notifyCoach } from '@/lib/notifications';
+import { cardioLoggedBody } from '@/lib/activity';
 
 /*
   The client's side of the Today screen.
@@ -141,6 +143,16 @@ export async function logCardio(formData: FormData) {
     miss the read and both insert, and the screen reads with findFirst so
     the duplicate would be invisible to the client and to the coach.
   */
+  /*
+    Whether this is the first log of the day decides whether the coach hears
+    about it. Correcting 30 minutes to 35 is not a second session, and a feed
+    that says otherwise trains people to ignore it.
+  */
+  const already = await prisma.cardioLog.findUnique({
+    where: { clientId_cardioTypeId_date: { clientId: user.id, cardioTypeId, date } },
+    select: { id: true },
+  });
+
   await prisma.cardioLog.upsert({
     where: { clientId_cardioTypeId_date: { clientId: user.id, cardioTypeId, date } },
     create: { clientId: user.id, cardioTypeId, date, minutes },
@@ -148,5 +160,14 @@ export async function logCardio(formData: FormData) {
   });
 
   await markScheduledDone(user.id, 'cardio', { day: date });
+
+  if (!already) {
+    const [name, type] = await Promise.all([
+      displayName(user.id),
+      prisma.cardioType.findUnique({ where: { id: cardioTypeId }, select: { name: true } }),
+    ]);
+    await notifyCoach(user.id, 'activity', cardioLoggedBody(name, type?.name, minutes));
+  }
+
   refresh();
 }

@@ -13,7 +13,7 @@ import {
   countState,
   type CountMode,
 } from '@/components/ui/system-window';
-import { habitLabel, isTracked, parseTarget } from '@/lib/habits';
+import { habitGoalText, habitLabel, isTracked, parseTarget } from '@/lib/habits';
 import { upcomingForClient } from '@/lib/booking';
 import { scheduledToday, scheduleBetween } from '@/lib/program-deploy';
 import { LocalTime } from '@/components/local-time';
@@ -314,6 +314,8 @@ export default async function TodayPage({
       total,
       unit,
       mode,
+      // What the coach asked for, when no measured number can carry it.
+      goalText: habitGoalText(goal.goalType, goal.targetValue, total),
       done: loggedDone.has(goal.id) || hit,
       // Only manual habits get a checkbox, and only on today — ticking a box
       // while looking at Thursday would write Thursday's habit against
@@ -571,6 +573,16 @@ export default async function TodayPage({
                         unit={r.total === undefined ? r.unit : undefined}
                         mode={r.mode}
                       />
+                    ) : r.goalText ? (
+                      /*
+                        The coach's own instruction, finally on the client's
+                        screen. A manual habit has no measured number, so this
+                        row used to be a bare dash — "Water [—]" — while the
+                        gallon the coach typed sat in the database unread.
+                      */
+                      <span className="readout text-sm text-muted-foreground">
+                        [{r.goalText}]
+                      </span>
                     ) : (
                       <span className="readout text-sm text-muted-foreground">[—]</span>
                     )}
