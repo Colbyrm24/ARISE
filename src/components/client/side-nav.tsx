@@ -12,7 +12,8 @@ import {
   MessageCircle,
   CalendarClock,
   Bell,
-  CircleUser,
+  CircleUser, 
+  Trophy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ const ITEMS = [
   { href: '/nutrition', label: 'Nutrition', icon: Apple },
   { href: '/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/progress', label: 'Progress', icon: TrendingUp },
+  { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { href: '/check-in', label: 'Check-in', icon: ClipboardCheck },
   { href: '/messages', label: 'Messages', icon: MessageCircle },
   { href: '/book', label: 'Book a call', icon: CalendarClock },
