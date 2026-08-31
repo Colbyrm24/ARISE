@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
-import { daysAgoIn, zoneOf } from '@/lib/day';
+import { daysAgoIn, zoneOf, todayFor } from '@/lib/day';
 import { weekOverWeek } from '@/lib/weight-trend';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,9 @@ import { WeightChart } from '@/components/progress/weight-chart';
 import { PhotoGrid } from '@/components/progress/photo-grid';
 import { PhotoCompare } from '@/components/progress/photo-compare';
 import { comparePairs } from '@/lib/photo-compare';
+import { AchievementBoard } from '@/components/progress/achievement-board';
+import { achievementStatsFor } from '@/lib/achievement-stats';
+import { achievementsFor, earnedCount, ACHIEVEMENTS } from '@/lib/achievements';
 import { PHOTO_ANGLES, signPhotoUrls } from '@/lib/progress-photos';
 import { weekOfFor, formatWeek } from '@/lib/check-in';
 import { logWeight, logMeasurement, removeWeightLog } from './actions';
@@ -31,6 +34,13 @@ export default async function ProgressPage() {
   // Their week, not the server's — a Sunday-evening check-in on the west
   // coast is already Monday in UTC.
   const thisWeek = weekOfFor(user);
+
+  /*
+    The badges. Derived entirely from what is already logged, so somebody who
+    has been training for months opens this holding everything they earned
+    before the feature existed.
+  */
+  const badges = achievementsFor(await achievementStatsFor(user.id, todayFor(user)));
 
   const [logs, measurements, photos, earliestPhotos, thisWeeksCheckIn] = await Promise.all([
     prisma.weightLog.findMany({
@@ -132,6 +142,18 @@ export default async function ProgressPage() {
             />
             <Button type="submit">Log</Button>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Achievements</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="readout text-[11px] uppercase tracking-wider text-muted-foreground">
+            {earnedCount(badges)} of {ACHIEVEMENTS.length} earned
+          </p>
+          <AchievementBoard states={badges} />
         </CardContent>
       </Card>
 
