@@ -147,3 +147,30 @@ export function streakFrom(doneDates: Set<string>, today: Date): number {
   }
   return streak;
 }
+
+/**
+ * The goal to print on a habit row when the number can't carry it.
+ *
+ * A tracked habit shows its goal inside the readout — "[7400/12000]" — so it
+ * needs nothing here. A manual one had nowhere to put it at all: habitLabel
+ * throws targetValue away for every type except custom, and the row's readout
+ * is a bare "[—]" because there is no measured value to show. So a coach who
+ * set Water to "1 gallon" produced a row reading "Water [—]", and the client
+ * never saw the gallon. The instruction existed in the database and on the
+ * coach's screen and nowhere the client could read it.
+ *
+ * Returns null when the row already says it — a numeric total is in the
+ * readout, and a custom habit's target IS its label.
+ */
+export function habitGoalText(
+  type: string,
+  targetValue: string | null | undefined,
+  total: number | undefined
+): string | null {
+  if (total !== undefined) return null;
+  // A custom habit's target is its whole description, already used as the
+  // label. Printing it twice would read "no alcohol — no alcohol".
+  if (type === 'custom') return null;
+  const text = (targetValue ?? '').trim();
+  return text || null;
+}

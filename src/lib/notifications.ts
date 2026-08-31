@@ -9,6 +9,13 @@ export const NOTIFICATION_TYPES = [
   'booking',
   'habit',
   'account',
+  /*
+    Training that happened. Workouts finished, cardio logged, a protein goal
+    reached — the three things a client does most and the three the coach was
+    never told about. Every other event in this list already had a caller;
+    these had the whole delivery mechanism and no one to ring it.
+  */
+  'activity',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -27,6 +34,8 @@ export function notificationHref(
     if (type === 'nutrition') return '/nutrition';
     if (type === 'booking') return '/book';
     if (type === 'habit') return '/today';
+    // Their own training, so the day it belongs to is where it goes.
+    if (type === 'activity') return '/today';
     if (type === 'account') return '/welcome';
     return '/progress';
   }
@@ -44,6 +53,7 @@ export function notificationHref(
       return '/coach/schedule';
     case 'habit':
     case 'account':
+    case 'activity':
       return `/coach/clients/${clientId}`;
     default:
       return '/coach/inbox';
@@ -64,6 +74,7 @@ const PUSH_TITLES: Record<NotificationType, string> = {
   booking: 'Call booked',
   habit: 'New habit',
   account: 'New signup',
+  activity: 'Client activity',
 };
 
 export async function notify(
