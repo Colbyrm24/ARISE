@@ -12,6 +12,7 @@ import {
   removeMealPhoto,
 } from '@/lib/meal-photos';
 import { estimateMealFromPhoto } from '@/lib/meal-estimate';
+import { recordProteinGoal } from '@/lib/protein-goal';
 
 /** What the photo logger tells the client, so the screen can say something real. */
 export type PhotoLogResult =
@@ -42,9 +43,17 @@ function mediaTypeFor(type: string): 'image/jpeg' | 'image/png' | 'image/webp' |
 }
 
 
-function refresh() {
+/*
+  Redraw the two screens a meal changes, and check whether that meal was the
+  one that landed the protein goal. Every path that writes a NutritionLog
+  already ended here, so this is the one seam where "the day's eating just
+  changed" is true for all of them — instrumenting six create sites instead
+  would have meant six chances to forget one.
+*/
+async function refresh(clientId?: string, date?: Date) {
   revalidatePath('/nutrition');
   revalidatePath('/today');
+  if (clientId && date) await recordProteinGoal(clientId, date);
 }
 
 /** Meal slot, or null if the client didn't pick one. */
@@ -86,7 +95,7 @@ export async function logMeal(formData: FormData) {
       fat: Number(recipe.fat) * quantity,
     },
   });
-  refresh();
+  await refresh(user.id, todayFor(user));
 }
 
 /** Logs a food from the library (or a previously saved custom food). */
@@ -113,7 +122,7 @@ export async function logFood(formData: FormData) {
       fat: Number(food.fat) * quantity,
     },
   });
-  refresh();
+  await refresh(user.id, todayFor(user));
 }
 
 /**
@@ -193,7 +202,7 @@ export async function quickAddFood(formData: FormData) {
       photoPath,
     },
   });
-  refresh();
+  await refresh(user.id, todayFor(user));
 }
 
 /**
@@ -282,7 +291,7 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
         },
       },
     });
-    refresh();
+    await refresh(user.id, todayFor(user));
     return { ok: false, error: result.message, saved: true };
   }
 
@@ -304,7 +313,7 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
       estimate: e as unknown as Prisma.InputJsonValue,
     },
   });
-  refresh();
+  await refresh(user.id, todayFor(user));
 
   return {
     ok: true,
@@ -353,7 +362,7 @@ export async function logPlanItem(formData: FormData) {
       fat: item.fat,
     },
   });
-  refresh();
+  await refresh(user.id, todayFor(user));
 }
 
 export async function removeMealLog(formData: FormData) {
@@ -368,5 +377,5 @@ export async function removeMealLog(formData: FormData) {
   // Storage is cleaned after the row is gone. An orphaned object costs a few
   // cents; a log pointing at a deleted file renders as a broken image.
   if (log.photoPath) await removeMealPhoto(log.photoPath);
-  refresh();
+  await refresh(user.id, todayFor(user));
 }
