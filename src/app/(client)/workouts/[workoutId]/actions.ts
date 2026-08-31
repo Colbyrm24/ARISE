@@ -6,6 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { markScheduledDone } from '@/lib/scheduled';
 import { requireClient } from '@/lib/auth';
 import { startOfDayInstantFor } from '@/lib/day';
+import { displayName, notifyCoach } from '@/lib/notifications';
+import { workoutFinishedBody } from '@/lib/activity';
 
 /*
   `today` is the lifter's today, not the server's.
@@ -238,6 +240,21 @@ export async function completeWorkout(formData: FormData) {
     other query in the app already assumes.
   */
   await markScheduledDone(user.id, 'workout', { workoutId, startedAt: log.startedAt });
+
+  /*
+    Tell the coach. This is the single most common thing a client does and
+    the feed never mentioned it once — the whole notification path existed
+    and no one called it for training.
+
+    After the write, and swallowed by notify() itself, so a coach with no
+    push subscription or no assigned relationship can't cost the client the
+    session they just finished.
+  */
+  const [name, workout] = await Promise.all([
+    displayName(user.id),
+    prisma.workout.findUnique({ where: { id: workoutId }, select: { name: true } }),
+  ]);
+  await notifyCoach(user.id, 'activity', workoutFinishedBody(name, workout?.name, duration));
 
   revalidatePath(`/workouts/${workoutId}`);
   revalidatePath('/workouts');
