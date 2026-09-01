@@ -10,6 +10,8 @@ import { CopyLinkButton } from '@/components/copy-link-button';
 import { IntakeCard } from '@/components/onboarding/intake-card';
 import { BillingCard } from '@/components/coach/billing-card';
 import { cn } from '@/lib/utils';
+import { requireCoach } from '@/lib/auth';
+import { zoneOf } from '@/lib/day';
 import { CLIENT_STATUSES, STATUS_LABELS } from '@/lib/client-status';
 import { PROVIDER_LABELS } from '@/lib/plans';
 import { updateClientStatus, addCoachNote, toggleCoachNotePin } from '../actions';
@@ -23,6 +25,7 @@ const selectClass =
   Status, the notes only you see, money, the agreement, and their intake.
 */
 export default async function ClientAccountPage({ params }: { params: { id: string } }) {
+  const coach = await requireCoach();
   const client = await prisma.client.findUnique({
     where: { userId: params.id },
     include: {
@@ -34,6 +37,15 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
   });
 
   if (!client) notFound();
+
+  /*
+    Two zones, deliberately. A coach note is something HE wrote, so it is
+    dated in his day; a charge is something that happens to the CLIENT's
+    card, so it is dated in theirs — which is also what the client's own
+    billing line says, so the two screens agree.
+  */
+  const coachZone = zoneOf(coach.profile);
+  const clientZone = zoneOf(client.user.profile);
 
   const [plans, templates] = await Promise.all([
     prisma.plan.findMany({ where: { active: true }, orderBy: { createdAt: 'desc' } }),
@@ -126,10 +138,16 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                     </form>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
+                    {/*
+                      An instant with no timeZone renders in the host's, which
+                      on Vercel is UTC — a note written at 9pm on the 3rd was
+                      dated Sep 4.
+                    */}
                     {note.createdAt.toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric',
+                      timeZone: coachZone,
                     })}
                   </p>
                 </li>
@@ -284,7 +302,7 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
       </Card>
 
       {/* What they have actually paid — see components/coach/billing-card.tsx. */}
-      <BillingCard clientId={client.userId} />
+      <BillingCard clientId={client.userId} timeZone={clientZone} />
 
       <IntakeCard clientId={client.userId} />
     </div>
