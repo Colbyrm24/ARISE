@@ -6,27 +6,32 @@ import { prisma } from '@/lib/prisma';
 import { markScheduledDone } from '@/lib/scheduled';
 import { requireClient } from '@/lib/auth';
 import { startOfDayInstantFor } from '@/lib/day';
+import { openSessionSince } from '@/lib/session-window';
 import { displayName, notifyCoach } from '@/lib/notifications';
 import { workoutFinishedBody } from '@/lib/activity';
 
 /*
   `today` is the lifter's today, not the server's.
 
-  This one bounds a `startedAt` timestamp rather than a `@db.Date` column, so
-  it takes the INSTANT local midnight happened — not `todayFor`, which is the
-  `@db.Date` label for the day and sits at 8pm the previous evening in New
-  York. Getting either half wrong splits or merges a session: the old UTC
+  The window bounds a `startedAt` timestamp rather than a `@db.Date` column,
+  so it takes the INSTANT local midnight happened — not `todayFor`, which is
+  the `@db.Date` label for the day and sits at 8pm the previous evening in
+  New York. Getting either half wrong splits or merges a session: the old UTC
   midnight opened a second log for a 7pm PDT workout, and bounding by the
   date label swept last night's unfinished session into this morning.
+
+  It reaches a few hours back past midnight so a session that straddles the
+  boundary stays one session. openSessionSince carries the reasoning and the
+  tests.
 */
 async function getOrCreateTodayLog(
   clientId: string,
   workoutId: string,
   user: Parameters<typeof startOfDayInstantFor>[0]
 ) {
-  const today = startOfDayInstantFor(user);
+  const since = openSessionSince(user);
   const existing = await prisma.workoutLog.findFirst({
-    where: { clientId, workoutId, startedAt: { gte: today }, completedAt: null },
+    where: { clientId, workoutId, startedAt: { gte: since }, completedAt: null },
     orderBy: { startedAt: 'desc' },
   });
   if (existing) return existing;
@@ -139,27 +144,36 @@ export async function logSet(formData: FormData) {
   });
 
   if (existingSet) {
+    /*
+      A personal best, once earned, is never taken away by re-saving the row.
+
+      Two ways it used to vanish. A blank weight box: `?? undefined` protected
+      the weight and the reps, `isPr` was written unconditionally, and
+      `detectPr` returns false the moment there is no weight to compare — so
+      resubmitting a PR row with only the reps filled left it reading 225 lb
+      with the flag gone. That one bites without anyone doing anything odd,
+      because a stored weight of 0 renders as an empty box.
+
+      The other survived that fix. `detectPr` excludes the row being edited so
+      it can't fail to beat itself — but it does NOT exclude the row's
+      siblings. Hit 225 for a new PB on set 1, then match it on sets 2 and 3
+      (correctly not flagged), then tap set 1's tick again to correct the
+      reps: set 2 now supplies the record, 225 > 225 is false, and the badge
+      is written away. The tick's own label says "Update set 1", so re-tapping
+      it is the obvious thing to do, and there was no way to get the PR back.
+
+      So the flag is only ever raised here, never lowered. A false positive
+      would need a client to have genuinely lifted the weight; the failure in
+      the other direction erased something real.
+    */
+    const keepsPr = existingSet.isPr || (actualWeight !== null && isPr);
+
     await prisma.workoutLogSet.update({
       where: { id: existingSet.id },
       data: {
         actualWeight: actualWeight ?? undefined,
         actualReps: actualReps ?? undefined,
-        /*
-          A blank weight box must not clear a personal best.
-
-          `?? undefined` already protects the weight and the reps — resubmit
-          with the weight blank and the stored 225 stays. `isPr` had no such
-          guard and was written unconditionally, and `detectPr` returns false
-          the moment there is no weight to compare. So resubmitting a PR row
-          with only the reps filled in left the row reading 225 lb with the
-          flag gone: the PB dropped off the coach's dashboard while the weight
-          that earned it was still sitting there.
-
-          This bites without anyone doing anything odd, because a stored
-          weight of 0 renders as an empty box — so the form submits blank on a
-          set the client never touched.
-        */
-        ...(actualWeight === null ? {} : { isPr }),
+        isPr: keepsPr,
       },
     });
   } else {
@@ -199,10 +213,31 @@ export async function completeWorkout(formData: FormData) {
     anyone who trains and doesn't log could never mark a session done. Their
     Today card said "Not started" forever and the workout habit never ticked.
   */
+  /*
+    The fallback is bounded to the session in progress, same as logSet.
+
+    It used to have no date bound at all, and nothing in the app ever closes
+    an abandoned log — so incomplete logs pile up forever. The hidden
+    workoutLogId is empty exactly when today has no log yet, which is the
+    circuit-session case this branch exists for, so the unbounded query went
+    looking and found the oldest wound in the table: an unfinished session
+    from a previous week.
+
+    Finishing that one wrote a duration of seven days, a volume totalled from
+    last week's sets, and ticked LAST week's calendar chip while today's
+    stayed hollow. Today still had no log, so the list said nothing was done
+    and the Finish button came back — from the client's side the button
+    simply did nothing.
+  */
   let log = workoutLogId
     ? await prisma.workoutLog.findUnique({ where: { id: workoutLogId }, include: { sets: true } })
     : await prisma.workoutLog.findFirst({
-        where: { clientId: user.id, workoutId, completedAt: null },
+        where: {
+          clientId: user.id,
+          workoutId,
+          startedAt: { gte: openSessionSince(user) },
+          completedAt: null,
+        },
         orderBy: { startedAt: 'desc' },
         include: { sets: true },
       });
