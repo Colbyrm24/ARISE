@@ -299,7 +299,21 @@ export default async function NutritionPage({
             <div>
               <div className="mb-2 flex items-baseline justify-between text-sm">
                 <span>Protein</span>
-                <Count value={Math.round(eaten.protein)} total={`${proteinGoal}g`} mode="reach" />
+                {/*
+                  The unit goes in `unit`, not glued onto `total`. It renders
+                  identically — [112/185g] — but a string total reached Count
+                  as NaN, and a NaN total makes countState bail to 'none',
+                  which is styled the same as 'short'. So this bracket looked
+                  the same at 20g and at 190g: the one signal on the screen
+                  for the number this file's own comment calls the one the
+                  coach actually chases could never fire.
+                */}
+                <Count
+                  value={Math.round(eaten.protein)}
+                  total={proteinGoal}
+                  unit="g"
+                  mode="reach"
+                />
               </div>
               <Progress value={fillPercent(eaten.protein, proteinGoal)} />
             </div>
