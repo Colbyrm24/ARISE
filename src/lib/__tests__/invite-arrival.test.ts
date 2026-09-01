@@ -30,6 +30,27 @@ test('somebody who never paid can be let in on an existing-client link', () => {
   assert.equal(statusForExistingClient(s('payment_pending'), s('onboarding')), 'onboarding');
 });
 
+test('an existing-client link lets in somebody paused or cancelled', () => {
+  /*
+    Not an edge case. Cancelling their old Stripe subscription is how he stops
+    billing them here, and customer.subscription.deleted sets paused on the
+    way through — so the client he is moving across is very often paused at
+    the moment he sends the link. Refusing them here would sign them up, tell
+    them there was nothing to pay, and then bounce them off every screen onto
+    "your last payment did not go through".
+  */
+  assert.equal(statusForExistingClient(s('paused'), s('onboarding')), 'onboarding');
+  assert.equal(statusForExistingClient(s('cancelled'), s('onboarding')), 'onboarding');
+  assert.equal(statusForExistingClient(s('paid'), s('onboarding')), 'onboarding');
+});
+
+test('a paying link does not move anyone but a fresh lead', () => {
+  // Mid-purchase belongs to the payment webhook; paused and cancelled are
+  // records, and a checkout will move them itself when the money lands.
+  assert.equal(statusForExistingClient(s('paused'), s('payment_pending')), null);
+  assert.equal(statusForExistingClient(s('cancelled'), s('payment_pending')), null);
+});
+
 test('a client already in the app is never pushed back out to pay', () => {
   // The failure this function exists to prevent.
   assert.equal(statusForExistingClient(s('onboarding'), s('payment_pending')), null);
@@ -41,11 +62,10 @@ test('an active client re-using a link is left alone entirely', () => {
   assert.equal(statusForExistingClient(s('active'), s('onboarding')), null);
 });
 
-test('a paused, cancelled or completed client keeps their record', () => {
-  for (const status of ['paused', 'cancelled', 'completed']) {
-    assert.equal(statusForExistingClient(s(status), s('onboarding')), null, status);
-    assert.equal(statusForExistingClient(s(status), s('payment_pending')), null, status);
-  }
+test('a completed client is left exactly as they are', () => {
+  // completed is an entitled status: they still have the app.
+  assert.equal(statusForExistingClient(s('completed'), s('onboarding')), null);
+  assert.equal(statusForExistingClient(s('completed'), s('payment_pending')), null);
 });
 
 test('somebody mid-payment is not written over with the same status', () => {
@@ -54,8 +74,7 @@ test('somebody mid-payment is not written over with the same status', () => {
   assert.equal(statusForExistingClient(s('onboarding'), s('onboarding')), null);
 });
 
-test('a client who has paid but not signed is not knocked back', () => {
+test('a client who has paid but not signed is not knocked back by a paying link', () => {
   assert.equal(statusForExistingClient(s('paid'), s('payment_pending')), null);
   assert.equal(statusForExistingClient(s('agreement_pending'), s('payment_pending')), null);
-  assert.equal(statusForExistingClient(s('agreement_pending'), s('onboarding')), null);
 });

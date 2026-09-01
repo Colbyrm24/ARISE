@@ -72,3 +72,21 @@ test('every locked-out status tells the client what is happening', () => {
     );
   }
 });
+
+test('invite-arrival keeps the same list of entitled statuses', () => {
+  /*
+    invite-arrival.ts holds its own copy, because it has to stay importable by
+    a bare node test and @/lib/auth is not. A copy that drifts is worse than
+    no copy: if `paused` ever landed in one list and not the other, an invite
+    would either lock out a client the coach vouched for or hand the app to
+    somebody whose card just died. So the two are compared here.
+  */
+  const inviteSrc = readFileSync(join(process.cwd(), 'src/lib/invite-arrival.ts'), 'utf8');
+  const m = /const ENTITLED_HERE = new Set\(\[([^\]]*)\]\)/.exec(inviteSrc);
+  assert.ok(m, 'invite-arrival.ts must declare ENTITLED_HERE as a literal Set');
+  const mirrored = m![1]
+    .split(',')
+    .map((s) => s.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean);
+  assert.deepEqual(mirrored.slice().sort(), entitled.slice().sort());
+});
