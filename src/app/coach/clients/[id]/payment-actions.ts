@@ -6,7 +6,7 @@ import { requireCoach, isEntitled } from '@/lib/auth';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { stripe } from '@/lib/stripe';
 import { appliedPrice, createStripePaymentLink } from '@/lib/payment-link';
-import { finalizeManualPaymentLink } from '@/lib/payment-finalize';
+import { finalizeManualPaymentLink, recheckStripePaymentLink } from '@/lib/payment-finalize';
 import { parsePrice, parseCount } from '@/lib/billing';
 import type { PaymentFrequency, PaymentProviderType } from '@prisma/client';
 
@@ -203,6 +203,39 @@ export async function markPaymentLinkPaid(formData: FormData) {
   if (!(await coachOwnsClient(coach.id, link.clientId))) return;
 
   await finalizeManualPaymentLink(paymentLinkId);
+
+  revalidatePath(`/coach/clients/${clientId}`);
+}
+
+/**
+ * "They say they paid — check Stripe."
+ *
+ * The recovery for a payment that landed at Stripe but never came back: a
+ * webhook that did not arrive, or a client who closed the tab before the
+ * success page could finish the job. Same ownership check as marking a link
+ * paid, but the answer comes from Stripe rather than from the coach, so this
+ * can only ever confirm a real payment.
+ */
+export async function recheckPaymentLink(formData: FormData) {
+  const coach = await requireCoach();
+
+  const paymentLinkId = formData.get('paymentLinkId') as string | null;
+  const clientId = formData.get('clientId') as string | null;
+  if (!paymentLinkId || !clientId) return;
+
+  const link = await prisma.paymentLink.findUnique({
+    where: { id: paymentLinkId },
+    select: { clientId: true },
+  });
+  if (!link || link.clientId !== clientId) return;
+  if (!(await coachOwnsClient(coach.id, link.clientId))) return;
+
+  try {
+    await recheckStripePaymentLink(paymentLinkId);
+  } catch {
+    // Stripe being unreachable is not worth a crash on a page the coach is
+    // using to fix something else. The link stays pending and he can retry.
+  }
 
   revalidatePath(`/coach/clients/${clientId}`);
 }
