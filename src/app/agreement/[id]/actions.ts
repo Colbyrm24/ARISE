@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { renderAgreementTemplate, formatAgreementDate } from '@/lib/agreement';
+import { zoneOf } from '@/lib/day';
 import { notifyCoach } from '@/lib/notifications';
 
 /**
@@ -24,8 +25,16 @@ export async function signAgreement(formData: FormData) {
   if (!agreement || agreement.clientId !== user.id || agreement.status === 'signed') return;
 
   const now = new Date();
+  /*
+    The signer's day, not the host's.
+
+    This is an instant, and formatting it with no zone used the server's — UTC
+    on Vercel. So a client in Los Angeles signing at 6:30pm on 1 September had
+    "September 2, 2026" frozen into renderedText, which is never re-rendered.
+    The date on their contract was a day out for good.
+  */
   const finalText = renderAgreementTemplate(agreement.renderedText, {
-    signed_date: formatAgreementDate(now),
+    signed_date: formatAgreementDate(now, zoneOf(user.profile)),
   });
 
   const headerList = headers();
