@@ -32,7 +32,20 @@ export async function createClientInvite(formData: FormData) {
   const startDateRaw = formData.get('startDate') as string | null;
   const name = ((formData.get('name') as string | null) ?? '').trim();
 
-  if (!planId || !agreementTemplateId || !startDateRaw) return;
+  /*
+    An invite for somebody who is already paying him.
+
+    He is moving a book of clients off Trainerize, and those people have live
+    payment plans running elsewhere. Sending them through the checkout would
+    either charge them twice or, when they refused, leave them stuck at
+    payment_pending looking at an app they cannot open. This flag makes the
+    account and the coach attachment and nothing financial.
+  */
+  const skipPayment = formData.get('skipPayment') === 'on';
+
+  if (!planId || !startDateRaw) return;
+  // Only the paying route needs something to sign.
+  if (!skipPayment && !agreementTemplateId) return;
 
   const startDate = new Date(startDateRaw);
   if (Number.isNaN(startDate.getTime())) return;
@@ -42,16 +55,23 @@ export async function createClientInvite(formData: FormData) {
   // checkout.
   const [plan, template] = await Promise.all([
     prisma.plan.findUnique({ where: { id: planId } }),
-    prisma.agreementTemplate.findUnique({ where: { id: agreementTemplateId } }),
+    agreementTemplateId
+      ? prisma.agreementTemplate.findUnique({ where: { id: agreementTemplateId } })
+      : Promise.resolve(null),
   ]);
-  if (!plan || !template) return;
+  if (!plan) return;
+  if (!skipPayment && !template) return;
 
   await prisma.clientInvite.create({
     data: {
       token: inviteToken(),
       coachId: coach.id,
       planId,
-      agreementTemplateId,
+      // Dropped entirely on a skip-payment invite: there is no checkout to
+      // attach an agreement to, and storing one would imply a document the
+      // client is never shown.
+      agreementTemplateId: skipPayment ? null : agreementTemplateId,
+      skipPayment,
       name: name || null,
       // Same three levers as a payment link, because these are the ones that
       // actually differ per person — the price he agreed, how many payments,
