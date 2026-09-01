@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { requireCoach, isEntitled } from '@/lib/auth';
 import { coachOwnsClient } from '@/lib/coach-guard';
@@ -216,26 +217,49 @@ export async function markPaymentLinkPaid(formData: FormData) {
  * paid, but the answer comes from Stripe rather than from the coach, so this
  * can only ever confirm a real payment.
  */
-export async function recheckPaymentLink(formData: FormData) {
+export async function recheckClientPayments(formData: FormData) {
   const coach = await requireCoach();
 
-  const paymentLinkId = formData.get('paymentLinkId') as string | null;
   const clientId = formData.get('clientId') as string | null;
-  if (!paymentLinkId || !clientId) return;
+  if (!clientId) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
 
-  const link = await prisma.paymentLink.findUnique({
-    where: { id: paymentLinkId },
-    select: { clientId: true },
+  /*
+    EVERY pending Stripe link on this client, not just the newest.
+
+    The dead end this exists for produces a second link almost every time: the
+    client says "I paid and nothing happened", and the coach's first instinct
+    on that same screen is to generate them a fresh one. Checking only the
+    latest would then look permanently at the wrong link and answer "no
+    payment" forever, while the money sits on the older one.
+  */
+  const links = await prisma.paymentLink.findMany({
+    where: { clientId, provider: 'stripe', status: 'pending' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
   });
-  if (!link || link.clientId !== clientId) return;
-  if (!(await coachOwnsClient(coach.id, link.clientId))) return;
 
-  try {
-    await recheckStripePaymentLink(paymentLinkId);
-  } catch {
-    // Stripe being unreachable is not worth a crash on a page the coach is
-    // using to fix something else. The link stays pending and he can retry.
+  let found = false;
+  let unreachable = false;
+
+  for (const link of links) {
+    try {
+      if (await recheckStripePaymentLink(link.id)) found = true;
+    } catch {
+      // Stripe being unreachable is not worth a crash on a page the coach is
+      // using to fix something else. Noted, reported, and he can retry.
+      unreachable = true;
+    }
   }
 
-  revalidatePath(`/coach/clients/${clientId}`);
+  revalidatePath(`/coach/clients/${clientId}/account`);
+
+  /*
+    Say what happened. A silent action here is worse than no action: the whole
+    reason he is pressing it is that a client insists they paid, and a page
+    that re-renders identically cannot tell him "Stripe says no" apart from
+    "this button is broken".
+  */
+  const outcome = found ? 'paid' : unreachable ? 'error' : 'none';
+  redirect(`/coach/clients/${clientId}/account?checked=${outcome}`);
 }
