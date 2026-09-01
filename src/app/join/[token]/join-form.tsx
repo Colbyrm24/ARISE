@@ -71,12 +71,27 @@ export function JoinForm({
 
       if (!session) {
         setLoading(false);
+        /*
+          Branch on what actually went wrong, not on which of the two calls
+          returned an object.
+
+          The first version of this assumed a failed signUp meant "that email
+          is taken" — so a rejected weak password, or a rate limit during a
+          burst of signups, told somebody with no account at all to go and
+          sign in. They can't, forgot-password sends nothing, and they are
+          left certain it is their fault. Supabase names the real cause; use
+          it, and fall back to showing it rather than guessing.
+        */
+        const reason = (signInError?.message ?? signUpError?.message ?? '').toLowerCase();
+
         setError(
-          signUpError
-            ? 'There is already an account with that email. Sign in first, then open this link again.'
-            : signInError
+          reason.includes('invalid login credentials')
+            ? 'That email already has an account and the password does not match. Sign in with your existing password (or reset it), then open this link again.'
+            : reason.includes('not confirmed')
               ? 'Check your email to confirm your account, then open this link again.'
-              : 'Something went wrong making your account. Try again in a moment.'
+              : signUpError?.message ||
+                signInError?.message ||
+                'Something went wrong making your account. Try again in a moment.'
         );
         return;
       }
