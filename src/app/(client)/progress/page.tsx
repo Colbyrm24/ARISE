@@ -48,16 +48,29 @@ export default async function ProgressPage() {
       orderBy: { date: 'asc' },
     }),
     /*
-      The only query on this page with no bound of any kind — every
-      measurement this client has ever taken, fetched and rendered on every
-      visit, growing forever. A year of weekly measurements is already fifty
-      rows to draw a trend nobody reads past the first dozen of.
+      The newest reading of each type, asked for as exactly that.
+
+      This screen renders one current value per measurement — five numbers —
+      and the query used to fetch every measurement the client had ever
+      taken. Capping it at 52 rows fixed the unbounded growth and introduced
+      a worse bug: the cap is across ALL types, so somebody who took a full
+      set once and then tracked their waist daily pushed chest, arms, thighs
+      and hips past row 52 in about seven weeks. Those rows then rendered a
+      dash while the measurements sat in the database — the data disappeared
+      off the screen and nothing had been deleted.
+
+      One indexed lookup per type instead. Five round trips that are each
+      bounded by construction, rather than one that is bounded by a number
+      somebody has to keep ahead of the client's logging habits.
     */
-    prisma.measurement.findMany({
-      where: { clientId: user.id },
-      orderBy: { date: 'desc' },
-      take: 52,
-    }),
+    Promise.all(
+      MEASUREMENTS.map(({ type }) =>
+        prisma.measurement.findFirst({
+          where: { clientId: user.id, type },
+          orderBy: { date: 'desc' },
+        })
+      )
+    ),
     prisma.progressPhoto.findMany({
       where: { clientId: user.id },
       orderBy: { date: 'desc' },
@@ -101,9 +114,13 @@ export default async function ProgressPage() {
   // coach are never looking at two different numbers for the same person.
   const { change: weekChange } = weekOverWeek(points, zoneOf(user.profile));
 
-  // Newest reading per measurement type.
-  const latestByType = new Map<string, (typeof measurements)[number]>();
-  for (const m of measurements) if (!latestByType.has(m.type)) latestByType.set(m.type, m);
+  // Newest reading per measurement type. The query already asked one per
+  // type, in MEASUREMENTS order, so this only drops the types with none.
+  type LatestMeasurement = NonNullable<(typeof measurements)[number]>;
+  const latestByType = new Map<string, LatestMeasurement>();
+  measurements.forEach((m, i) => {
+    if (m) latestByType.set(MEASUREMENTS[i]!.type, m as LatestMeasurement);
+  });
 
   return (
     <div className="flex flex-col gap-6">
