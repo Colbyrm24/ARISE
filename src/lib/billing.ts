@@ -178,19 +178,57 @@ export function refundOutcome(
 }
 
 /**
+ * Did the coach leave this field alone?
+ *
+ * The difference between "blank, so use the plan's number" and "typed
+ * something I could not read" is the whole ballgame on an override field,
+ * and both used to come back as the same `null`. See parsePrice.
+ */
+export function isBlankField(raw: string | null | undefined): boolean {
+  return raw === null || raw === undefined || String(raw).trim() === '';
+}
+
+/**
+ * The number out of what a person actually types into a money or count box.
+ *
+ * `Number('1,200')` is NaN, and so is `Number('$1,200')`. Those are not
+ * exotic inputs — a comma in a four-figure price is how everybody writes it,
+ * and the box is labelled with a currency. On an override field NaN became
+ * null, null means "no override", and no override means the plan's own
+ * price: the coach agreed $1,200 and the client checked out at whatever the
+ * plan said, with nothing on screen to say so.
+ *
+ * Only the currency symbol, the thousands separators and stray whitespace
+ * come off. Deliberately no cleverness beyond that — "12abc" is still junk
+ * and still rejected, because guessing at a half-typed number is how you
+ * charge somebody $12 instead of $1,200. Callers must treat a rejection as
+ * "stop", never as "no override".
+ */
+function humanNumber(raw: string): number | null {
+  // Trimmed at the ends, but interior whitespace is left in so it fails the
+  // shape test below — "1200 6" is two numbers, and silently reading it as
+  // 12006 would be worse than refusing it.
+  const cleaned = raw.trim().replace(/[$£€,]/g, '');
+  if (!/^-?(\d+\.?\d*|\.\d+)$/.test(cleaned)) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
  * A price a coach typed into a form, or null if it isn't one.
  *
  * `Number('')` is 0 and `Number('abc')` is NaN, and both used to travel all
  * the way to `Math.round(NaN * 100)` inside a Stripe call, which 500s the
  * page the coach is standing on. Zero is rejected too: a $0 checkout is
  * never what anyone meant to send a client.
+ *
+ * Null means "I could not read this", not "leave it as the plan's". Callers
+ * decide which they are looking at with isBlankField.
  */
 export function parsePrice(raw: string | null | undefined): number | null {
-  if (raw === null || raw === undefined) return null;
-  const trimmed = String(raw).trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n <= 0) return null;
+  if (isBlankField(raw)) return null;
+  const n = humanNumber(String(raw));
+  if (n === null || n <= 0) return null;
   // Stripe takes integer cents; more precision than that is a typo.
   return Math.round(n * 100) / 100;
 }
@@ -203,11 +241,9 @@ export function parsePrice(raw: string | null | undefined): number | null {
  * the terms of an agreement.
  */
 export function parseCount(raw: string | null | undefined): number | null {
-  if (raw === null || raw === undefined) return null;
-  const trimmed = String(raw).trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isInteger(n) || n < 1) return null;
+  if (isBlankField(raw)) return null;
+  const n = humanNumber(String(raw));
+  if (n === null || !Number.isInteger(n) || n < 1) return null;
   return n;
 }
 

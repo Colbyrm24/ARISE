@@ -73,7 +73,7 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
   const weekStart = startOfWeek();
   const inSevenDays = new Date(now.getTime() + 7 * DAY);
 
-  const [clients, prSets, weighedIn, messages] = await Promise.all([
+  const [clients, prSets, weighedIn, declining, messages] = await Promise.all([
     prisma.client.findMany({
       // Scoped to this coach. It took a coachId and then listed every client
       // in the database — harmless with one coach, wrong the moment there
@@ -91,6 +91,25 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
 
     prisma.weightLog.findMany({
       where: { date: { gte: weekStart }, client: { coachId } },
+      select: { clientId: true },
+      distinct: ['clientId'],
+    }),
+
+    /*
+      Whose card is being declined.
+
+      The dashboard has counted failed payments since the tile existed and
+      linked it at /coach/payments, which lists plans, prices and agreement
+      templates and not one payment. So the coach read "03", clicked to find
+      out whose cards were failing, and landed on a settings screen. The file
+      header on the dashboard describes fixing exactly this for two other
+      tiles; this one was left.
+
+      No date bound: a decline from three weeks ago is still a decline, and
+      it is still counted by the tile.
+    */
+    prisma.payment.findMany({
+      where: { status: 'failed', client: { coachId } },
       select: { clientId: true },
       distinct: ['clientId'],
     }),
@@ -128,6 +147,7 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
   });
 
   const prIds = new Set(prSets.map((s) => s.workoutLog.clientId));
+  const decliningIds = new Set(declining.map((p) => p.clientId));
   const weighedIds = new Set(weighedIn.map((w) => w.clientId));
 
   // Newest across the two directions of each thread.
@@ -197,6 +217,16 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
       href: '/coach/clients?segment=noweighin',
       warn: true,
       people: engaged.filter((c) => !weighedIds.has(c.userId)).map(person),
+    },
+    {
+      key: 'declining',
+      label: 'Card declining',
+      href: '/coach/clients?segment=declining',
+      warn: true,
+      // Not limited to `engaged`, unlike the two above it: a decline is the
+      // reason somebody is about to stop being active, so filtering by
+      // active status would hide the case worth seeing.
+      people: clients.filter((c) => decliningIds.has(c.userId)).map(person),
     },
   ];
 }
