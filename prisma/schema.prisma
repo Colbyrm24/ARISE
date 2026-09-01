@@ -320,7 +320,7 @@ model PaymentLink {
 
   client   Client            @relation(fields: [clientId], references: [userId])
   plan     Plan              @relation(fields: [planId], references: [id])
-  template AgreementTemplate @relation(fields: [agreementTemplateId], references: [id])
+  template AgreementTemplate  @relation(fields: [agreementTemplateId], references: [id])
   payment  Payment?
   agreement Agreement?
   subscriptions Subscription[]
@@ -347,12 +347,22 @@ model ClientInvite {
   token                    String            @unique
   coachId                  String            @map("coach_id")
   planId                   String            @map("plan_id")
-  agreementTemplateId      String            @map("agreement_template_id")
+  // Null for an invite that skips the agreement — see skipPayment.
+  agreementTemplateId      String?           @map("agreement_template_id")
   name                     String? // prefills the signup form so he can say who it is for
   priceOverride            Decimal?          @map("price_override") @db.Decimal(10, 2)
   numberOfPaymentsOverride Int?              @map("number_of_payments_override")
   termMonthsOverride       Int?              @map("term_months_override")
   startDate                DateTime          @map("start_date") @db.Date
+  // A client who is ALREADY paying him somewhere else.
+  //
+  // He is moving a book of clients off Trainerize, and those people have live
+  // payment plans he is not going to re-run through Stripe. Sending them to a
+  // checkout would either charge them twice or, if they refused, strand them
+  // at payment_pending with no way into the app they were told to download.
+  // This invite makes an account, attaches the coach, and puts them straight
+  // into the intake — no payment link, no agreement to sign.
+  skipPayment              Boolean           @default(false) @map("skip_payment")
   usedAt                   DateTime?         @map("used_at")
   usedBy                   String?           @map("used_by") // the client id that consumed it
   createdAt                DateTime          @default(now()) @map("created_at")
@@ -360,7 +370,7 @@ model ClientInvite {
 
   coach    User              @relation("CoachInvites", fields: [coachId], references: [id])
   plan     Plan              @relation(fields: [planId], references: [id])
-  template AgreementTemplate @relation(fields: [agreementTemplateId], references: [id])
+  template AgreementTemplate? @relation(fields: [agreementTemplateId], references: [id])
 
   @@index([coachId])
   @@map("client_invites")
