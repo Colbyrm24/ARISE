@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { cn } from '@/lib/utils';
+import { todayIn, zoneOf } from '@/lib/day';
 import {
   WEEKDAYS,
   dayKey as key,
@@ -39,7 +40,8 @@ export default async function ClientCalendarPage({
 }) {
   const client = await prisma.client.findUnique({
     where: { userId: params.id },
-    select: { userId: true },
+    // timezone, because "today" on this grid is the CLIENT's today.
+    select: { userId: true, user: { select: { profile: { select: { timezone: true } } } } },
   });
 
   if (!client) notFound();
@@ -113,7 +115,16 @@ export default async function ClientCalendarPage({
     weighIns: weights.filter((w) => inMonth(w.date)).length,
   };
 
-  const todayKey = key(new Date());
+  /*
+    Their today, not the host's.
+
+    Everything else on this grid is a @db.Date label at UTC midnight, so the
+    squares are right; this was the one instant on the page, and its UTC day
+    is not the client's. From 8pm Eastern the accent tint sat on tomorrow's
+    square — and the evening is exactly when a coach opens this to ask "did
+    they train today".
+  */
+  const todayKey = key(todayIn(zoneOf(client.user?.profile)));
 
   const prev = monthKey(month === 0 ? year - 1 : year, month === 0 ? 11 : month - 1);
   const next = monthKey(month === 11 ? year + 1 : year, month === 11 ? 0 : month + 1);
