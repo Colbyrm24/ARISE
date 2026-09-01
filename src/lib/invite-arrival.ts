@@ -7,11 +7,18 @@ import type { ClientStatus } from '@prisma/client';
   of that request with a real decision in it, and the decision is easy to get
   catastrophically wrong: he is about to move a book of clients across from
   another platform, several of whom already have accounts here, and the wrong
-  answer takes somebody who is actively training and drops them back to a
-  payment screen they cannot get past.
-
-  The rule is that an invite only ever moves somebody forward.
+  answer either drops somebody who is actively training back to a payment
+  screen, or leaves somebody he has personally vouched for locked out of the
+  app he just told them to download.
 */
+
+/**
+ * The statuses that already have the paid product. Mirrors ENTITLED in
+ * @/lib/auth, which cannot be imported here — it pulls in Supabase and
+ * next/headers, and this module has to stay importable by a bare node test.
+ * entitlement.test.ts asserts the two lists stay identical.
+ */
+const ENTITLED_HERE = new Set(['onboarding', 'active', 'ending_soon', 'completed']);
 
 /** Where a person lands when they use an invite. */
 export function arrivingStatus(skipPayment: boolean): ClientStatus {
@@ -24,35 +31,35 @@ export function arrivingStatus(skipPayment: boolean): ClientStatus {
 }
 
 /**
- * The statuses that mean "hasn't got going yet". Only these can be moved by
- * an invite; anything else describes a client with a history the invite has
- * no business rewriting.
- */
-const NOT_STARTED: ReadonlySet<string> = new Set(['lead', 'payment_pending', 'onboarding']);
-
-/**
  * The status to write for a client who already exists, or null to leave them
  * exactly as they are.
  *
- * Null covers three cases that all matter:
- *   - an active client re-using a link (never demote them to payment_pending);
- *   - a paused, cancelled or completed client (their status is a record, and
- *     re-inviting them is not the moment to erase it);
- *   - somebody already sitting at the status they'd be moved to.
+ * The two kinds of invite get opposite treatment on purpose.
+ *
+ * An EXISTING-CLIENT invite is the coach saying, in his own console, "this
+ * person is my client and pays me elsewhere" — so it lets them in from
+ * anywhere that isn't already in. That deliberately includes `paused` and
+ * `cancelled`, which is not an edge case: cancelling their old Stripe
+ * subscription is exactly how he stops billing them here, and
+ * `customer.subscription.deleted` sets `paused` on the way through. Without
+ * this, the client he just moved across would sign up, be told there was
+ * nothing to pay, and then bounce off every screen onto "your last payment
+ * did not go through".
+ *
+ * A PAYING invite only moves a fresh lead. Anyone else it would touch is
+ * either mid-purchase — where the payment webhook owns the status — or
+ * already training, and pushing them back out to pay is the failure this
+ * whole function exists to prevent.
+ *
+ * Somebody already entitled is never touched by either kind.
  */
 export function statusForExistingClient(
   current: ClientStatus,
   arriving: ClientStatus
 ): ClientStatus | null {
-  if (!NOT_STARTED.has(current)) return null;
+  if (ENTITLED_HERE.has(current)) return null;
   if (current === arriving) return null;
-  /*
-    payment_pending → onboarding happens when a client who never paid is
-    re-invited on an existing-client link, which is exactly how he will fix
-    somebody who bounced off a checkout. onboarding → payment_pending must
-    not: that is a person already inside the app, and pushing them back out
-    to pay is the failure this whole function exists to prevent.
-  */
-  if (current === 'onboarding' && arriving === 'payment_pending') return null;
-  return arriving;
+
+  if (arriving === 'onboarding') return 'onboarding';
+  return current === 'lead' ? 'payment_pending' : null;
 }
