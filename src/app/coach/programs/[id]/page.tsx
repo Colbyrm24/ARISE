@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { requireCoach } from '@/lib/auth';
+import { todayIn, zoneOf } from '@/lib/day';
+import { dayKey } from '@/lib/month-grid';
 import { ProgramWeek } from '@/components/coach/program-week';
 import {
   addWorkout,
@@ -62,10 +64,20 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
     .map((c) => ({ id: c.userId, name: c.user.profile?.fullName || c.user.email }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // The date input wants YYYY-MM-DD. Defaulting to today rather than to the
-  // next Monday, because a coach signing someone up on a Wednesday means
-  // "start Wednesday", not "wait five days".
-  const defaultStart = new Date().toISOString().slice(0, 10);
+  /*
+    The date input wants YYYY-MM-DD. Defaulting to today rather than to the
+    next Monday, because a coach signing someone up on a Wednesday means
+    "start Wednesday", not "wait five days".
+
+    His today, not the server's. This was `new Date().toISOString()`, and
+    toISOString is UTC — so from 8pm Eastern onward the box pre-filled with
+    TOMORROW. Deploy parses that string literally as midnight UTC, so the
+    whole block landed a day late: the client's first day was blank, every
+    session sat on the wrong weekday, and the confirmation ("182 days written
+    through …") read perfectly correct. The evening is exactly when a coach
+    sits down to do this.
+  */
+  const defaultStart = dayKey(todayIn(zoneOf(coach.profile)));
 
   // A few hundred exercises in one flat dropdown is unusable, so they're
   // grouped by muscle — the browser renders these as labelled sections.
