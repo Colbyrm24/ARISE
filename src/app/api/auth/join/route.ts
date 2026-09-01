@@ -5,6 +5,7 @@ import { notify } from '@/lib/notifications';
 import { createStripePaymentLink } from '@/lib/payment-link';
 import { attachClientToCoach } from '@/lib/onboard-client';
 import { arrivingStatus, statusForExistingClient } from '@/lib/invite-arrival';
+import { promoteIfIntakeComplete } from '@/lib/intake';
 
 /*
   The whole funnel, in one request.
@@ -37,6 +38,34 @@ export async function POST(request: Request) {
     include: { plan: true },
   });
   if (!invite) {
+    return NextResponse.json({ error: 'That invite has already been used.' }, { status: 410 });
+  }
+
+  /*
+    Claim the invite before anything is written for this person.
+
+    An `updateMany` filtered on `usedAt: null` is the lock: two taps on the
+    submit button race here, exactly one updates a row, and the loser never
+    reaches the checkout call. Doing it after the Stripe call would make two
+    payment links for one person, and they'd be charged twice if they opened
+    both.
+
+    It sits above the client write rather than below it because this route is
+    a public POST and the token is the whole authorisation. With the writes
+    first, anyone who got hold of a spent existing-client token could POST it,
+    collect a client row at `onboarding` — an entitled status — plus a live
+    relationship with the coach, and only then be handed the 410. They'd close
+    the error and walk into the paid product. Claim first and the 410 is the
+    end of it.
+  */
+  const claimed = await prisma.clientInvite.updateMany({
+    where: { id: invite.id, usedAt: null },
+    // user.id, not dbUser.id: the row does not exist yet, and the two are the
+    // same value by construction — the User row is created with the id off
+    // the verified Supabase session.
+    data: { usedAt: new Date(), usedBy: user.id },
+  });
+  if (claimed.count === 0) {
     return NextResponse.json({ error: 'That invite has already been used.' }, { status: 410 });
   }
 
@@ -144,23 +173,6 @@ export async function POST(request: Request) {
   await attachClientToCoach(dbUser.id, invite.coachId);
 
   /*
-    Claim the invite before spending money at Stripe.
-
-    An `updateMany` filtered on `usedAt: null` is the lock: two taps on the
-    submit button race here, exactly one updates a row, and the loser never
-    reaches the checkout call. Doing this after the Stripe call instead would
-    make two payment links for one person, and they'd be charged twice if
-    they opened both.
-  */
-  const claimed = await prisma.clientInvite.updateMany({
-    where: { id: invite.id, usedAt: null },
-    data: { usedAt: new Date(), usedBy: dbUser.id },
-  });
-  if (claimed.count === 0) {
-    return NextResponse.json({ error: 'That invite has already been used.' }, { status: 410 });
-  }
-
-  /*
     The whole point of the flag: no checkout, no agreement, no money.
 
     Claimed above like any other invite, so the link is single-use either way.
@@ -169,13 +181,28 @@ export async function POST(request: Request) {
     to announce them.
   */
   if (invite.skipPayment) {
+    /*
+      They may have filled the intake already.
+
+      The person this invite is for often has an account here from months ago,
+      and some of them completed every step of the intake as a lead and then
+      drifted. Signing and saving the intake both call this; joining is the
+      third event that can be the last one, and without it somebody arrives
+      with all four sections already answered, nothing left to re-save, and
+      sits at `onboarding` forever — inside the app, but missing from every
+      "active clients" view in the console.
+    */
+    const active = await promoteIfIntakeComplete(dbUser.id);
+
     await notify(
       invite.coachId,
       'account',
-      `${fullName || user.email} joined from your existing-client link and is at the intake.`,
+      active
+        ? `${fullName || user.email} joined from your existing-client link and is active — their intake was already done.`
+        : `${fullName || user.email} joined from your existing-client link and is at the intake.`,
       { clientId: dbUser.id }
     );
-    return NextResponse.json({ redirectTo: '/onboarding' });
+    return NextResponse.json({ redirectTo: active ? '/today' : '/onboarding' });
   }
 
   /*
