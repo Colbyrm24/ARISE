@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
+import { todayFor } from '@/lib/day';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { cn } from '@/lib/utils';
 import {
@@ -102,7 +103,18 @@ export default async function ClientCalendarPage({
     },
   ];
 
-  const todayKey = dayKey(new Date());
+  /*
+    Their today, not the host's.
+
+    Every other date on this grid is a @db.Date label at UTC midnight, so the
+    grid itself is right; this was the one instant on the page, and
+    dayKey(new Date()) is its UTC day. A client in Los Angeles opening the
+    calendar at 6pm on 1 September saw the highlight on the 2nd, next to
+    tomorrow's session. From Sydney at 8am the highlight sat on yesterday for
+    the first ten hours of their day. The Today screen gets this right with
+    todayFor and says why in its header; this page was the outlier.
+  */
+  const todayKey = dayKey(todayFor(user));
   const prev = shiftMonth(year, month, -1);
   const next = shiftMonth(year, month, 1);
 
