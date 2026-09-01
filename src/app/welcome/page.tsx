@@ -5,6 +5,7 @@ import { requireClient, isEntitled } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { SystemWindow, SystemWindowContent, Cell } from '@/components/ui/system-window';
 import { STATUS_WAITING } from '@/lib/client-status';
+import { ONBOARDING_STEPS } from '@/lib/onboarding';
 import { SignOutButton } from '@/components/client/sign-out-button';
 import { Composer } from '@/components/messages/composer';
 import { sendMessageToCoach, coachIdForClient } from '@/app/(client)/messages/actions';
@@ -166,7 +167,9 @@ export default async function WelcomePage() {
             <span>
               {intake > 0 ? 'Finish your intake' : 'Fill in your intake'}
               <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
-                {intake > 0 ? `${intake} of 4 done` : 'about 5 minutes'}
+                {intake > 0
+                  ? `${intake} of ${ONBOARDING_STEPS.length} done`
+                  : 'about 5 minutes'}
               </span>
             </span>
             <ArrowRight size={15} className="shrink-0 text-accent" />
