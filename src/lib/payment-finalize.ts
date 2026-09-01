@@ -59,7 +59,8 @@ async function createAgreementAndPayment(
     // by the sign action, at the moment the client actually signs.
   });
 
-  const [, , agreement] = await prisma.$transaction([
+  const finalize = () =>
+    prisma.$transaction([
     prisma.paymentLink.update({ where: { id: paymentLink.id }, data: { status: 'paid' } }),
     /*
       Upsert, not create.
@@ -93,8 +94,23 @@ async function createAgreementAndPayment(
       },
       update: {},
     }),
-    prisma.agreement.create({
-      data: {
+    /*
+      Upsert, for the same reason the Payment above is one.
+
+      The webhook and the success page both call this, and the guard that
+      stops the second one (`status === 'paid'`) only helps if the first has
+      already committed. When they overlap — which is the normal case, since
+      the client lands on the success page in the same second Stripe fires the
+      event — the loser hit a unique violation on paymentLinkId, the whole
+      transaction rolled back, and the client sat on "Finalizing your
+      payment…" while their perfectly good payment went unrecorded.
+
+      An empty update: the agreement the winner wrote is already correct, and
+      re-rendering over it could clobber a signature that arrived in between.
+    */
+    prisma.agreement.upsert({
+      where: { paymentLinkId: paymentLink.id },
+      create: {
         clientId: paymentLink.clientId,
         paymentLinkId: paymentLink.id,
         templateId: paymentLink.template.id,
@@ -107,6 +123,7 @@ async function createAgreementAndPayment(
         startDate: paymentLink.startDate,
         termMonths,
       },
+      update: {},
     }),
     /*
       A renewal must not lock an active client out of the app.
@@ -130,6 +147,27 @@ async function createAgreementAndPayment(
       },
     }),
   ]);
+
+  /*
+    Two callers, one payment, and no lock between them.
+
+    Upserts above make the common collision harmless, but Postgres can still
+    raise a unique violation when two inserts race inside overlapping
+    transactions. If that happens the other handler has already done the whole
+    job correctly — so the right response is to hand back the agreement it
+    wrote, not to show somebody who has just paid an error. The notification
+    is skipped on this path deliberately: the winner already sent it.
+  */
+  let agreement: Awaited<ReturnType<typeof finalize>>[2];
+  try {
+    agreement = (await finalize())[2];
+  } catch (err) {
+    const existing = await prisma.agreement.findUnique({
+      where: { paymentLinkId: paymentLink.id },
+    });
+    if (!existing) throw err;
+    return existing;
+  }
 
   /*
     Tell the coach the money arrived.
@@ -266,6 +304,45 @@ export async function finalizeStripeSession(sessionId: string) {
   }
 
   return agreement;
+}
+
+/**
+ * Asks Stripe whether a link that still reads "pending" was in fact paid, and
+ * finishes the job if it was.
+ *
+ * The dead end this exists for: a client pays, the webhook does not arrive (or
+ * arrives before the endpoint is configured, or fails), and they close the tab
+ * before the success page can act as the fallback. Their money is at Stripe,
+ * their link says pending, no agreement exists, and there was nothing anywhere
+ * in the console that could rescue them — "Mark as Paid" only ever appeared
+ * for FanBasis links. The only route out was a hand-written database edit.
+ *
+ * This asks the payment processor rather than taking anybody's word for it, so
+ * it cannot invent a payment that did not happen. Returns the agreement if it
+ * finalized one, null if Stripe says nothing was paid.
+ */
+export async function recheckStripePaymentLink(paymentLinkId: string) {
+  const link = await prisma.paymentLink.findUnique({ where: { id: paymentLinkId } });
+  if (!link || link.provider !== 'stripe' || link.status === 'paid') return null;
+
+  /*
+    Two shapes of reference, same as finalizeStripeSession has to handle. A
+    checkout session id can be finalized directly. A Payment Link id cannot —
+    it is not a session — so its sessions are listed and the paid one, if any,
+    is what gets finalized.
+  */
+  if (link.providerRef.startsWith('cs_')) {
+    return finalizeStripeSession(link.providerRef);
+  }
+
+  const sessions = await stripe.checkout.sessions.list({
+    payment_link: link.providerRef,
+    limit: 20,
+  });
+  const paid = sessions.data.find((s) => s.payment_status === 'paid');
+  if (!paid) return null;
+
+  return finalizeStripeSession(paid.id);
 }
 
 /**

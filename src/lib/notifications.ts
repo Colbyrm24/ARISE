@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { sendPush } from '@/lib/push';
+import { primaryCoach } from '@/lib/onboard-client';
 
 export const NOTIFICATION_TYPES = [
   'message',
@@ -128,14 +129,35 @@ export function parseBody(body: string): { clientId: string | null; text: string
   return { clientId: body.slice(0, i), text: body.slice(i + 1) };
 }
 
-/** The coach currently assigned to a client, or null if they have none. */
+/**
+ * The coach to tell about this client.
+ *
+ * Three sources, in order of authority. The relationship row is the real
+ * answer; Client.coachId is the same fact written in the other place the app
+ * keeps it; the practice's primary coach is the single-coach fallback.
+ *
+ * It used to be the relationship row alone, and that silently cost him the
+ * whole funnel. The join route set Client.coachId without ever writing a
+ * relationship, so every notification after signup — they paid, they signed,
+ * they finished the intake — resolved to no coach and returned early. Not an
+ * error anywhere; just nothing arriving. Reading the second column repairs
+ * every client already created that way without a migration.
+ */
 export async function coachIdForClient(clientId: string) {
   try {
     const rel = await prisma.coachClientRelationship.findFirst({
       where: { clientId, status: 'active' },
       orderBy: { assignedAt: 'desc' },
     });
-    return rel?.coachId ?? null;
+    if (rel?.coachId) return rel.coachId;
+
+    const client = await prisma.client.findUnique({
+      where: { userId: clientId },
+      select: { coachId: true },
+    });
+    if (client?.coachId) return client.coachId;
+
+    return (await primaryCoach())?.id ?? null;
   } catch {
     return null;
   }
