@@ -13,11 +13,23 @@ export default async function ClientNotificationsPage() {
     take: 30,
   });
 
-  // Opening the page is the read receipt. Written directly rather than through
-  // the server action — revalidatePath() is not allowed during a render pass.
-  if (notifications.some((n) => !n.readAt)) {
+  /*
+    Opening the page is the read receipt — but only for what the page showed.
+
+    The list takes 30 and the update was unbounded, so it cleared every unread
+    row this user had. Somebody back from two weeks away with 40 unread items
+    (activity fires per workout, per cardio log, per protein goal) saw thirty,
+    and the other ten were marked read having never been on screen. There is
+    no pagination, so those ten were then unreachable and the badge said zero.
+
+    Bounding by the ids actually rendered is the whole fix; the next visit
+    picks up whatever is left. Written directly rather than through the server
+    action — revalidatePath() is not allowed during a render pass.
+  */
+  const unreadShown = notifications.filter((n) => !n.readAt).map((n) => n.id);
+  if (unreadShown.length > 0) {
     await prisma.notification.updateMany({
-      where: { userId: user.id, readAt: null },
+      where: { userId: user.id, id: { in: unreadShown }, readAt: null },
       data: { readAt: new Date() },
     });
   }
