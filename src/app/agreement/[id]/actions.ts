@@ -64,6 +64,9 @@ export async function signAgreement(formData: FormData) {
     }),
   ]);
 
+  // Signing first, so his notifications read in the order things happened.
+  await notifyCoach(user.id, 'check_in', `${signedName} signed their agreement.`);
+
   /*
     They may have filled the intake while their payment was still pending —
     /welcome invites exactly that. If so, signing is the last of the two
@@ -73,8 +76,6 @@ export async function signAgreement(formData: FormData) {
   if (await promoteIfIntakeComplete(user.id)) {
     await notifyCoach(user.id, 'check_in', `${signedName} finished their intake and is now active.`);
   }
-
-  await notifyCoach(user.id, 'check_in', `${signedName} signed their agreement.`);
 
   revalidatePath(`/agreement/${agreementId}`);
   revalidatePath(`/coach/clients/${user.id}`);
