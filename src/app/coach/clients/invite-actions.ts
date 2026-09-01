@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
-import { parsePrice, parseCount } from '@/lib/billing';
+import { parsePrice, parseCount, isBlankField } from '@/lib/billing';
 
 /*
   Starting a funnel from the coach's side.
@@ -22,6 +22,29 @@ import { parsePrice, parseCount } from '@/lib/billing';
 /** Unguessable, short enough to paste into a text message. */
 function inviteToken() {
   return randomBytes(12).toString('base64url');
+}
+
+/*
+  An override field has three states, and they used to collapse into two.
+
+  Blank means "use the plan's number" — the common case, which is why these
+  are placeholders rather than pre-filled values. A number means that number.
+  Unreadable has to mean STOP, because the alternative is what happened
+  before: parsePrice returned null on "1,200", null was indistinguishable
+  from blank, and the invite went out at the PLAN'S price. The coach texts
+  the link, the client checks out, and signs an agreement stating a price
+  neither of them agreed to. Nothing on the screen said a thing.
+
+  There is no error channel here — this is a plain form action, not
+  useFormState — so refusing leaves the coach looking at an unchanged panel.
+  That is a worse minute and a far better outcome than a wrong link reaching
+  a client.
+*/
+function override(raw: FormDataEntryValue | null, parse: (s: string | null) => number | null) {
+  const text = typeof raw === 'string' ? raw : null;
+  if (isBlankField(text)) return { ok: true, value: null } as const;
+  const value = parse(text);
+  return value === null ? ({ ok: false } as const) : ({ ok: true, value } as const);
 }
 
 export async function createClientInvite(formData: FormData) {
@@ -46,6 +69,14 @@ export async function createClientInvite(formData: FormData) {
   ]);
   if (!plan || !template) return;
 
+  // Same three levers as a payment link, because these are the ones that
+  // actually differ per person — the price he agreed, how many payments, and
+  // how long the term runs. Any one of them unreadable and no link goes out.
+  const price = override(formData.get('priceOverride'), parsePrice);
+  const payments = override(formData.get('numberOfPaymentsOverride'), parseCount);
+  const term = override(formData.get('termMonthsOverride'), parseCount);
+  if (!price.ok || !payments.ok || !term.ok) return;
+
   await prisma.clientInvite.create({
     data: {
       token: inviteToken(),
@@ -53,14 +84,9 @@ export async function createClientInvite(formData: FormData) {
       planId,
       agreementTemplateId,
       name: name || null,
-      // Same three levers as a payment link, because these are the ones that
-      // actually differ per person — the price he agreed, how many payments,
-      // and how long the term runs.
-      priceOverride: parsePrice(formData.get('priceOverride') as string | null),
-      numberOfPaymentsOverride: parseCount(
-        formData.get('numberOfPaymentsOverride') as string | null
-      ),
-      termMonthsOverride: parseCount(formData.get('termMonthsOverride') as string | null),
+      priceOverride: price.value,
+      numberOfPaymentsOverride: payments.value,
+      termMonthsOverride: term.value,
       startDate,
     },
   });

@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
 import { getSegments } from '@/lib/console';
 import { InvitePanel } from '@/components/coach/invite-panel';
+import { zoneOf } from '@/lib/day';
 import type { ClientStatus } from '@prisma/client';
 
 function initials(name: string | null | undefined, email: string) {
@@ -105,7 +106,7 @@ export default async function CoachClientsPage({
 
       {/* The start of the funnel, above the roster, because adding somebody
           is the thing he comes here to do that he could not do at all. */}
-      <InvitePanel coachId={coach.id} />
+      <InvitePanel coachId={coach.id} timeZone={zoneOf(coach.profile)} />
 
       <form className="flex flex-col gap-3 sm:flex-row sm:items-center">
         {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
