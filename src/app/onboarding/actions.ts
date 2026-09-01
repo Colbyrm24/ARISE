@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
 import { ONBOARDING_STEPS } from '@/lib/onboarding';
+import { promoteIfIntakeComplete } from '@/lib/intake';
 import { notifyCoach, displayName } from '@/lib/notifications';
 
 export async function saveOnboardingStep(formData: FormData) {
@@ -42,47 +43,28 @@ export async function saveOnboardingStep(formData: FormData) {
   });
 
   /*
-    Is the whole intake done?
+    And this is where a client actually becomes active.
 
-    The old version counted completed rows against "steps that have a required
-    field" — three, because `lifestyle` has none. But a step with no required
-    fields auto-completes (`[].every()` is true), so filling lifestyle first
-    made the count hit three early and told the coach the intake was finished
-    when it wasn't; fill all four and the count was four against three, so it
-    never fired at all. Counting the steps that are actually complete against
-    the number of steps is the thing that was meant.
+    Nothing anywhere wrote `status: 'active'`. Every client who completed the
+    whole funnel sat at `onboarding` forever unless the coach noticed and
+    clicked a status chip by hand — which meant the console's "active clients"
+    segments were empty no matter how many people were being coached.
+
+    The completeness check itself used to live here and counted completed rows
+    against "steps that have a required field" — three, because `lifestyle` has
+    none. But a step with no required fields auto-completes (`[].every()` is
+    true), so filling lifestyle first made the count hit three early and told
+    the coach the intake was finished when it wasn't; fill all four and the
+    count was four against three, so it never fired at all. It now lives in
+    promoteIfIntakeComplete, which signing calls too — so whichever of the two
+    happens last is the one that promotes them.
   */
-  const completedKeys = await prisma.onboardingResponse.findMany({
-    where: { clientId: user.id, completedAt: { not: null } },
-    select: { stepKey: true },
-  });
-  const doneKeys = new Set(completedKeys.map((r) => r.stepKey));
-  const allDone = ONBOARDING_STEPS.every((s) => doneKeys.has(s.key));
+  const promoted = await promoteIfIntakeComplete(user.id);
 
-  if (allDone) {
-    /*
-      And this is where a client actually becomes active.
-
-      Nothing anywhere wrote `status: 'active'`. Every client who completed
-      the whole funnel sat at `onboarding` forever unless the coach noticed
-      and clicked a status chip by hand — which meant the console's "active
-      clients" segments were empty no matter how many people were being
-      coached.
-
-      updateMany with a status filter so this only ever promotes somebody who
-      is mid-intake. A paused or cancelled client editing an old answer must
-      not quietly reactivate themselves.
-    */
-    const promoted = await prisma.client.updateMany({
-      where: { userId: user.id, status: 'onboarding' },
-      data: { status: 'active', startDate: new Date() },
-    });
-
-    // Told once, on the transition — not on every subsequent edit.
-    if (promoted.count > 0) {
-      const name = await displayName(user.id);
-      await notifyCoach(user.id, 'check_in', `${name} finished their intake and is now active.`);
-    }
+  // Told once, on the transition — not on every subsequent edit.
+  if (promoted) {
+    const name = await displayName(user.id);
+    await notifyCoach(user.id, 'check_in', `${name} finished their intake and is now active.`);
   }
 
   revalidatePath('/onboarding');
