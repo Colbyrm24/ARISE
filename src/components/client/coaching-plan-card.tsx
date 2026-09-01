@@ -23,11 +23,26 @@ import { ManageBillingButton } from '@/components/client/manage-billing-button';
   name of what they are on.
 */
 
-function when(date: Date) {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+/*
+  The client's date, not the server's.
+
+  currentPeriodEnd is an instant from Stripe, and formatting an instant with
+  no timeZone uses the host's — UTC on Vercel. A period ending 6pm PDT on
+  1 October read "Next payment Oct 2" to the person whose card gets charged
+  on the 1st. On the one line in the app that says when money leaves their
+  account, being a day out is not a rounding error.
+*/
+function when(date: Date, timeZone: string) {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone });
 }
 
-export async function CoachingPlanCard({ clientId }: { clientId: string }) {
+export async function CoachingPlanCard({
+  clientId,
+  timeZone,
+}: {
+  clientId: string;
+  timeZone: string;
+}) {
   /*
     Wrapped, because this is the profile screen and a billing read failing
     must not take down the place somebody goes to change their background or
@@ -132,9 +147,9 @@ export async function CoachingPlanCard({ clientId }: { clientId: string }) {
                 {left !== null && left > 0 && `${left} to go · `}
                 {required !== null && left === 0 && 'Paid in full · '}
                 {sub.currentPeriodEnd && sub.status === 'active' && !sub.cancelAtPeriodEnd
-                  ? `Next payment ${when(sub.currentPeriodEnd)}`
+                  ? `Next payment ${when(sub.currentPeriodEnd, timeZone)}`
                   : sub.cancelAtPeriodEnd && sub.currentPeriodEnd
-                    ? `Runs until ${when(sub.currentPeriodEnd)}`
+                    ? `Runs until ${when(sub.currentPeriodEnd, timeZone)}`
                     : 'No payment scheduled'}
               </p>
             </div>
