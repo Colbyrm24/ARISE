@@ -10,6 +10,7 @@ import {
   amountFromCents,
   parsePrice,
   parseCount,
+  isBlankField,
   refundOutcome,
   checkoutRefs,
 } from '../billing';
@@ -155,6 +156,37 @@ describe('parsePrice', () => {
     // 500 the page the coach was standing on.
     assert.equal(parsePrice('abc'), null);
     assert.equal(parsePrice('12abc'), null);
+    // Two numbers is not one number. Guessing at a half-typed field is how
+    // you charge $12 for something that was meant to be $1,200.
+    assert.equal(parsePrice('1200 6'), null);
+  });
+
+  test('the way a person actually writes a price', () => {
+    /*
+      The bug this closes: Number('1,200') is NaN, NaN came back as null,
+      null means "no override", and the link went out at the PLAN'S price.
+      A comma in a four-figure number is not an edge case, and the field has
+      a currency on it.
+    */
+    assert.equal(parsePrice('1,200'), 1200);
+    assert.equal(parsePrice('$1,200'), 1200);
+    assert.equal(parsePrice('$300'), 300);
+    assert.equal(parsePrice(' £1,499.50 '), 1499.5);
+    assert.equal(parsePrice('12,000'), 12000);
+  });
+
+  test('blank and unreadable both come back null, so callers ask which', () => {
+    // The whole point of isBlankField: an action that cannot tell a typo
+    // from an empty box falls back to the plan's price on a typo.
+    assert.equal(isBlankField(''), true);
+    assert.equal(isBlankField('   '), true);
+    assert.equal(isBlankField(null), true);
+    assert.equal(isBlankField(undefined), true);
+    assert.equal(isBlankField('abc'), false);
+    assert.equal(isBlankField('0'), false);
+
+    assert.equal(parsePrice('abc'), null);
+    assert.equal(parsePrice(''), null);
   });
 
   test('zero and negatives are rejected', () => {
@@ -178,6 +210,11 @@ describe('parseCount', () => {
     assert.equal(parseCount('0'), null);
     assert.equal(parseCount('-3'), null);
     assert.equal(parseCount('2.5'), null);
+  });
+
+  test('a separator in a large count is read, not thrown away', () => {
+    assert.equal(parseCount('1,000'), 1000);
+    assert.equal(parseCount(' 12 '), 12);
   });
 
   test('an empty field means "not set"', () => {
