@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Dumbbell, Apple } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { zoneOf } from '@/lib/day';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,10 +35,25 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
         include: { workout: true },
       },
       nutritionTargets: { orderBy: { effectiveDate: 'desc' }, take: 1 },
+      // For the dates below. startedAt is an instant, and the day it belongs
+      // to is the client's day, not the server's.
+      user: { select: { profile: { select: { timezone: true } } } },
     },
   });
 
   if (!client) notFound();
+
+  /*
+    Their zone, not the host's.
+
+    startedAt is a DateTime instant and this rendered with no timeZone, which
+    on Vercel means UTC. A client in Los Angeles who trained at 6pm Monday
+    (01:00Z Tuesday) had that session listed under Tue here — so the coach
+    asked how Tuesday's session went about a workout done on Monday, and this
+    list disagreed with the client's own calendar and Today screen, both of
+    which use the client's zone.
+  */
+  const clientZone = zoneOf(client.user?.profile);
 
   /*
     Scoped to this coach. This feeds the assign-program dropdown, and
@@ -123,7 +139,11 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
                     <li key={log.id} className="flex items-center justify-between text-xs">
                       <span>{log.workout.name}</span>
                       <span className="text-muted-foreground">
-                        {log.startedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        {log.startedAt.toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          timeZone: clientZone,
+                        })}
                         {log.completedAt ? ' · completed' : ' · in progress'}
                       </span>
                     </li>

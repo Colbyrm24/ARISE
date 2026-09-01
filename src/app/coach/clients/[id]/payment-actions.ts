@@ -7,7 +7,7 @@ import { coachOwnsClient } from '@/lib/coach-guard';
 import { stripe } from '@/lib/stripe';
 import { appliedPrice, createStripePaymentLink } from '@/lib/payment-link';
 import { finalizeManualPaymentLink } from '@/lib/payment-finalize';
-import { parsePrice, parseCount } from '@/lib/billing';
+import { parsePrice, parseCount, isBlankField } from '@/lib/billing';
 import type { PaymentFrequency, PaymentProviderType } from '@prisma/client';
 
 /**
@@ -51,6 +51,23 @@ export async function createPaymentLink(formData: FormData) {
   // default. This is what decides when their subscription stops, so it is
   // stored on the link rather than living only in Stripe's metadata.
   const numberOfPaymentsOverride = parseCount(numberOfPaymentsOverrideRaw);
+
+  /*
+    parsePrice fixed the crash above and left the quieter half of the same
+    bug: null is also what a BLANK field returns, so a value it can't read is
+    indistinguishable from one the coach never typed, and the link falls back
+    to the plan's price. A 500 at least tells him something went wrong.
+    Charging a client an amount he didn't agree does not — he finds that out
+    from the client, later.
+
+    So an unreadable field stops the link. Blank still means the plan's own
+    number, which is the common case.
+  */
+  const unreadable =
+    (!isBlankField(priceOverrideRaw) && priceOverride === null) ||
+    (!isBlankField(termMonthsOverrideRaw) && termMonthsOverride === null) ||
+    (!isBlankField(numberOfPaymentsOverrideRaw) && numberOfPaymentsOverride === null);
+  if (unreadable) return;
   /*
     The rule about Stripe-priced plans ignoring the override lives with the
     money, in @/lib/payment-link. This is only the sanity check that we have
