@@ -13,7 +13,12 @@ import { cn } from '@/lib/utils';
 import { CLIENT_STATUSES, STATUS_LABELS } from '@/lib/client-status';
 import { PROVIDER_LABELS } from '@/lib/plans';
 import { updateClientStatus, addCoachNote, toggleCoachNotePin } from '../actions';
-import { createPaymentLink, markPaymentLinkPaid, cancelPaymentLink } from '../payment-actions';
+import {
+  createPaymentLink,
+  markPaymentLinkPaid,
+  cancelPaymentLink,
+  recheckPaymentLink,
+} from '../payment-actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -191,6 +196,30 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                   <Button type="submit" size="sm" variant="secondary">
                     Mark as Paid
                   </Button>
+                </form>
+              )}
+
+              {/*
+                The way out of "I already paid".
+
+                A Stripe payment that never came back — a webhook that didn't
+                arrive, or a client who closed the tab before the success page
+                could finish — left this link pending with no agreement and
+                nothing in the console able to fix it. This asks Stripe
+                directly, so it can only ever confirm a payment that really
+                happened; a client who has not paid stays exactly as they are.
+              */}
+              {latestLink.provider === 'stripe' && (
+                <form action={recheckPaymentLink} className="flex flex-col gap-1">
+                  <input type="hidden" name="paymentLinkId" value={latestLink.id} />
+                  <input type="hidden" name="clientId" value={client.userId} />
+                  <Button type="submit" size="sm" variant="secondary" className="self-start">
+                    They say they paid — check Stripe
+                  </Button>
+                  <p className="text-[11px] text-muted-foreground">
+                    Confirms with Stripe and finishes their agreement if the payment went
+                    through.
+                  </p>
                 </form>
               )}
 
