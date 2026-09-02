@@ -71,12 +71,22 @@ export const STATUS_WAITING: Partial<Record<ClientStatus, { title: string; body:
     body: 'Your coach has been told you signed up and will be in touch with your plan and a payment link. Filling in your intake now means your first week is ready the moment you start.',
   },
   payment_pending: {
-    title: 'Payment link sent',
-    body: 'Your coach has sent you a payment link. Everything opens up the moment it goes through — message them below if it never arrived.',
+    /*
+      No promise of an email, for the same reason as agreement_pending below.
+
+      This read "your coach has sent you a payment link… message them below if
+      it never arrived". For anybody who arrived on a join link and then backed
+      out of the checkout — or whose card declined — no payment link had been
+      sent and none was coming. They waited on an inbox this product never
+      writes to, while their own live checkout URL sat one query away in the
+      database. /welcome puts that URL on the screen now.
+    */
+    title: 'One payment to go',
+    body: 'Your checkout is below — everything opens up the moment it goes through. If anything looks wrong, message your coach here.',
   },
   paid: {
     title: 'Payment received',
-    body: 'Your coaching agreement is on its way. Once you have signed it, the app opens up.',
+    body: 'Your coaching agreement is next. Sign it below and the app opens up.',
   },
   agreement_pending: {
     // No promise of an email. There is no email in this product, and telling

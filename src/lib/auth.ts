@@ -32,6 +32,65 @@ import { ensureCoachAssigned } from '@/lib/onboard-client';
   Scoped to one render, so it can't serve one person's identity to another —
   a plain module-level variable here would be exactly that bug.
 */
+/*
+  A Supabase session with no row of ours is a bricked account. This unbricks it.
+
+  Every screen in ARISE joins against our own `users` table, and exactly two
+  places ever wrote a row into it — the signup route and the join route — both
+  fired from the browser, both after the Supabase account already exists. So
+  there is a window, and landing in it was permanent:
+
+  getCurrentUser returned null for "no session" AND for "real session, no row
+  of ours". The root page sends null to /login. The middleware decides signed-
+  in from the cookie's JWT alone — it runs on the Edge and cannot read the
+  database — so it sends anyone with a live cookie off /login back to /. That
+  is a redirect loop with no exit, on every route, with no reachable sign-out
+  button. The person's only escape was clearing site data.
+
+  Three real ways in: the signup page never checked the response and pushed
+  on to /onboarding regardless; the join form's fetch could reject after the
+  Supabase account was made; and an auth-callback link (a coach inviting
+  somebody straight from the Supabase dashboard) has no row-creating step at
+  all, so it looped on the very first click, every time.
+
+  Repairing beats refusing. The session is real and already verified by
+  Supabase, and this writes exactly what the signup route writes. `create`
+  rather than `upsert` because we only get here when the row is missing, and
+  a unique-violation from a racing tab is caught and re-read below.
+*/
+async function repairMissingUserRow(id: string, email: string) {
+  try {
+    const created = await prisma.user.create({
+      data: {
+        id,
+        email,
+        // The safe default. A coach's row is made by hand and is not the
+        // account that goes missing; guessing "coach" here would hand the
+        // console to somebody who should not have it.
+        role: 'client',
+        profile: { create: {} },
+        clientRecord: { create: { status: 'lead' } },
+      },
+      include: { profile: true, clientRecord: true },
+    });
+
+    // Same attachment the signup route does, or they arrive un-coached: no
+    // inbox thread, no notifications, nobody to book with.
+    await ensureCoachAssigned(created.id);
+
+    return created;
+  } catch {
+    /*
+      Two tabs can race this. Whoever lost re-reads rather than failing — and
+      if the read comes back empty too, something else is wrong and null is
+      the honest answer.
+    */
+    return prisma.user
+      .findUnique({ where: { id }, include: { profile: true, clientRecord: true } })
+      .catch(() => null);
+  }
+}
+
 export const getCurrentUser = cache(async () => {
   const supabase = createClient();
   const {
@@ -45,7 +104,13 @@ export const getCurrentUser = cache(async () => {
     include: { profile: true, clientRecord: true },
   });
 
-  return dbUser;
+  if (dbUser) return dbUser;
+
+  // Signed in as far as Supabase is concerned, but we have no row for them.
+  // See repairMissingUserRow — this is the difference between a working
+  // account and an inescapable redirect loop.
+  if (!user.email) return null;
+  return repairMissingUserRow(user.id, user.email);
 });
 
 /**
