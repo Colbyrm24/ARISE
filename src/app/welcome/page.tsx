@@ -118,7 +118,11 @@ export default async function WelcomePage() {
   const pendingPayment =
     status === 'payment_pending'
       ? await prisma.paymentLink.findFirst({
-          where: { clientId: user.id, status: 'pending', checkoutUrl: { not: null } },
+          // No `checkoutUrl: { not: null }` filter: the column is non-nullable
+          // in the schema, so Prisma's real types reject the comparison. The
+          // offline stub types `where` as any and let it through, which is
+          // how it reached a build.
+          where: { clientId: user.id, status: 'pending' },
           orderBy: { createdAt: 'desc' },
           select: { id: true, checkoutUrl: true },
         })
