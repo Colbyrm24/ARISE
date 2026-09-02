@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Check } from 'lucide-react';
-import { requireClient } from '@/lib/auth';
+import { requireClient, isEntitled } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,6 +21,9 @@ const textareaClass =
  */
 export default async function OnboardingPage() {
   const user = await requireClient();
+
+  // Whether /today would actually let them in. See the button at the bottom.
+  const entitled = isEntitled(user.clientRecord?.status);
 
   const responses = await prisma.onboardingResponse.findMany({
     where: { clientId: user.id },
@@ -121,9 +124,25 @@ export default async function OnboardingPage() {
         );
       })}
 
-      <Link href="/today">
+      {/*
+        Where this button goes depends on whether they can actually get in.
+
+        /welcome pushes a waiting client into the intake — "worth doing now",
+        and it genuinely is. But the button at the bottom said "All set — go
+        to my dashboard" and linked to /today, which requires entitlement and
+        bounces anybody still on lead or payment_pending straight back to the
+        waiting screen. So the one person the intake was aimed at finished all
+        four sections, tapped the finish line, and silently landed back where
+        they started. Same destination, said honestly, and the copy no longer
+        promises a dashboard that is not theirs yet.
+      */}
+      <Link href={entitled ? '/today' : '/welcome'}>
         <Button variant={allDone ? 'primary' : 'secondary'} className="w-full">
-          {allDone ? 'All set — go to my dashboard' : 'Skip for now'}
+          {!allDone
+            ? 'Skip for now'
+            : entitled
+              ? 'All set — go to my dashboard'
+              : 'All set — back to your setup'}
         </Button>
       </Link>
     </div>
