@@ -63,7 +63,28 @@ export async function POST(request: NextRequest) {
     failures are logged and acknowledged rather than rethrown, and the
     payment count is always recomputed from the database, so a genuinely
     missed event still resolves correctly the next time one arrives.
+
+    EXCEPT for checkout.session.completed, which is what RETRYABLE is for.
+
+    "The next event fixes it" is true of the recurring handlers — another
+    invoice.paid is always coming. checkout.session.completed fires ONCE per
+    checkout, and it is the event that turns money into an Agreement and an
+    entitled client. finalizeStripeSession also makes live Stripe API calls,
+    so a 429 or a 5xx from Stripe's own side is enough to throw it.
+
+    Swallowing that meant: the client pays, the handler throws, we answer
+    200, Stripe marks the event delivered and never sends it again. No
+    Payment row, no Agreement, status stuck at payment_pending, and
+    requireEntitledClient bounces them to /welcome. They have paid and cannot
+    get in — and both recoveries need a person: the success page only runs if
+    their browser reaches it, and the coach's "check Stripe" button only runs
+    if he knows to press it.
+
+    So that one event fails loudly and lets Stripe retry, which is the thing
+    Stripe is actually good at.
   */
+  const RETRYABLE = new Set<string>(['checkout.session.completed']);
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -138,6 +159,20 @@ export async function POST(request: NextRequest) {
       id: event.id,
       error: err instanceof Error ? err.message : String(err),
     });
+
+    /*
+      A 500 asks Stripe to try again, with its own backoff, for up to three
+      days. For the one event that never comes round a second time, that is
+      the difference between a client who pays and gets in an hour later and
+      a client who pays and is locked out until somebody notices.
+
+      Everything else still answers 200: those handlers self-heal on the next
+      delivery, and a permanently failing one would otherwise be retried for
+      three days to fail identically every time.
+    */
+    if (RETRYABLE.has(event.type)) {
+      return NextResponse.json({ error: 'Handler failed — please retry' }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ received: true });
