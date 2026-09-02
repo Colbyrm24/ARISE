@@ -80,15 +80,46 @@ export default async function WelcomePage() {
     It's one query and it ends the dead end.
   */
   const pendingAgreement =
-    status === 'agreement_pending'
+    status === 'agreement_pending' || status === 'paid'
       ? await prisma.agreement.findFirst({
           // `status`, not a signedAt column — Agreement records signing as
           // 'pending_signature' -> 'signed'. The offline Prisma stub types
           // every `where` as `any`, so a wrong field name here compiles
           // locally and only fails on Vercel. It did.
+          //
+          // `paid` is in here as well as `agreement_pending`. Nothing in the
+          // payment path writes `paid` — finalize goes straight to
+          // agreement_pending — but it is one of the statuses the coach can
+          // set by hand from the console, and one click put a client on
+          // "your agreement is on its way" with the agreement already sitting
+          // in the database, unreachable.
           where: { clientId: user.id, status: 'pending_signature', deletedAt: null },
           orderBy: { createdAt: 'desc' },
           select: { id: true },
+        })
+      : null;
+
+  /*
+    The checkout they walked away from.
+
+    A client who taps back out of Stripe, or whose card declines, keeps the
+    status `payment_pending` and a live PaymentLink row — and this screen then
+    told them "your coach has sent you a payment link… message them if it
+    never arrived". No payment link was ever sent: the coach sent a JOIN link,
+    which now reads "this link is spent" if they go back to it. So they sat
+    waiting on an email that does not exist, in a product that sends no email,
+    with a working checkout URL one query away in the database.
+
+    Same shape as the agreement rescue above, for the step before it — and
+    this is the more common one, because abandoning a checkout is a thing
+    people do by accident.
+  */
+  const pendingPayment =
+    status === 'payment_pending'
+      ? await prisma.paymentLink.findFirst({
+          where: { clientId: user.id, status: 'pending', checkoutUrl: { not: null } },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, checkoutUrl: true },
         })
       : null;
 
@@ -157,6 +188,16 @@ export default async function WelcomePage() {
           </ul>
 
           {/* The one action that moves them, right where they're stuck. */}
+          {pendingPayment?.checkoutUrl && (
+            <a
+              href={pendingPayment.checkoutUrl}
+              className="glow flex items-center justify-between gap-3 border border-accent/55 bg-accent/[0.11] px-4 py-3 text-sm font-bold uppercase tracking-[0.14em] text-foreground shadow-[inset_0_0_22px_hsl(var(--accent)/0.14),0_0_28px_-6px_hsl(var(--accent)/0.6)] transition-colors hover:border-accent"
+            >
+              Finish your payment
+              <ArrowRight size={16} />
+            </a>
+          )}
+
           {pendingAgreement && (
             <Link
               href={`/agreement/${pendingAgreement.id}`}
