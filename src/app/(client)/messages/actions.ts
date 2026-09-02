@@ -3,8 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
-import { notify, displayName } from '@/lib/notifications';
-import { primaryCoach } from '@/lib/onboard-client';
+import { notify, displayName, coachIdForClient } from '@/lib/notifications';
 import {
   isAllowedVoiceNote,
   removeVoiceNote,
@@ -13,33 +12,20 @@ import {
 } from '@/lib/voice-notes';
 import type { VoiceNoteResult } from '@/lib/voice-notes';
 
-/**
- * A client only ever talks to their own coach. We resolve the coach from
- * coach_client_relationships rather than letting the browser name a
- * recipient — otherwise a client could message anyone by id.
- */
-export async function coachIdForClient(clientId: string) {
-  const rel = await prisma.coachClientRelationship.findFirst({
-    where: { clientId, status: 'active' },
-    orderBy: { assignedAt: 'desc' },
-  });
-  if (rel?.coachId) return rel.coachId;
+/*
+  Who this client's coach is lives in @/lib/notifications now.
 
-  /*
-    Somebody who signed up but hasn't been assigned yet still needs to be
-    able to ask a question — that is exactly the person most likely to have
-    one. Falling back to the instance's primary coach is the same assumption
-    the signup path already makes, and it is still not a recipient the
-    browser gets to name.
+  There were two implementations of the same question and they did not agree:
+  this one checked the relationship row and fell back to the primary coach,
+  while the lib one also reads Client.coachId in between — which is the
+  column that repairs every client the join route created before it started
+  writing relationships. Two answers to "who is your coach" is a bug waiting
+  for a client to fall in the gap between them.
 
-    Ordered rather than "whichever row comes back first": the moment there
-    are two coaches, an unordered findFirst would route an unassigned
-    client's message to an arbitrary one. Deterministic is not correct for
-    multi-coach, but it is at least predictable, and it fails the same way
-    every time instead of intermittently.
-  */
-  return (await primaryCoach())?.id ?? null;
-}
+  It also had to leave. Every export from a 'use server' module is a callable
+  endpoint, and this one took an arbitrary clientId and returned a coach's id
+  with no session check at all.
+*/
 
 export async function sendMessageToCoach(formData: FormData) {
   const user = await requireClient();
