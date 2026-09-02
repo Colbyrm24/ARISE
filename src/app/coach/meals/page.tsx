@@ -1,10 +1,16 @@
 import { AlertTriangle, Check, Send, Trash2 } from 'lucide-react';
 import { requireCoach } from '@/lib/auth';
-import { getPendingMeals, getReadAccuracy, type PendingMeal } from '@/lib/meal-review';
+import {
+  getPendingMeals,
+  getReadAccuracy,
+  countPendingMeals,
+  type PendingMeal,
+} from '@/lib/meal-review';
 import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system-window';
 import { Button } from '@/components/ui/button';
 import { macroReply, askIfThatsAll } from '@/lib/meal-reply';
 import type { DayContext } from '@/lib/day-shape';
+import { cn } from '@/lib/utils';
 import { confirmMeal, correctMeal, discardMeal } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -116,6 +122,27 @@ function DayStrip({ day }: { day: DayContext }) {
 
 function MealCard({ meal }: { meal: PendingMeal }) {
   const est = meal.estimate;
+
+  /*
+    Generated once and carried into the form in a hidden field beside the
+    textarea, so correctMeal can tell "he left it alone" from "he wrote this"
+    by comparing against what was ACTUALLY on screen. Reconstructing it in the
+    action meant regenerating from the day as it looks at submit time, which
+    drifts the moment the client logs anything while the queue is open — and
+    the coach's stale text then went out quoting the numbers he had just
+    corrected away from.
+  */
+  const prefilledReply = macroReply({
+    id: meal.id,
+    meal: meal.meal,
+    calories: meal.calories,
+    protein: meal.protein,
+    carbs: meal.carbs,
+    fat: meal.fat,
+    failed: Boolean(meal.failure),
+    failureReason: meal.failureReason,
+    day: meal.day,
+  });
   const followUp = askIfThatsAll(meal.day);
 
   return (
@@ -146,10 +173,59 @@ function MealCard({ meal }: { meal: PendingMeal }) {
 
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           {meal.failure ? (
-            <div className="flex items-start gap-2 border border-destructive/40 bg-destructive/[0.06] p-2">
-              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-destructive" />
+            /*
+              What to DO about it depends on why it failed, and this said one
+              thing for all four reasons.
+
+              The dangerous one is day-summary: a perfectly legible tracker
+              home screen the client meant to send. The banner told the coach
+              "nothing was counted — put the numbers in below", so typing in
+              the 1,807 it was quoting at him wrote a whole day's eating on
+              top of the meals already logged that day. That is exactly the
+              double-count the day-summary branch exists to prevent, and the
+              advice and the safeguard were pointing opposite ways.
+            */
+            <div
+              className={cn(
+                'flex items-start gap-2 border p-2',
+                meal.failureReason === 'day-summary'
+                  ? 'border-accent/40 bg-accent/[0.06]'
+                  : 'border-destructive/40 bg-destructive/[0.06]'
+              )}
+            >
+              <AlertTriangle
+                size={14}
+                className={cn(
+                  'mt-0.5 shrink-0',
+                  meal.failureReason === 'day-summary' ? 'text-accent' : 'text-destructive'
+                )}
+              />
               <p className="text-xs leading-relaxed">
-                {meal.failure} Nothing was counted against their day — put the numbers in below.
+                {meal.failure}{' '}
+                {meal.failureReason === 'day-summary' ? (
+                  <>
+                    This is their whole day, not one meal, so nothing was counted — their
+                    individual meals are already logged.{' '}
+                    <strong className="text-foreground">Don&apos;t put these numbers in below</strong>
+                    , it would count the day twice. Reply about it instead.
+                    {meal.dayTotals && (
+                      <span className="readout mt-1 block text-[10px] uppercase text-muted-foreground">
+                        Their screen says {Math.round(meal.dayTotals.calories)} cal ·{' '}
+                        {Math.round(meal.dayTotals.protein)}p ·{' '}
+                        {Math.round(meal.dayTotals.carbs)}c · {Math.round(meal.dayTotals.fat)}f
+                      </span>
+                    )}
+                  </>
+                ) : meal.failureReason === 'unavailable' ? (
+                  <>
+                    That was the reader failing, not the photo — the client did nothing wrong.
+                    Nothing was counted; put the numbers in below if you can read it yourself.
+                  </>
+                ) : meal.failureReason === 'not-food' ? (
+                  <>Nothing was counted. Worth asking what they meant to send.</>
+                ) : (
+                  <>Nothing was counted against their day — put the numbers in below.</>
+                )}
               </p>
             </div>
           ) : (
@@ -231,6 +307,8 @@ function MealCard({ meal }: { meal: PendingMeal }) {
           */}
           <form action={correctMeal} className="flex flex-col gap-3 border-t border-border/60 pt-3">
             <input type="hidden" name="logId" value={meal.id} />
+            {/* What the textarea was filled with — see correctMeal. */}
+            <input type="hidden" name="replyWas" value={prefilledReply} />
             <input
               name="name"
               defaultValue={meal.name}
@@ -277,16 +355,7 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                 name="reply"
                 rows={4}
                 maxLength={2000}
-                defaultValue={macroReply({
-                  id: meal.id,
-                  meal: meal.meal,
-                  calories: meal.calories,
-                  protein: meal.protein,
-                  carbs: meal.carbs,
-                  fat: meal.fat,
-                  failed: Boolean(meal.failure),
-                  day: meal.day,
-                })}
+                defaultValue={prefilledReply}
                 className="w-full resize-y rounded-none border border-input bg-secondary/40 p-2 text-sm leading-relaxed focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
               />
             </label>
@@ -338,9 +407,12 @@ function MealCard({ meal }: { meal: PendingMeal }) {
 
 export default async function CoachMealsPage() {
   const coach = await requireCoach();
-  const [meals, accuracy] = await Promise.all([
+  const [meals, accuracy, waiting] = await Promise.all([
     getPendingMeals(coach.id),
     getReadAccuracy(coach.id),
+    // The badge in the sidebar counts every pending row; this page renders 40.
+    // Without this the two disagreed with nothing to explain the gap.
+    countPendingMeals(coach.id).catch(() => 0),
   ]);
 
   return (
@@ -350,6 +422,22 @@ export default async function CoachMealsPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Photos your clients logged, read and waiting on you.
         </p>
+        {/*
+          Say so when the page is not the whole queue.
+
+          The list takes 40 oldest-first and the sidebar badge counts all of
+          them, so past forty the coach saw a badge reading 137 and a page
+          showing 40, with the newest — the clients actively waiting on a
+          number right now — structurally unreachable and nothing on screen
+          admitting it. Nothing ages these rows out, so the backlog is
+          permanent until he clears the front of it.
+        */}
+        {waiting > meals.length && (
+          <p className="readout mt-2 border border-accent/40 bg-accent/[0.06] px-3 py-2 text-[11px] uppercase leading-relaxed text-foreground">
+            Showing the {meals.length} oldest of {waiting} waiting. Clear these and the rest move
+            up.
+          </p>
+        )}
       </div>
 
       {accuracy && accuracy.medianCalorieGapPct !== null && (

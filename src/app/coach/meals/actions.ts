@@ -175,21 +175,23 @@ export async function correctMeal(formData: FormData) {
   /*
     If the coach corrected the macros but left the sentence alone, the sentence
     is now quoting the old numbers at the client. Rather than making the box a
-    live-updating client component, compare what came back against what we
-    would have generated for the old values: an exact match means untouched,
-    so regenerate it from the corrected ones. Anything he actually typed is
-    left exactly as written.
+    live-updating client component, compare what came back against what was
+    actually rendered into it: an exact match means untouched, so regenerate
+    from the corrected values. Anything he typed is left exactly as written.
+
+    The rendered text is carried in a hidden field rather than reconstructed
+    here, and that is the whole point. Reconstructing meant calling macroReply
+    with the day as it looks NOW, while the textarea was filled from the day
+    as it looked when the page loaded — and observationFor and closerFor both
+    read the day. So if the client logged anything while the queue sat open,
+    which with forty cards held through an evening is close to certain, the
+    two strings differed, `untouched` came out false, and the coach's stale
+    unedited text went out verbatim: 620 calories in the message, 900 in the
+    log he had just saved.
   */
   const submitted = typeof formData.get('reply') === 'string' ? String(formData.get('reply')) : '';
-  const untouched =
-    submitted.trim() ===
-    macroReply({
-      id: log.id,
-      meal: log.meal,
-      ...before,
-      failed: log.reviewState === 'failed',
-      day: dayBefore,
-    }).trim();
+  const rendered = typeof formData.get('replyWas') === 'string' ? String(formData.get('replyWas')) : '';
+  const untouched = rendered.trim().length > 0 && submitted.trim() === rendered.trim();
 
   const finalReply = untouched
     ? macroReply({
