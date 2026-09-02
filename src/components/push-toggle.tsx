@@ -72,6 +72,37 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey: string }) {
         const reg = await navigator.serviceWorker.register('/sw.js');
         const existing = await reg.pushManager.getSubscription();
         if (!cancelled) setState(existing ? 'on' : 'off');
+
+        /*
+          Re-register what the browser already has, every time this loads.
+
+          The two sides could drift apart with nothing to pull them back.
+          Push endpoints rotate — routinely, on mobile — and when one does,
+          the next send gets a 410 and lib/push.ts deletes our row. The
+          browser's subscription object still exists, so this toggle went on
+          saying "On" while the client received nothing, forever, and neither
+          they nor the coach was told. For an app whose entire reach-the-phone
+          story is push, that is churn you never see happen.
+
+          savePushSubscription upserts on the endpoint, so re-sending the
+          same live one costs a write and changes nothing. Deliberately not
+          awaited into the render path and deliberately silent: this is
+          repair, and if it fails the toggle below is still the real fix.
+        */
+        if (existing) {
+          const json = existing.toJSON() as {
+            endpoint?: string;
+            keys?: { p256dh?: string; auth?: string };
+          };
+          if (json.endpoint && json.keys?.p256dh && json.keys?.auth) {
+            void savePushSubscription({
+              endpoint: json.endpoint,
+              p256dh: json.keys.p256dh,
+              auth: json.keys.auth,
+              userAgent: navigator.userAgent,
+            }).catch(() => {});
+          }
+        }
       } catch {
         if (!cancelled) setState('unsupported');
       }
