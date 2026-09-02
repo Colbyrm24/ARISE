@@ -35,12 +35,38 @@ export default function SignupPage() {
       return;
     }
 
-    // Mirror the new user into our own database (profile + client record).
-    await fetch('/api/auth/complete-signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fullName }),
-    });
+    /*
+      Mirror the new user into our own database (profile + client record).
+
+      Wrapped and checked, because the Supabase account exists by this line
+      and every screen in the app joins against OUR users table. An unguarded
+      call meant a dropped connection left the button reading "Creating
+      account…" forever, and a 500 was ignored entirely — the push to
+      /onboarding below fired regardless, on an account with nothing behind
+      it. getCurrentUser now repairs a missing row rather than looping, so
+      this is no longer fatal, but a person should still be told rather than
+      quietly handed a half-made account.
+    */
+    try {
+      const res = await fetch('/api/auth/complete-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fullName }),
+      });
+      if (!res.ok) {
+        setLoading(false);
+        setError(
+          'Your account was created but we could not finish setting it up. Try signing in — if that does not work, message your coach.'
+        );
+        return;
+      }
+    } catch {
+      setLoading(false);
+      setError(
+        'Lost connection before we could finish. Your account was created — try signing in.'
+      );
+      return;
+    }
 
     setLoading(false);
     // Straight into intake. A client who lands on /today first almost never
