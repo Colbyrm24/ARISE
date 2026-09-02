@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { STATUS_LABELS, statusBadgeVariant } from '@/lib/client-status';
 import { NotificationList } from '@/components/notifications/notification-list';
-import { getSegments, getRecentActivity, initialsOf, ago } from '@/lib/console';
+import { getSegments, getRecentActivity, initialsOf } from '@/lib/console';
 import { markAllNotificationsRead } from './notification-actions';
 
 /*
@@ -304,7 +304,7 @@ export default async function CoachDashboardPage() {
                         <span className="text-muted-foreground">{a.text}</span>
                       </span>
                       <span className="readout shrink-0 text-[10px] text-muted-foreground">
-                        {ago(a.at)}
+                        {a.when}
                       </span>
                     </Link>
                   </li>
