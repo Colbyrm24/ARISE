@@ -5,9 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { requireCoach } from '@/lib/auth';
+import { requireCoach, isEntitled } from '@/lib/auth';
 import { todayIn, zoneOf } from '@/lib/day';
 import { dayKey } from '@/lib/month-grid';
+import { STATUS_LABELS } from '@/lib/client-status';
 import { ProgramWeek } from '@/components/coach/program-week';
 import {
   addWorkout,
@@ -25,8 +26,23 @@ const selectClass =
 export default async function ProgramBuilderPage({ params }: { params: { id: string } }) {
   const coach = await requireCoach();
 
-  const template = await prisma.workoutTemplate.findUnique({
-    where: { id: params.id },
+  /*
+    Owned, not merely existing.
+
+    This was a bare findUnique on the id in the URL. Every write on this
+    screen goes through coachOwnsTemplate — six actions were fixed to do that
+    — but the READ was never guarded, so pasting another coach's template id
+    into the address bar rendered their whole program: every session, every
+    movement, sets, rest, their coaching notes on each one, the repeating week
+    and the step targets. The buttons would all have refused, and by then the
+    thing worth protecting was already on screen.
+
+    notFound() rather than a redirect, and the same answer for "does not
+    exist" as for "not yours", so the URL cannot be used to find out which
+    template ids are real.
+  */
+  const template = await prisma.workoutTemplate.findFirst({
+    where: coach.role === 'admin' ? { id: params.id } : { id: params.id, coachId: coach.id },
     include: {
       workouts: {
         orderBy: { dayOrder: 'asc' },
@@ -54,14 +70,41 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
       orderBy: { position: 'asc' },
       select: { id: true, name: true },
     }),
+    /*
+      Who this program can be deployed to.
+
+      Every client on the roster was in this menu, cancelled and completed
+      ones included — sorted alphabetically, so a former client sat between
+      two current ones with nothing to tell them apart. Picking one writes
+      half a year of sessions into somebody's calendar and fires the
+      notification, and the client screen still renders for a cancelled
+      account, so the first sign would be them asking why they had been given
+      a new program.
+
+      Status comes back with the row so the ones who have not started yet are
+      labelled rather than hidden — building a program for somebody in
+      onboarding, before their first day, is the normal way round.
+    */
     prisma.client.findMany({
-      where: { coachId: coach.id },
-      select: { userId: true, user: { select: { email: true, profile: { select: { fullName: true } } } } },
+      where: { coachId: coach.id, status: { notIn: ['cancelled', 'completed'] } },
+      select: {
+        userId: true,
+        status: true,
+        user: { select: { email: true, profile: { select: { fullName: true } } } },
+      },
     }),
   ]);
 
   const clients = clientRows
-    .map((c) => ({ id: c.userId, name: c.user.profile?.fullName || c.user.email }))
+    .map((c) => {
+      const name = c.user.profile?.fullName || c.user.email;
+      return {
+        id: c.userId,
+        // Started clients read as their plain name; the rest carry the reason
+        // they might not be the right person to deploy to yet.
+        name: isEntitled(c.status) ? name : `${name} — ${STATUS_LABELS[c.status] ?? c.status}`,
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 
   /*
