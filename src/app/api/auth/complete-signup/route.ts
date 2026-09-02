@@ -27,6 +27,18 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const fullName: string | undefined = typeof body.fullName === 'string' ? body.fullName : undefined;
 
+  /*
+    Whether this call is the one that created the row decides whether the
+    coach hears about it.
+
+    The upsert itself is idempotent, but ensureCoachAssigned and notify ran
+    unconditionally underneath it — so any signed-in person could POST this
+    in a loop and fill the coach's feed with "X created an account", pushing
+    to his phone each time. It also fired a second time whenever somebody
+    already registered ran through signup again.
+  */
+  const before = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true } });
+
   const dbUser = await prisma.user.upsert({
     where: { id: user.id },
     update: {},
@@ -41,12 +53,13 @@ export async function POST(request: Request) {
 
   // Attach them to the coach immediately. Without this the account exists but
   // is unreachable from the console — no inbox thread, no notifications, and
-  // nobody to book a call with.
+  // nobody to book a call with. Idempotent, so it runs either way.
   const coachId = await ensureCoachAssigned(dbUser.id);
 
   // And tell the coach somebody signed up, which nothing did before. A lead
-  // the coach never hears about is a lead that never becomes a client.
-  if (coachId) {
+  // the coach never hears about is a lead that never becomes a client — but
+  // only on the call that actually made the account.
+  if (coachId && !before) {
     await notify(coachId, 'account', `${fullName || user.email} created an account.`, {
       clientId: dbUser.id,
     });
