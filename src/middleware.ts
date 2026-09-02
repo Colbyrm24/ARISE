@@ -40,6 +40,27 @@ const CLIENT_PREFIXES = [
   '/check-in',
   '/progress',
   '/notifications',
+  /*
+    These five shipped after the list and were never added to it.
+
+    Missing one is usually only a cost: the (client) layout's requireClient()
+    still catches it, but by then the page has rendered and paid for a
+    supabase.auth.getUser() round trip to do what the edge does with no
+    network call at all — which is the exact per-request expense this file
+    was rewritten to remove.
+
+    The sharper edge is clearedSession below, which reads the same list. On
+    the expired-token-refresh-timeout branch a client sitting on an unlisted
+    route got NextResponse.next() instead of clear-and-redirect, and the
+    render then called requireClient() → an UNBOUNDED getUser() against the
+    still-dead cookie. No deadline, no timeout. That is precisely the hang
+    the 8-second deadline further down exists to prevent.
+  */
+  '/calendar',
+  '/leaderboard',
+  '/recipes',
+  '/welcome',
+  '/agreement',
 ];
 
 /** Every cookie Supabase keeps a session in, including the chunked ones. */
