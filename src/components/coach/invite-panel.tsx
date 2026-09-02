@@ -69,10 +69,19 @@ export async function InvitePanel({
     return (
       <SystemWindow title="Add a client">
         <SystemWindowContent className="pt-4">
+          {/*
+            Two migrations can land here now, and naming the wrong one sends
+            him hunting. client-invite-migration.sql creates the table;
+            existing-client-migration.sql adds the skip-payment columns to it.
+            The second is the likely one — the table has been live for a
+            while — so it is named first.
+          */}
           <p className="text-sm text-muted-foreground">
-            Inviting clients needs one database change that hasn&apos;t been applied yet — run{' '}
-            <code className="readout text-xs">prisma/client-invite-migration.sql</code> in Supabase
-            and this turns on.
+            Inviting clients needs a database change that hasn&apos;t been applied yet — run{' '}
+            <code className="readout text-xs">prisma/existing-client-migration.sql</code> in
+            Supabase (and{' '}
+            <code className="readout text-xs">prisma/client-invite-migration.sql</code> first, if
+            you never have) and this turns on.
           </p>
         </SystemWindowContent>
       </SystemWindow>
@@ -88,13 +97,19 @@ export async function InvitePanel({
   */
   const today = dayKey(todayIn(timeZone));
 
-  if (plans.length === 0 || templates.length === 0) {
+  /*
+    Only a plan is genuinely required now. An existing-client link signs
+    nothing, so gating the whole panel on having an agreement template would
+    block the one route that needs no agreement — and that is the route he
+    wants this week, moving people across from Trainerize.
+  */
+  if (plans.length === 0) {
     return (
       <SystemWindow title="Add a client">
         <SystemWindowContent className="pt-4">
           <p className="text-sm text-muted-foreground">
-            You need at least one plan and one agreement template before you can invite anybody.
-            Both live on the Payments screen.
+            You need at least one plan before you can invite anybody. Plans live on the Payments
+            screen.
           </p>
         </SystemWindowContent>
       </SystemWindow>
@@ -110,6 +125,13 @@ export async function InvitePanel({
           again.
         </p>
 
+        {templates.length === 0 && (
+          <p className="readout text-[10px] uppercase leading-relaxed text-[hsl(var(--destructive))]">
+            No agreement template yet, so paying links can&apos;t be made — add one on the Payments
+            screen. Existing-client links still work.
+          </p>
+        )}
+
         <form action={createClientInvite} className="flex flex-col gap-2">
           <input
             name="name"
@@ -117,6 +139,31 @@ export async function InvitePanel({
             placeholder="Their name (so you know whose link this is)"
             className={fieldClass}
           />
+
+          {/*
+            The switch that decides whether this link asks for money.
+
+            He is moving a book of clients off Trainerize and those people are
+            already paying him on their own plans. Sending them through the
+            checkout would charge them a second time, and if they refused they
+            would sit at payment_pending unable to open the app he just told
+            them to download. Ticking this makes the account, attaches them to
+            him, and drops them straight into the intake.
+          */}
+          <label className="flex items-start gap-2 border border-dashed border-border/70 p-2.5">
+            <input
+              type="checkbox"
+              name="skipPayment"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--accent))]"
+            />
+            <span className="flex flex-col gap-0.5">
+              <span className="text-[13px]">They already pay me somewhere else</span>
+              <span className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
+                No checkout and no agreement. They sign up and go straight to the intake. Set
+                Starts to the date they actually began with you.
+              </span>
+            </span>
+          </label>
 
           <div className="flex flex-wrap items-center gap-2">
             <select name="planId" aria-label="Plan" className={selectClass} required>
@@ -126,11 +173,16 @@ export async function InvitePanel({
                 </option>
               ))}
             </select>
+            {/*
+              Not `required`: a skip-payment invite has nothing to sign, and a
+              browser-level requirement here would block the submit with no
+              visible reason on the one form he uses for both. The action does
+              the real check — it refuses a PAYING invite with no template.
+            */}
             <select
               name="agreementTemplateId"
               aria-label="Agreement template"
               className={selectClass}
-              required
             >
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -237,16 +289,31 @@ export async function InvitePanel({
                   className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/40 py-2.5 last:border-b-0"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm">{invite.name ?? 'Unnamed'}</p>
+                    <p className="flex items-baseline gap-2 truncate text-sm">
+                      {invite.name ?? 'Unnamed'}
+                      {/*
+                        Which kind of link this is, on the row. Two links that
+                        look identical but one charges and one does not is
+                        exactly the pair you do not want to send to the wrong
+                        person.
+                      */}
+                      {invite.skipPayment && (
+                        <span className="readout shrink-0 text-[9px] uppercase tracking-wider text-accent">
+                          No payment
+                        </span>
+                      )}
+                    </p>
                     <p className="readout mt-0.5 text-[10px] text-muted-foreground">
                       {invite.plan.name} ·{' '}
-                      {describePaymentStructure({
-                        price: effective,
-                        billingType: invite.plan.billingType,
-                        paymentFrequency: invite.plan.paymentFrequency,
-                        numberOfPayments:
-                          invite.numberOfPaymentsOverride ?? invite.plan.numberOfPayments,
-                      })}
+                      {invite.skipPayment
+                        ? 'already paying elsewhere'
+                        : describePaymentStructure({
+                            price: effective,
+                            billingType: invite.plan.billingType,
+                            paymentFrequency: invite.plan.paymentFrequency,
+                            numberOfPayments:
+                              invite.numberOfPaymentsOverride ?? invite.plan.numberOfPayments,
+                          })}
                     </p>
                   </div>
                   <CopyLinkButton url={`${origin}/join/${invite.token}`} />

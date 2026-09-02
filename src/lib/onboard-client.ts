@@ -57,3 +57,47 @@ export async function ensureCoachAssigned(clientId: string) {
     return null;
   }
 }
+
+/**
+ * Attaches a client to a NAMED coach — the one whose invite they used.
+ *
+ * ensureCoachAssigned picks the practice's primary coach, which is right for
+ * somebody who arrived off a bare signup with nothing pointing at anyone. An
+ * invite is different: it says exactly whose client this is, and that is the
+ * answer to use.
+ *
+ * This existed nowhere, and the gap was expensive. The join route set
+ * Client.coachId directly and never wrote a CoachClientRelationship row —
+ * while the repair in requireClient only fires when coachId is NULL, so it
+ * could never notice. Everything downstream reads the relationship: the
+ * coach's notifications for a payment, a signature and a finished intake all
+ * resolved to no coach and were dropped, his inbox 404'd on the client, and
+ * the client's own messages screen told them they had no coach yet. A person
+ * could pay, sign and be fully active with the coach hearing nothing after
+ * the initial signup ping.
+ *
+ * Never throws: failing to attach must not cost somebody the account they
+ * just made.
+ */
+export async function attachClientToCoach(clientId: string, coachId: string) {
+  try {
+    if (!coachId || coachId === clientId) return null;
+
+    await prisma.coachClientRelationship.upsert({
+      where: { coachId_clientId: { coachId, clientId } },
+      create: { coachId, clientId, status: 'active' },
+      update: { status: 'active' },
+    });
+
+    // Both columns kept in step, same as ensureCoachAssigned, so no reader
+    // has to know which one is authoritative.
+    await prisma.client.updateMany({
+      where: { userId: clientId },
+      data: { coachId },
+    });
+
+    return coachId;
+  } catch {
+    return null;
+  }
+}

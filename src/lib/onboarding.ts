@@ -156,3 +156,19 @@ export function readAnswer(json: unknown): Record<string, string> {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return {};
   return json as Record<string, string>;
 }
+
+/**
+ * Every step the intake asks for, answered.
+ *
+ * Lives here rather than next to the promotion it drives because that module
+ * touches the database and this is the part worth testing directly — and the
+ * untested version of this check was wrong in both directions at once. It
+ * counted completed rows against "steps that have a required field", which is
+ * three of the four: filling the fieldless step first made the count hit three
+ * early and told the coach the intake was finished when it wasn't, and filling
+ * all four made it four against three, so it never fired at all.
+ */
+export function allStepsDone(completedKeys: Iterable<string>) {
+  const done = new Set(completedKeys);
+  return ONBOARDING_STEPS.every((s) => done.has(s.key));
+}

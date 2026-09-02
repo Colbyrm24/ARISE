@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { renderAgreementTemplate, formatAgreementDate } from '@/lib/agreement';
+import { promoteIfIntakeComplete } from '@/lib/intake';
 import { zoneOf } from '@/lib/day';
 import { notifyCoach } from '@/lib/notifications';
 
@@ -53,10 +54,37 @@ export async function signAgreement(formData: FormData) {
         userAgent: headerList.get('user-agent') ?? undefined,
       },
     }),
-    prisma.client.update({ where: { userId: user.id }, data: { status: 'onboarding' } }),
+    /*
+      updateMany with a status filter, because this used to be an
+      unconditional write.
+
+      A client on month six who pays a renewal and signs the second agreement
+      was knocked all the way back to `onboarding` — still let into the app,
+      but dropped out of every "active clients" view and handed an intake they
+      finished half a year ago. Only somebody who has not been let in yet is
+      moved forward to onboarding.
+    */
+    prisma.client.updateMany({
+      where: {
+        userId: user.id,
+        status: { in: ['lead', 'payment_pending', 'paid', 'agreement_pending'] },
+      },
+      data: { status: 'onboarding' },
+    }),
   ]);
 
+  // Signing first, so his notifications read in the order things happened.
   await notifyCoach(user.id, 'check_in', `${signedName} signed their agreement.`);
+
+  /*
+    They may have filled the intake while their payment was still pending —
+    /welcome invites exactly that. If so, signing is the last of the two
+    things and this is what makes them active; otherwise it does nothing and
+    the intake's own save handles it.
+  */
+  if (await promoteIfIntakeComplete(user.id)) {
+    await notifyCoach(user.id, 'check_in', `${signedName} finished their intake and is now active.`);
+  }
 
   revalidatePath(`/agreement/${agreementId}`);
   revalidatePath(`/coach/clients/${user.id}`);

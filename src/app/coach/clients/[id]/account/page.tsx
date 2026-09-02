@@ -15,7 +15,12 @@ import { zoneOf } from '@/lib/day';
 import { CLIENT_STATUSES, STATUS_LABELS } from '@/lib/client-status';
 import { PROVIDER_LABELS } from '@/lib/plans';
 import { updateClientStatus, addCoachNote, toggleCoachNotePin } from '../actions';
-import { createPaymentLink, markPaymentLinkPaid, cancelPaymentLink } from '../payment-actions';
+import {
+  createPaymentLink,
+  markPaymentLinkPaid,
+  cancelPaymentLink,
+  recheckClientPayments,
+} from '../payment-actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -24,7 +29,13 @@ const selectClass =
   Account — where they stand with you rather than what they are training.
   Status, the notes only you see, money, the agreement, and their intake.
 */
-export default async function ClientAccountPage({ params }: { params: { id: string } }) {
+export default async function ClientAccountPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { checked?: string };
+}) {
   const coach = await requireCoach();
   const client = await prisma.client.findUnique({
     where: { userId: params.id },
@@ -47,9 +58,19 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
   const coachZone = zoneOf(coach.profile);
   const clientZone = zoneOf(client.user.profile);
 
-  const [plans, templates] = await Promise.all([
+  const [plans, templates, pendingStripeLinks] = await Promise.all([
     prisma.plan.findMany({ where: { active: true }, orderBy: { createdAt: 'desc' } }),
     prisma.agreementTemplate.findMany({ orderBy: { isDefault: 'desc' } }),
+    /*
+      Every unpaid Stripe link on this client, not just the newest one shown
+      below. A client who paid a link that never came back usually has a second
+      link by the time anyone notices, because generating a fresh one is the
+      obvious first thing to try — and the money is on the older one.
+    */
+    prisma.paymentLink.findMany({
+      where: { clientId: params.id, provider: 'stripe', status: 'pending' },
+      select: { id: true },
+    }),
   ]);
 
   const latestAgreement = client.agreements[0] ?? null;
@@ -212,6 +233,7 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                 </form>
               )}
 
+
               {/* A link he no longer wants live. Cancelling it stops it being
                   payable and clears the way for a fresh one. */}
               <form action={cancelPaymentLink}>
@@ -225,6 +247,45 @@ export default async function ClientAccountPage({ params }: { params: { id: stri
                 </button>
               </form>
             </div>
+          )}
+
+          {/*
+            The way out of "I already paid".
+
+            A Stripe payment that never came back — a webhook that didn't
+            arrive, or a client who closed the tab before the success page
+            could finish — left the link pending with no agreement and nothing
+            in the console able to fix it; "Mark as Paid" only ever appeared
+            for FanBasis. This asks Stripe directly, across every unpaid link
+            on the client, so it can only ever confirm a payment that really
+            happened — somebody who has not paid stays exactly as they are.
+          */}
+          {pendingStripeLinks.length > 0 && (
+            <form action={recheckClientPayments} className="flex flex-col gap-1.5">
+              <input type="hidden" name="clientId" value={client.userId} />
+              <Button type="submit" size="sm" variant="secondary" className="self-start">
+                They say they paid — check Stripe
+              </Button>
+              {searchParams?.checked === 'paid' ? (
+                <p className="readout text-[11px] uppercase text-[hsl(var(--accent))]">
+                  Found it. Their payment is recorded and the agreement is waiting on their
+                  signature.
+                </p>
+              ) : searchParams?.checked === 'none' ? (
+                <p className="readout text-[11px] uppercase text-muted-foreground">
+                  Stripe has no completed payment on{' '}
+                  {pendingStripeLinks.length === 1 ? 'their link' : 'any of their links'} yet.
+                </p>
+              ) : searchParams?.checked === 'error' ? (
+                <p className="readout text-[11px] uppercase text-[hsl(var(--destructive))]">
+                  Couldn&apos;t reach Stripe just then — try again in a moment.
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Checks Stripe and finishes their agreement if the payment went through.
+                </p>
+              )}
+            </form>
           )}
 
           {plans.length === 0 || templates.length === 0 ? (

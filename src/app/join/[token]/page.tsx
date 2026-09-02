@@ -65,6 +65,20 @@ export default async function JoinPage({ params }: { params: { token: string } }
 
   const coachName = invite.coach.profile?.fullName ?? 'your coach';
 
+  /*
+    Somebody already paying gets a different page, not the same page with the
+    payment quietly skipped.
+
+    Everything below used to be written for a person about to buy: a price and
+    a billing cadence in the window header, "you'll go straight to payment", a
+    footnote about an agreement they will never be shown. To a client being
+    moved across from another platform — who is already paying, and was told
+    this was just the new app — that page reads as being charged twice, and
+    the ones who don't bounce message the coach to ask. So the money is not
+    mentioned to them at all.
+  */
+  const existing = invite.skipPayment;
+
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-5 px-5 py-10">
       <header>
@@ -73,20 +87,37 @@ export default async function JoinPage({ params }: { params: { token: string } }
           {invite.name ? `${invite.name.split(' ')[0]}, you're in.` : "You're in."}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {coachName} set this up for you. Make your account and you&apos;ll go straight to
-          payment, then the agreement, then the app.
+          {existing ? (
+            <>
+              {coachName} moved your coaching over to ARISE. Make your account and you&apos;re
+              straight in — nothing to pay, your plan carries on exactly as it is.
+            </>
+          ) : (
+            <>
+              {coachName} set this up for you. Make your account and you&apos;ll go straight to
+              payment, then the agreement, then the app.
+            </>
+          )}
         </p>
       </header>
 
-      <SystemWindow title={invite.plan.name} meta={`[${terms}]`}>
+      <SystemWindow
+        title={existing ? 'Your account' : invite.plan.name}
+        meta={existing ? '[no payment]' : `[${terms}]`}
+      >
         <SystemWindowContent className="pt-4">
-          <JoinForm token={invite.token} defaultName={invite.name ?? ''} />
+          <JoinForm
+            token={invite.token}
+            defaultName={invite.name ?? ''}
+            skipPayment={existing}
+          />
         </SystemWindowContent>
       </SystemWindow>
 
       <p className="text-xs leading-relaxed text-muted-foreground">
-        You&apos;ll see the coaching agreement in full before you sign it, after payment. Nothing
-        starts until you have read it.
+        {existing
+          ? "You won't be asked for a card. Your account opens on a few questions about your training, and then you're in."
+          : "You'll see the coaching agreement in full before you sign it, after payment. Nothing starts until you have read it."}
       </p>
     </div>
   );
