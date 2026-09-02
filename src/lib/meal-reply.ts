@@ -91,6 +91,16 @@ export type ReplyInput = {
   fat: number;
   /** Set when the read failed, so the line asks instead of asserting. */
   failed?: boolean;
+  /**
+   * WHY it failed, when we know.
+   *
+   * All four reasons used to produce the same sentence — "couldn't get a
+   * clear read on that one". For a day-summary that is simply untrue: the
+   * screenshot was read perfectly, it just isn't a meal, and telling a client
+   * their tracker screen was unreadable when they can see it plainly is the
+   * kind of wrong that makes them stop sending things.
+   */
+  failureReason?: 'not-food' | 'unreadable' | 'unavailable' | 'day-summary' | null;
   /** Totals for the whole day including this meal. Absent on older callers. */
   day?: DayContext | null;
 };
@@ -147,8 +157,20 @@ export function macroReply(input: ReplyInput) {
   );
 
   if (failed) {
-    // No numbers to give. Asking for the detail is the honest move — inventing
-    // a figure here is how a client ends up eating to a number nobody read.
+    /*
+      No numbers to give. Asking for the detail is the honest move — inventing
+      a figure here is how a client ends up eating to a number nobody read.
+
+      But which honest thing to say depends on what went wrong. A day summary
+      was read fine; a photo of a dog was read fine too. Only the last branch
+      is actually "I couldn't see it".
+    */
+    if (input.failureReason === 'day-summary') {
+      return `Got your day there brotha. Everything on that screen is already counted from the meals you sent so I havent added it again. ${closerFor(id, meal, done)}`;
+    }
+    if (input.failureReason === 'not-food') {
+      return `Haha not sure what I'm looking at there my man. Send the plate over and I'll get you the numbers. ${closerFor(id, meal, false)}`;
+    }
     return `Couldnt get a clear read on that one my man. Roughly how much was on the plate and Ill get you the numbers. ${closerFor(id, meal, false)}`;
   }
 

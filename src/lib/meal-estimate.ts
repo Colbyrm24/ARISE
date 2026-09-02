@@ -192,7 +192,40 @@ function clean(n: unknown, max: number): number {
   client a third of the drink they actually had, every time, and undercounting
   is the failure that costs someone their deficit.
 */
-const ALCOHOL = /\b(beer|lager|ale|ipa|stout|pilsner|cider|wine|prosecco|champagne|sake|vodka|gin|rum|whisk(?:e)?y|bourbon|scotch|tequila|mezcal|brandy|cognac|liqueur|schnapps|aperol|campari|spritz|margarita|mojito|martini|negroni|daiquiri|cosmopolitan|old fashioned|seltzer|white claw|truly|shot|cocktail|hard )/i;
+const ALCOHOL =
+  /\b(?:beer|lager|ale|ipa|stout|pilsner|cider|wine|prosecco|champagne|sake|vodka|gin|rum|whisk(?:e)?y|bourbon|scotch|tequila|mezcal|brandy|cognac|liqueur|schnapps|aperol|campari|spritz|margarita|mojito|martini|negroni|daiquiri|cosmopolitan|old fashioned|seltzer|white claw|truly|cocktail|hard seltzer|hard cider|hard lemonade)\b/i;
+
+/**
+ * Is this item really a drink whose calories live outside the macros?
+ *
+ * The name alone was the whole test, and it was wrong twice over.
+ *
+ * It had no closing word boundary, so it matched PREFIXES: `gin` matched
+ * ginger, `ale` matched alevin, `hard ` matched hard boiled and hard cheese,
+ * `rum` matched rumaki. And even with a boundary, plenty of food merely has a
+ * drink in its name — scotch egg, sake salmon, stout beef stew, beer-battered
+ * cod, apple cider vinegar.
+ *
+ * Every one of those switched the 4/4/9 reconciliation off for that item.
+ * Measured on a real plate: "chicken stir fry" at 520 stated calories against
+ * 690 from its macros got corrected to 690; the identical plate called
+ * "ginger chicken stir fry" was carried at 520. Same food, 25% under, decided
+ * by one word — and undercounting is precisely the failure the comment above
+ * says must never happen. A single-item plate named "hard boiled eggs" was
+ * worse: the food list came back empty and nothing was checked at all.
+ *
+ * So the name only nominates; the numbers decide. Ethanol is 7 kcal/g and
+ * sits in no macro column, so a real drink's calories tower over its own
+ * 4/4/9 — a beer is 150 against 52. Food that merely sounds like a drink has
+ * ordinary macros behind its calories and stays in the check.
+ */
+function isDrink(item: EstimateItem) {
+  if (!ALCOHOL.test(item.name)) return false;
+  const fromMacros = item.protein * 4 + item.carbs * 4 + item.fat * 9;
+  // A quarter clear of its own macros, and at least 25 calories clear, so
+  // rounding on a small item cannot tip it either way.
+  return item.calories > fromMacros * 1.25 + 25;
+}
 
 /**
  * Totals from the items, then reconciled against the 4/4/9 arithmetic.
@@ -213,8 +246,8 @@ export function reconcile(items: EstimateItem[], source: EstimateSource = 'plate
   const carbs = items.reduce((s, i) => s + i.carbs, 0);
   const fat = items.reduce((s, i) => s + i.fat, 0);
 
-  const drinks = items.filter((i) => ALCOHOL.test(i.name));
-  const food = items.filter((i) => !ALCOHOL.test(i.name));
+  const drinks = items.filter(isDrink);
+  const food = items.filter((i) => !isDrink(i));
 
   const drinkCalories = drinks.reduce((s, i) => s + i.calories, 0);
   const stated = food.reduce((s, i) => s + i.calories, 0);

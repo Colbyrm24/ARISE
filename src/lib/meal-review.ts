@@ -28,6 +28,22 @@ export type PendingMeal = {
   /** Null for a failed read, which still shows up so the photo isn't stranded. */
   estimate: MealEstimate | null;
   failure: string | null;
+  /**
+   * WHY the read produced nothing, not just that it did.
+   *
+   * The reason was written to the row and then thrown away here, so four very
+   * different situations — a photo of a dog, an unreadable blur, an API
+   * outage, and a tracker's home screen the client meant to send — all
+   * reached the coach as one sentence and one prefilled reply. For the last
+   * of those the advice was actively harmful: see the queue's own banner.
+   */
+  failureReason: FailureReason | null;
+  /**
+   * A day-summary screenshot's own printed figures, when that is what it was.
+   * Present so the coach can act on them without re-reading the photo, and
+   * deliberately NOT counted against the day.
+   */
+  dayTotals: { calories: number; protein: number; carbs: number; fat: number } | null;
   calories: number;
   protein: number;
   carbs: number;
@@ -40,6 +56,10 @@ export type PendingMeal = {
    */
   day: DayContext | null;
 };
+
+/** The four ways a read produces no meal. Kept in step with lib/meal-estimate. */
+export type FailureReason = 'not-food' | 'unreadable' | 'unavailable' | 'day-summary';
+const REASONS: FailureReason[] = ['not-food', 'unreadable', 'unavailable', 'day-summary'];
 
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -55,14 +75,37 @@ function initialsOf(name: string) {
  * doesn't parse degrades to a failed read rather than throwing, because one
  * malformed row must not take down the whole queue.
  */
-function parseEstimate(value: unknown): { estimate: MealEstimate | null; failure: string | null } {
-  if (!value || typeof value !== 'object') return { estimate: null, failure: null };
+function parseEstimate(value: unknown): {
+  estimate: MealEstimate | null;
+  failure: string | null;
+  failureReason: FailureReason | null;
+  dayTotals: PendingMeal['dayTotals'];
+} {
+  const none = { estimate: null, failure: null, failureReason: null, dayTotals: null };
+  if (!value || typeof value !== 'object') return none;
   const v = value as Record<string, unknown>;
 
   if (typeof v.failed === 'string') {
-    return { estimate: null, failure: typeof v.message === 'string' ? v.message : 'Read failed.' };
+    const reason = REASONS.includes(v.failed as FailureReason)
+      ? (v.failed as FailureReason)
+      : null;
+    const t = v.dayTotals as Record<string, unknown> | undefined;
+    return {
+      estimate: null,
+      failure: typeof v.message === 'string' ? v.message : 'Read failed.',
+      failureReason: reason,
+      dayTotals:
+        t && typeof t === 'object'
+          ? {
+              calories: Number(t.calories ?? 0),
+              protein: Number(t.protein ?? 0),
+              carbs: Number(t.carbs ?? 0),
+              fat: Number(t.fat ?? 0),
+            }
+          : null,
+    };
   }
-  if (!Array.isArray(v.items)) return { estimate: null, failure: null };
+  if (!Array.isArray(v.items)) return none;
 
   const items: EstimateItem[] = v.items
     .filter((i): i is Record<string, unknown> => Boolean(i) && typeof i === 'object')
@@ -94,6 +137,8 @@ function parseEstimate(value: unknown): { estimate: MealEstimate | null; failure
       adjusted: v.adjusted === true || undefined,
     },
     failure: null,
+    failureReason: null,
+    dayTotals: null,
   };
 }
 
@@ -128,7 +173,7 @@ export async function getPendingMeals(coachId: string, limit = 40): Promise<Pend
 
   return rows.map((r) => {
     const fullName = r.client.user.profile?.fullName || r.client.user.email;
-    const { estimate, failure } = parseEstimate(r.estimate);
+    const { estimate, failure, failureReason, dayTotals } = parseEstimate(r.estimate);
     return {
       id: r.id,
       clientId: r.clientId,
@@ -140,6 +185,8 @@ export async function getPendingMeals(coachId: string, limit = 40): Promise<Pend
       photoUrl: r.photoPath ? urls.get(r.photoPath) ?? null : null,
       estimate,
       failure: failure ?? (r.reviewState === 'failed' ? 'Read failed.' : null),
+      failureReason,
+      dayTotals,
       calories: r.calories,
       protein: Math.round(Number(r.protein)),
       carbs: Math.round(Number(r.carbs)),
