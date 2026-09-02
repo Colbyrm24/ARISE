@@ -8,7 +8,8 @@ import { STATUS_WAITING } from '@/lib/client-status';
 import { ONBOARDING_STEPS } from '@/lib/onboarding';
 import { SignOutButton } from '@/components/client/sign-out-button';
 import { Composer } from '@/components/messages/composer';
-import { sendMessageToCoach, coachIdForClient } from '@/app/(client)/messages/actions';
+import { sendMessageToCoach } from '@/app/(client)/messages/actions';
+import { coachIdForClient } from '@/lib/notifications';
 import { cn } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
