@@ -180,7 +180,18 @@ export async function handleInvoicePaid(invoice: {
       short, and the coach's screen kept saying their card was declining. On
       a six-payment plan they would have been charged a seventh time.
     */
-    if (already.status !== 'succeeded') {
+    /*
+      Narrowed to the two states that are genuinely "not paid yet".
+
+      `!== 'succeeded'` also matched `refunded`, which handleChargeRefunded
+      writes — so a refund could be undone by a redelivery of the very
+      invoice it refunded. The realistic trigger is a person hitting Resend
+      in the Stripe dashboard while investigating the billing complaint that
+      prompted the refund. The row flips back to succeeded, stopIfPaidInFull
+      counts a full six, the subscription cancels itself, and the client has
+      paid five net for a six-payment plan with no trace of the refund left.
+    */
+    if (already.status === 'pending' || already.status === 'failed') {
       await prisma.payment.update({
         where: { id: already.id },
         data: { status: 'succeeded', paidAt, amount, subscriptionId: sub.id },
@@ -192,10 +203,17 @@ export async function handleInvoicePaid(invoice: {
     // The signup charge already has a Payment row, written by the finalize
     // path against the checkout session. Attach it to the subscription
     // instead of writing a second one for the same money.
+    // Same reasoning as the branch above: a refunded signup charge must not
+    // be force-written back to succeeded by a redelivered first invoice.
     const signupPayment =
       role === 'first' && sub.paymentLinkId
         ? await prisma.payment.findFirst({
-            where: { paymentLinkId: sub.paymentLinkId, subscriptionId: null, deletedAt: null },
+            where: {
+              paymentLinkId: sub.paymentLinkId,
+              subscriptionId: null,
+              deletedAt: null,
+              status: { notIn: ['refunded'] },
+            },
           })
         : null;
 
