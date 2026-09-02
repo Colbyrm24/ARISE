@@ -55,6 +55,17 @@ export const TRIGGER_LABELS: Record<Trigger, string> = {
 export const QUIET_DAYS = 3;
 
 /**
+ * How long before somebody can be told they've gone quiet again.
+ *
+ * The nudge is worth sending once. Sending it every morning to a client who
+ * has stopped opening the app is not a nudge, it is a person being pestered
+ * daily by what they believe is their coach — and it is the surest way to
+ * make them mute the app entirely. If a week of silence follows the first
+ * one, that is a conversation for the coach to have himself.
+ */
+export const QUIET_COOLDOWN_DAYS = 7;
+
+/**
  * Picks the line to send.
  *
  * Rotation is by day-of-year rather than random so that two clients on the
@@ -136,6 +147,29 @@ async function candidates(today: Date): Promise<Candidate[]> {
   });
   const heardFromCoachAt = new Map(lastOutbound.map((r) => [r.recipientId, r._max.createdAt]));
 
+  /*
+    Who has already been told they have gone quiet, recently.
+
+    The only guard on repeats was AutoMessageSend's unique key on
+    (client, trigger, date) — one per DAY. A client who never opens the app
+    keeps `theirLast` where it is, so they matched the quiet branch again the
+    next morning, and the next: one "havent heard from you in a few days"
+    every single day, indefinitely, from someone they believe is their coach.
+    Thirty of them in a month. The file's own rule at the top says rotation
+    exists so the same client doesn't get the same sentence every Thursday;
+    this was worse than that.
+  */
+  const quietSince = new Date(today.getTime() - QUIET_COOLDOWN_DAYS * 86_400_000);
+  const toldRecently = new Set(
+    (
+      await prisma.autoMessageSend.findMany({
+        where: { clientId: { in: ids }, trigger: GONE_QUIET, date: { gte: quietSince } },
+        select: { clientId: true },
+        distinct: ['clientId'],
+      })
+    ).map((r) => r.clientId)
+  );
+
   const quietCutoff = new Date(today.getTime() - QUIET_DAYS * 86_400_000);
   const out: Candidate[] = [];
 
@@ -168,7 +202,22 @@ async function candidates(today: Date): Promise<Candidate[]> {
     */
     if (theirLast && (!coachLast || theirLast > coachLast)) continue;
 
-    if (!theirLast || theirLast < quietCutoff) {
+    /*
+      "Havent heard from you in a few days" has to be TRUE.
+
+      `!theirLast` — a client who has never sent a message — used to take this
+      branch, so somebody who finished their intake at 5pm got, as the first
+      thing their coach ever said to them, "Hey my man havent heard from you
+      in a few days. Everything good?" at 9am the next morning. There has been
+      no few days and no conversation to be absent from. A new client gets the
+      ordinary check-in, which is a normal first thing to receive.
+
+      And once somebody has been told, they are not told again for
+      QUIET_COOLDOWN_DAYS — see toldRecently above.
+    */
+    const quiet = Boolean(theirLast) && theirLast! < quietCutoff;
+
+    if (quiet && !toldRecently.has(userId)) {
       out.push({ clientId: userId, coachId, trigger: GONE_QUIET });
     } else if (resting.has(userId)) {
       out.push({ clientId: userId, coachId, trigger: REST_DAY });

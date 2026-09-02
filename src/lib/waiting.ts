@@ -53,9 +53,45 @@ function betweenCoachAnd(coachId: string, clientIds: string[]) {
   };
 }
 
+/*
+  Whose threads count as live.
+
+  The relationship row is the gate, and NOTHING in the app ever writes
+  anything but 'active' to its status — ensureCoachAssigned and
+  attachClientToCoach both upsert it active, and updateClientStatus only
+  touches Client.status. So filtering on the relationship alone let a client
+  who cancelled mid-conversation sit in "Waiting on you" at the top of the
+  inbox forever, ageing into the red `cold` tone, holding the sidebar badge
+  permanently above zero. After a year of ordinary churn that is 20 active
+  clients mixed into 40 former ones and a badge that can never reach zero —
+  which is precisely the badge-he-learns-to-ignore failure this file's own
+  header is written to prevent.
+
+  Client.status is the column that actually moves, so it is the one to read.
+  The dashboard has always excluded these two; the inbox never did.
+
+  Written twice, inline, rather than hoisted into a shared const — and that is
+  deliberate. `{ status: { notIn: ['cancelled', 'completed'] } }` inside a
+  `where` literal is contextually typed by Prisma, so the strings narrow to
+  ClientStatus. The same object in a standalone const widens to `string[]`,
+  which real Prisma rejects and the offline stub waves through: a local
+  typecheck that passes and a Vercel build that does not. That has already
+  cost this project a stale production deploy once today.
+
+  NOT rather than a positive filter, because `clientRecord` is nullable. A
+  positive `clientRecord: { status: ... }` means "the row exists AND matches",
+  so a client whose Client row is missing would vanish from the inbox
+  entirely, unread messages and all — trading a badge that never clears for a
+  person who never appears, which is the worse of the two.
+*/
+
 export async function getWaitingThreads(coachId: string): Promise<WaitingThread[]> {
   const rels = await prisma.coachClientRelationship.findMany({
-    where: { coachId, status: 'active' },
+    where: {
+      coachId,
+      status: 'active',
+      NOT: { client: { clientRecord: { status: { in: ['cancelled', 'completed'] } } } },
+    },
     include: { client: { include: { profile: true } } },
   });
   if (rels.length === 0) return [];
@@ -172,8 +208,15 @@ export async function getWaitingThreads(coachId: string): Promise<WaitingThread[
  * about.
  */
 export async function countWaitingThreads(coachId: string): Promise<number> {
+  // Same live-client filter as getWaitingThreads, inline for the same reason
+  // (see the comment above it). The badge has to count the same set the list
+  // shows, so these two `where` clauses must stay identical.
   const rels = await prisma.coachClientRelationship.findMany({
-    where: { coachId, status: 'active' },
+    where: {
+      coachId,
+      status: 'active',
+      NOT: { client: { clientRecord: { status: { in: ['cancelled', 'completed'] } } } },
+    },
     select: { clientId: true },
   });
   if (rels.length === 0) return 0;

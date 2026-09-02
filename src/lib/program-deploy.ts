@@ -90,11 +90,34 @@ export async function deployProgram({
   const byWeekday = new Map(days.map((d) => [d.weekday, d]));
   const batchId = randomUUID();
 
-  // Clear what a previous deploy of THIS template put on THIS client's
-  // calendar from the start date forward. Hand-placed rows have no
-  // templateId, and the past is never touched.
+  /*
+    Clear what ANY previous deploy put on this client's calendar from the
+    start date forward — not just this template's.
+
+    It used to filter on `templateId`, which is right only while a client
+    never changes program. Deploy Phase 2 in April over a January block that
+    runs to July and the January rows stay: from April to July the client has
+    TWO rows on every date, and there is no unique constraint on
+    ScheduledItem, so skipDuplicates cannot catch it either. scheduledToday
+    is a findFirst with no ordering, so which program they see becomes
+    whichever row Postgres hands back; the coach's month view draws two chips
+    a day and counts "6/44" in a month with 22 sessions; markScheduledDone
+    updateManys both; and the confirmation says "Replaced 0 from the previous
+    deploy" while it happens. No screen in the app could clear the orphans.
+
+    Hand-placed rows still survive — they have no templateId — and the past is
+    still never touched. Completed sessions survive too: re-deploying at 6pm
+    used to delete the row the client ticked that morning, which un-did their
+    own tick and dropped the month's count by one. A finished day is a record
+    of something that happened, not a plan to be replaced.
+  */
   const removed = await prisma.scheduledItem.deleteMany({
-    where: { clientId, templateId, date: { gte: from } },
+    where: {
+      clientId,
+      templateId: { not: null },
+      completedAt: null,
+      date: { gte: from },
+    },
   });
 
   const rows: {
