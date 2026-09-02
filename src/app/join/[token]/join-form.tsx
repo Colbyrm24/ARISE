@@ -97,11 +97,30 @@ export function JoinForm({
       }
     }
 
-    const res = await fetch('/api/auth/join', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, fullName }),
-    });
+    /*
+      Wrapped, because the account already exists at Supabase by this line.
+
+      An unguarded fetch that rejects — a phone losing signal between making
+      the account and this call is the ordinary case — skipped every
+      setLoading(false) below it. The button sat disabled reading "One
+      second…" forever, with no error and no way forward, and the half-made
+      account behind it was the thing that used to brick a login. Whatever
+      happens here, they get told and they get the button back.
+    */
+    let res: Response;
+    try {
+      res = await fetch('/api/auth/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, fullName }),
+      });
+    } catch {
+      setLoading(false);
+      setError(
+        'Lost connection before we could finish. Your account is made — open this link again, or sign in.'
+      );
+      return;
+    }
 
     const data = await res.json().catch(() => ({}));
 

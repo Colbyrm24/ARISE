@@ -103,9 +103,24 @@ export default async function JoinPage({ params }: { params: { token: string } }
 
       <SystemWindow
         title={existing ? 'Your account' : invite.plan.name}
-        meta={existing ? '[no payment]' : `[${terms}]`}
+        meta={existing ? '[no payment]' : undefined}
       >
         <SystemWindowContent className="pt-4">
+          {/*
+            The terms in the body, not squeezed into the header chip.
+
+            `meta` sits beside the title on one row and holds its full width,
+            so a real payment string — "$375.00 per payment, 6 payments
+            monthly" — pushed the row past a 390px phone and clipped itself at
+            the right edge. The price, cut off, on the first screen a paying
+            client ever sees. Down here it has the whole width and wraps.
+          */}
+          {!existing && (
+            <p className="readout mb-4 border border-border/70 bg-secondary/30 px-3 py-2 text-[11px] uppercase leading-relaxed tracking-wider text-foreground">
+              {terms}
+            </p>
+          )}
+
           <JoinForm
             token={invite.token}
             defaultName={invite.name ?? ''}
