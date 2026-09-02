@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { timingSafeEqual } from 'node:crypto';
 import { runAutoMessages } from '@/lib/auto-message';
 
 export const dynamic = 'force-dynamic';
@@ -31,9 +32,24 @@ export async function GET(request: Request) {
     );
   }
 
-  const url = new URL(request.url);
-  const auth = request.headers.get('authorization');
-  const authorised = auth === `Bearer ${secret}` || url.searchParams.get('key') === secret;
+  /*
+    Header only. The `?key=` fallback is gone.
+
+    A query string is written into Vercel's request and function logs, into
+    browser history, and into any Referer that leaves the page — so the
+    secret that fires a message to every client was being copied into three
+    places that outlive the request. Vercel Cron sends the Authorization
+    header, so nothing legitimate needed the fallback.
+
+    Compared with timingSafeEqual for the same reason the health token is:
+    a remote timing oracle across an edge hop is not a practical attack, but
+    the correct comparison costs nothing and stops the question being asked.
+  */
+  const auth = request.headers.get('authorization') ?? '';
+  const expected = `Bearer ${secret}`;
+  const authorised =
+    auth.length === expected.length &&
+    timingSafeEqual(Buffer.from(auth), Buffer.from(expected));
   if (!authorised) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
