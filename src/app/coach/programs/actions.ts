@@ -48,9 +48,25 @@ export async function deleteTemplate(formData: FormData) {
       prisma.workout.deleteMany({ where: { templateId: id } }),
       prisma.workoutTemplate.delete({ where: { id } }),
     ]);
-  } catch {
-    // Assigned to a client, or has logged workouts — leave it in place
-    // rather than erroring the whole page.
+  } catch (err) {
+    /*
+      Assigned to a client, or has logged workouts. Both are foreign keys and
+      both are right — a client's sessions are their history, and a retired
+      assignment is the record that they ran it — so the template stays.
+
+      Still swallowed rather than thrown, because a coach who taps delete on
+      a program somebody trained from should not get a crashed page. But it
+      is logged now: this ran silent, and the list happily drew a delete
+      button on a row where pressing it could not do anything, so the only
+      signal was the coach noticing the program was still there. The list
+      works the block out for itself and shows "In use" instead, which means
+      reaching this line at all is now a sign that something else is wrong.
+    */
+    console.error('deleteTemplate blocked', {
+      templateId: id,
+      coachId: coach.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   revalidatePath('/coach/programs');
