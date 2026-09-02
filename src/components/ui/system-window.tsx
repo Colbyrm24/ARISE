@@ -80,9 +80,15 @@ const SystemWindow = React.forwardRef<HTMLDivElement, SystemWindowProps>(
 
       {title && (
         <div className="flex items-center gap-3 px-5 pb-0 pt-5">
+          {/*
+            min-w-0 so the title can actually shrink. A flex child's default
+            min-width is auto, which is min-content — so `flex-1` alone could
+            not get it below the width of its longest word, and the row grew
+            past the container instead.
+          */}
           <div
             className={cn(
-              'relative z-10 flex flex-1 items-center justify-center border px-3 py-2 text-center text-xs font-bold uppercase tracking-[0.3em]',
+              'relative z-10 flex min-w-0 flex-1 items-center justify-center border px-3 py-2 text-center text-xs font-bold uppercase tracking-[0.3em]',
               alert
                 ? 'border-destructive/50 bg-destructive/[0.07] text-destructive'
                 : 'glow border-accent/55 bg-accent/[0.11] text-foreground shadow-[inset_0_0_22px_hsl(var(--accent)/0.14),0_0_28px_-6px_hsl(var(--accent)/0.6)]'
@@ -91,7 +97,19 @@ const SystemWindow = React.forwardRef<HTMLDivElement, SystemWindowProps>(
             {title}
           </div>
           {meta && (
-            <span className="readout shrink-0 text-[10px] uppercase text-muted-foreground">
+            /*
+              Meta is nearly always a short count — [3/5], [12 min] — and at
+              this size those sit far inside the cap, so they never wrap and
+              nothing about them changes.
+
+              It used to be shrink-0 with no cap, which meant the one caller
+              passing a real sentence (the payment terms on /join) held its
+              full max-content width and pushed the whole row off a 390px
+              phone, clipping itself at the edge. Half the row is the ceiling
+              now, and past it the text wraps instead of the page scrolling
+              sideways.
+            */
+            <span className="readout max-w-[50%] text-right text-[10px] uppercase text-muted-foreground">
               {meta}
             </span>
           )}
