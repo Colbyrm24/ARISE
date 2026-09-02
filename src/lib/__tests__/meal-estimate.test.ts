@@ -81,6 +81,51 @@ test('alcohol cannot drag the food half off', () => {
   assert.equal(r.adjusted, false);
 });
 
+/*
+  --- food that merely sounds like a drink
+
+  The exemption switched the whole 4/4/9 check off for an item, and the test
+  for it was the item's NAME. With no closing word boundary that matched
+  prefixes — `gin` matched ginger, `ale` matched alevin, `hard ` matched hard
+  boiled — and even with a boundary, scotch egg and sake salmon are food.
+
+  Measured before the fix: "chicken stir fry" at 520 stated against 690 from
+  its macros was corrected to 690; the identical plate called "ginger chicken
+  stir fry" was carried at 520. Same food, 25% under, decided by one word.
+*/
+test('a word that looks like a drink does not exempt the food it is in', () => {
+  const wrong = { calories: 520, protein: 45, carbs: 60, fat: 30 }; // 4/4/9 = 690
+
+  for (const name of [
+    'ginger chicken stir fry',
+    'hard boiled eggs and toast',
+    'scotch egg platter',
+    'sake glazed salmon',
+    'stout beef stew',
+    'apple cider vinegar slaw',
+    'rumaki',
+  ]) {
+    const r = reconcile([item({ name, ...wrong })]);
+    assert.equal(r.adjusted, true, `${name} must stay inside the 4/4/9 check`);
+    assert.equal(r.calories, 690, `${name} must be corrected to its macros`);
+  }
+});
+
+test('a real drink is still carried at its stated calories', () => {
+  // Ethanol is 7 kcal/g and sits in no macro column, so a drink's calories
+  // tower over its own 4/4/9. That gap is what identifies it, not the name.
+  for (const drink of [
+    { name: 'pale ale', calories: 210, protein: 2, carbs: 18, fat: 0 },
+    { name: 'glass of red wine', calories: 125, protein: 0, carbs: 4, fat: 0 },
+    { name: 'vodka soda', calories: 97, protein: 0, carbs: 0, fat: 0 },
+    { name: 'white claw', calories: 100, protein: 0, carbs: 2, fat: 0 },
+  ]) {
+    const r = reconcile([item(drink)]);
+    assert.equal(r.adjusted, false, `${drink.name} must not be reconciled`);
+    assert.equal(r.calories, drink.calories);
+  }
+});
+
 // --- screens are transcribed, never rewritten
 test('a screen is never reconciled, even when the numbers do not add up', () => {
   // 47p + 62c + 12g fat = 188 + 248 + 108 = 544, printed as 537. Fibre and
