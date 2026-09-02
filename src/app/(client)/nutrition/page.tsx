@@ -167,6 +167,20 @@ function Fold({
   );
 }
 
+/*
+  Room for a model call inside the request.
+
+  Server Actions invoked from this page inherit its function limit, and the
+  default is ten seconds — shorter than a vision read of a photograph. Without
+  this the platform kills the request mid-call: Anthropic still bills it, the
+  photo is left orphaned in the bucket, no row is written, and the client sees
+  a bare error with the photo still loaded and an obvious button to try again.
+
+  Sixty is the ceiling on this plan and the SDK's own timeout (20s, one retry)
+  sits well inside it, so this is headroom rather than a target.
+*/
+export const maxDuration = 60;
+
 export default async function NutritionPage({
   searchParams,
 }: {

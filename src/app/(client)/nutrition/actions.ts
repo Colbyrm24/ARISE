@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { requireClient } from '@/lib/auth';
+import { requireClient, requireEntitledClient } from '@/lib/auth';
 import { todayFor } from '@/lib/day';
 import {
   isAllowedMealPhoto,
@@ -29,17 +29,28 @@ export type PhotoLogResult =
   | { ok: false; error: string; saved?: boolean };
 
 /**
- * The photo input converts everything to JPEG in the browser before upload,
- * which is what makes an iPhone HEIC readable at all. This maps whatever
- * arrives to a type the vision API accepts, defaulting to JPEG rather than
- * refusing — a mislabelled JPEG is far more likely than a genuinely exotic
- * format getting this far past isAllowedMealPhoto().
+ * The type to hand the vision API, or null if it cannot read this at all.
+ *
+ * The photo input normally converts everything to JPEG in the browser, which
+ * is what makes an iPhone HEIC readable — but it explicitly falls back to
+ * sending the ORIGINAL file when createImageBitmap throws, which is exactly
+ * what Chrome and Firefox do with HEIC. So HEIC bytes really do arrive here,
+ * and the old version labelled them image/jpeg and sent them anyway.
+ *
+ * That is a hard 400 from the API every single time, reported to the client
+ * as "couldn't read that photo just now" — a sentence promising a transient
+ * outage for something that will fail identically forever. Naming it instead
+ * lets the caller say the true thing.
  */
-function mediaTypeFor(type: string): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' {
+function mediaTypeFor(
+  type: string
+): 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif' | null {
   if (type === 'image/png') return 'image/png';
   if (type === 'image/webp') return 'image/webp';
   if (type === 'image/gif') return 'image/gif';
-  return 'image/jpeg';
+  if (type === 'image/jpeg' || type === 'image/jpg') return 'image/jpeg';
+  // Anything else — HEIC and HEIF above all — the API cannot decode.
+  return null;
 }
 
 
@@ -248,7 +259,16 @@ export async function quickAddFood(formData: FormData) {
  *    and the client can tell the difference between a guess and their coach.
  */
 export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResult> {
-  const user = await requireClient();
+  /*
+    requireEntitledClient, not requireClient.
+
+    This is the only action in the app that spends real money per call, and it
+    was gated on merely being signed in. The page above it uses
+    requireEntitledClient — but a Server Action is its own public endpoint and
+    the page's gate does not protect it, so anybody who got through /signup
+    (role client, status lead, nothing paid) could drive the coach's API bill.
+  */
+  const user = await requireEntitledClient();
 
   const photo = formData.get('photo');
   if (!(photo instanceof File) || photo.size === 0) {
@@ -262,14 +282,46 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
 
   const description = ((formData.get('description') as string | null) ?? '').trim().slice(0, 300);
 
-  // A read costs money and a stuck loop could run all night. This is not a
-  // security boundary, just a ceiling far above anything a person eats.
+  /*
+    A read costs money and a stuck loop could run all night.
+
+    Honest about what this does and does not stop. It counts photo rows for
+    today, and two holes remain that closing properly needs a table of its
+    own — one row claimed before the spend, never deleted:
+
+      · the count runs before the upload and the model call, so simultaneous
+        submissions all read the same number;
+      · removeMealLog deletes the rows it counts, so log-then-delete resets it.
+
+    What has changed is the third hole, which was the one that mattered: a
+    call the platform killed used to write no row at all, so the failure most
+    likely to be retried in a loop was the one the ceiling could not see. The
+    SDK is bounded now (see lib/ai.ts) and a failed read writes its row like
+    any other, so retries count.
+
+    Not a security boundary either way — a ceiling far above anything a person
+    eats, in front of the only action in the app that spends money per call.
+  */
   const today = todayFor(user);
   const readsToday = await prisma.nutritionLog.count({
     where: { clientId: user.id, date: today, source: 'photo' },
   });
   if (readsToday >= 30) {
     return { ok: false, error: "That's a lot of photos for one day — log the rest by hand." };
+  }
+
+  /*
+    Checked before the upload, not after: an unreadable format is going to
+    fail whatever we do, and paying for the storage and the API call first
+    only adds an orphaned file to the disappointment.
+  */
+  const mediaType = mediaTypeFor(photo.type);
+  if (!mediaType) {
+    return {
+      ok: false,
+      error:
+        "That photo is in a format the reader can't open (HEIC, usually). Take it again in the app, or share it as a JPEG.",
+    };
   }
 
   const path = mealPhotoPath(user.id, photo.name);
@@ -279,7 +331,7 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
   const bytes = Buffer.from(await photo.arrayBuffer());
   const result = await estimateMealFromPhoto({
     base64: bytes.toString('base64'),
-    mediaType: mediaTypeFor(photo.type),
+    mediaType,
     description: description || null,
   });
 
