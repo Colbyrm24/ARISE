@@ -7,6 +7,8 @@ import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window
 import { describePaymentStructure } from '@/lib/plans';
 import { appliedPrice } from '@/lib/payment-link';
 import { createClientInvite, revokeClientInvite } from '@/app/coach/clients/invite-actions';
+import { todayIn } from '@/lib/day';
+import { dayKey } from '@/lib/month-grid';
 
 /*
   Adding somebody who isn't a client yet.
@@ -36,7 +38,13 @@ function loadInvites(coachId: string) {
   });
 }
 
-export async function InvitePanel({ coachId }: { coachId: string }) {
+export async function InvitePanel({
+  coachId,
+  timeZone,
+}: {
+  coachId: string;
+  timeZone: string;
+}) {
   /*
     The table can lag the code by a few minutes.
 
@@ -81,7 +89,13 @@ export async function InvitePanel({ coachId }: { coachId: string }) {
   }
 
   const origin = getSiteUrl();
-  const today = new Date().toISOString().slice(0, 10);
+  /*
+    His today, not the server's. This was `new Date().toISOString()`, which
+    is UTC — so from 8pm Eastern onward the Starts box pre-filled with
+    tomorrow, and that date goes onto the invite and then onto the
+    {{start_date}} of a signed agreement. Nothing on screen looks wrong.
+  */
+  const today = dayKey(todayIn(timeZone));
 
   /*
     Only a plan is genuinely required now. An existing-client link signs
@@ -198,9 +212,25 @@ export async function InvitePanel({ coachId }: { coachId: string }) {
               <span className="readout text-[10px] uppercase text-muted-foreground">
                 Price override
               </span>
+              {/*
+                type="number", not just inputMode.
+
+                inputMode is a hint about which keyboard to show and
+                constrains nothing, so these three boxes happily took
+                "1,200" — which parsed to NaN, which came back as null,
+                which meant "no override", which meant the PLAN'S price. The
+                link went out at the wrong number and the client signed an
+                agreement stating it.
+
+                The action refuses an unreadable override now. This stops it
+                being typed at all, and matches the payment-link form on the
+                account screen, which has been type="number" all along.
+              */}
               <input
                 name="priceOverride"
-                inputMode="decimal"
+                type="number"
+                step="0.01"
+                min="0"
                 placeholder="plan price"
                 className={`readout ${fieldClass}`}
               />
@@ -211,7 +241,9 @@ export async function InvitePanel({ coachId }: { coachId: string }) {
               </span>
               <input
                 name="numberOfPaymentsOverride"
-                inputMode="numeric"
+                type="number"
+                min="1"
+                step="1"
                 placeholder="plan default"
                 className={`readout ${fieldClass}`}
               />
@@ -222,7 +254,9 @@ export async function InvitePanel({ coachId }: { coachId: string }) {
               </span>
               <input
                 name="termMonthsOverride"
-                inputMode="numeric"
+                type="number"
+                min="1"
+                step="1"
                 placeholder="plan default"
                 className={`readout ${fieldClass}`}
               />

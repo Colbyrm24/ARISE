@@ -2,6 +2,7 @@ import { redirect, notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { getCurrentUser } from '@/lib/auth';
+import { zoneOf } from '@/lib/day';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,9 @@ export default async function AgreementPage({ params }: { params: { id: string }
   if (!isOwningClient && !isTheirCoach) notFound();
 
   const clientName = agreement.client.user.profile?.fullName ?? agreement.client.user.email;
+  // Whose day the signature happened on: always the client's, whether the
+  // coach or the client is the one reading this receipt.
+  const signerZone = zoneOf(agreement.client.user.profile);
   const isSigned = agreement.status === 'signed';
 
   return (
@@ -68,16 +72,24 @@ export default async function AgreementPage({ params }: { params: { id: string }
             <p>
               Signed by <span className="text-foreground">{agreement.signature.signedName}</span>
             </p>
+            {/*
+              The signer's zone, not the host's. Formatting an instant with no
+              timeZone uses the server's, which is UTC on Vercel — so a
+              signature made at 6:30pm on 1 September in Los Angeles was shown
+              back to that same client as "September 2, 2026 at 1:30 AM".
+            */}
             <p>
               {agreement.signature.signedAt.toLocaleDateString('en-US', {
                 month: 'long',
                 day: 'numeric',
                 year: 'numeric',
+                timeZone: signerZone,
               })}{' '}
               at{' '}
               {agreement.signature.signedAt.toLocaleTimeString('en-US', {
                 hour: 'numeric',
                 minute: '2-digit',
+                timeZone: signerZone,
               })}
             </p>
             <p className="mt-2 text-xs">

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
-import { todayFor } from '@/lib/day';
+import { todayFor, dayIn, zoneOf } from '@/lib/day';
+import { dayKey } from '@/lib/month-grid';
 import { coachIdForClient } from '@/lib/notifications';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { boardView, rankBoard, type BoardRow } from '@/lib/leaderboard';
@@ -83,22 +84,45 @@ export default async function LeaderboardPage() {
     }),
     prisma.user.findMany({
       where: { id: { in: clientIds } },
-      select: { id: true, profile: { select: { fullName: true } } },
+      // timezone, because a workout is an instant and the day it counts for
+      // is that person's own day — see the note on `mark` below.
+      select: { id: true, profile: { select: { fullName: true, timezone: true } } },
     }),
   ]);
 
-  // One set of day-keys per client, so two things logged on the same day
-  // count once. Consistency is days shown up, not events recorded.
+  const zoneFor = new Map<string, string>(
+    people.map((p) => [p.id, zoneOf(p.profile)] as const)
+  );
+
+  /*
+    One set of day-keys per client, so two things logged on the same day count
+    once. Consistency is days shown up, not events recorded.
+
+    Which means all four sources have to agree on what a day IS. Three of them
+    are @db.Date labels written with todayFor — the client's real local day.
+    The fourth, WorkoutLog.startedAt, is a raw instant, and slicing its ISO
+    string gave the UTC day: a client in Los Angeles who trained at 7pm Monday
+    and logged their steps on Monday scored TWO active days for one day of
+    showing up, and got credited for a Tuesday they might have rested. Over a
+    30-day window that systematically ranked evening-training clients in the
+    west above identically consistent ones in the east. consistencyPercent
+    clamps at 100, which is why it never looked broken.
+  */
   const days = new Map<string, Set<string>>();
-  const mark = (clientId: string, d: Date) => {
-    const key = d.toISOString().slice(0, 10);
+  const markKey = (clientId: string, key: string) => {
     if (!days.has(clientId)) days.set(clientId, new Set());
     days.get(clientId)!.add(key);
   };
-  for (const w of workouts) mark(w.clientId, w.startedAt);
-  for (const c of cardio) mark(c.clientId, c.date);
-  for (const s of steps) mark(s.clientId, s.date);
-  for (const g of goals) mark(g.clientId, g.date);
+  /** A stored @db.Date label — already the right calendar day, read in UTC. */
+  const markLabel = (clientId: string, d: Date) => markKey(clientId, dayKey(d));
+  /** An instant — the day it belongs to is that client's own day. */
+  const markInstant = (clientId: string, at: Date) =>
+    markKey(clientId, dayKey(dayIn(at, zoneFor.get(clientId))));
+
+  for (const w of workouts) markInstant(w.clientId, w.startedAt);
+  for (const c of cardio) markLabel(c.clientId, c.date);
+  for (const s of steps) markLabel(s.clientId, s.date);
+  for (const g of goals) markLabel(g.clientId, g.date);
 
   const rows: BoardRow[] = people.map((p) => ({
     clientId: p.id,

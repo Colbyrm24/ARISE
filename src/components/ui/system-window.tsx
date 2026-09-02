@@ -154,6 +154,32 @@ export function countState(
 }
 
 /**
+ * The number inside a display string: "185g" -> 185, "8.2k" -> 8.2.
+ *
+ * `Count` accepts a string for `total` so a caller can render "185g" or
+ * "10k", and it used to hand that string straight to `Number()` — which is
+ * NaN for every one of them. `countState` bails to 'none' on a non-finite
+ * total, and 'none' and 'short' share the accent styling, so the bracket
+ * looked identical at 20g of protein and at 190g against a 185g goal. The
+ * single signal on the screen for the number this coach actually chases
+ * could never fire.
+ *
+ * Callers should pass a numeric `total` and put the suffix in `unit`, which
+ * renders the same. This is the guard for the ones that don't — the same
+ * mistake as Number("12,000 steps"), which has shipped here before.
+ */
+export function numericPart(raw: number | string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : undefined;
+  // Number('') is 0, not NaN, so a string with no digits in it — an em dash,
+  // an empty field — would come back as a real zero rather than "no number".
+  const digits = raw.replace(/[^0-9.\-]/g, '');
+  if (!/\d/.test(digits)) return undefined;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
  * Bracket notation: [3/5], [112/185g], [8.2/10k].
  *
  * A percentage tells someone how they're doing; a bracket tells them what's
@@ -174,7 +200,7 @@ export function Count({
   mode?: CountMode;
   className?: string;
 }) {
-  const state = countState(Number(value), total === undefined ? undefined : Number(total), mode);
+  const state = countState(numericPart(value) ?? NaN, numericPart(total), mode);
   return (
     <span
       className={cn(

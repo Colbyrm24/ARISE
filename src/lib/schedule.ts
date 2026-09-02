@@ -117,10 +117,35 @@ export function zonedTimeToUtc(
   return new Date(naive - secondOffset * 60000);
 }
 
-/** The calendar date in the coach's timezone, n days after `from`. */
+/**
+ * The calendar date in the coach's timezone, n days after `from`.
+ *
+ * Stepped as CALENDAR dates, not by adding 86,400,000ms.
+ *
+ * The millisecond version drifts the local wall-clock time by an hour across
+ * a DST transition, and when the starting local hour sits near the edge that
+ * drift rolls the date over. Checked against the real ICU rules: from
+ * Saturday 8 March 2025 at 23:30 America/New_York, offsets 0, 1 and 2
+ * produced March 8, 10 and 11 — Sunday the 9th was never generated, so a
+ * client opening /book late that Saturday saw no Sunday times at all,
+ * whatever the coach had set for Sundays. Fall-back does the mirror from a
+ * 00:30 start: a day repeats and the window comes up one short at the end.
+ *
+ * `Date.UTC(y, m - 1, d + n)` normalises month and year rollover, and a
+ * calendar day is exactly one calendar day however many hours it actually
+ * ran. Read back at noon so no rendering of that date can slip to a
+ * neighbouring one. zonedTimeToUtc still does the real DST work on the
+ * resulting date — this only decides WHICH dates get asked about.
+ */
 function dayIn(from: Date, dayOffset: number, timeZone: string) {
-  const p = partsIn(new Date(from.getTime() + dayOffset * 86400000), timeZone);
-  return { year: p.year, month: p.month, day: p.day, weekday: p.weekday };
+  const base = partsIn(from, timeZone);
+  const stepped = new Date(Date.UTC(base.year, base.month - 1, base.day + dayOffset, 12));
+  return {
+    year: stepped.getUTCFullYear(),
+    month: stepped.getUTCMonth() + 1,
+    day: stepped.getUTCDate(),
+    weekday: stepped.getUTCDay(),
+  };
 }
 
 /**

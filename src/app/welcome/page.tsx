@@ -26,6 +26,13 @@ export const dynamic = 'force-dynamic';
   their coach — within one tap.
 */
 
+/*
+  How many sections the intake actually has. Read from the form's own
+  definition so the count on this screen can never drift from the number of
+  sections a client is asked to fill.
+*/
+const INTAKE_SECTIONS = ONBOARDING_STEPS.length;
+
 const STEPS = [
   { key: 'signed-up', label: 'Account created' },
   { key: 'paid', label: 'Payment' },
@@ -85,7 +92,7 @@ export default async function WelcomePage() {
         })
       : null;
 
-  const [intake, thread] = await Promise.all([
+  const [intakeRaw, thread] = await Promise.all([
     prisma.onboardingResponse.count({
       where: { clientId: user.id, completedAt: { not: null } },
     }),
@@ -112,6 +119,15 @@ export default async function WelcomePage() {
           .then((rows) => rows.reverse())
       : Promise.resolve([]),
   ]);
+
+  /*
+    Clamped rather than trusted. The count is of completed response rows, and
+    a step that was retired from ONBOARDING_STEPS would leave its row behind —
+    which is how you get "5 of 4 done". Clamping keeps the copy honest whatever
+    is in the table.
+  */
+  const intake = Math.min(intakeRaw, INTAKE_SECTIONS);
+  const intakeDone = intake >= INTAKE_SECTIONS;
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-5 px-5 py-10">
@@ -157,19 +173,35 @@ export default async function WelcomePage() {
         The intake is the one useful thing somebody can do while they wait, and
         doing it now is what makes their first week ready on day one instead of
         day four.
+
+        Three states, not two. The old version only asked whether *any* section
+        had been filled, so somebody who had answered all four was still told
+        to "Finish your intake — 4 of 4 done": a to-do that was already done,
+        under a heading saying it was worth doing now, on the screen a waiting
+        client stares at the longest. Once it's finished it stops being a task
+        and becomes something they can go back and change.
+
+        The section count comes from ONBOARDING_STEPS rather than a literal 4,
+        which is what let the copy and the form drift apart in the first place.
       */}
-      <SystemWindow title="Worth doing now" plain>
+      <SystemWindow title={intakeDone ? 'With your coach' : 'Worth doing now'} plain>
         <SystemWindowContent className="pt-3">
           <Link
             href="/onboarding"
             className="flex items-center justify-between gap-3 text-sm transition-colors hover:text-accent"
           >
             <span>
-              {intake > 0 ? 'Finish your intake' : 'Fill in your intake'}
+              {intakeDone
+                ? 'Your intake'
+                : intake > 0
+                  ? 'Finish your intake'
+                  : 'Fill in your intake'}
               <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
-                {intake > 0
-                  ? `${intake} of ${ONBOARDING_STEPS.length} done`
-                  : 'about 5 minutes'}
+                {intakeDone
+                  ? `all ${INTAKE_SECTIONS} sections · review or update`
+                  : intake > 0
+                    ? `${intake} of ${INTAKE_SECTIONS} done`
+                    : 'about 5 minutes'}
               </span>
             </span>
             <ArrowRight size={15} className="shrink-0 text-accent" />

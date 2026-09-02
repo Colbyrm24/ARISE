@@ -10,6 +10,7 @@ import { PushToggle } from '@/components/push-toggle';
 import { HealthSync } from '@/components/health-sync';
 import { prisma } from '@/lib/prisma';
 import { avatarSrc } from '@/lib/avatars';
+import { zoneOf } from '@/lib/day';
 import { AvatarUpload } from '@/components/client/avatar-upload';
 import { CoachingPlanCard } from '@/components/client/coaching-plan-card';
 
@@ -48,7 +49,7 @@ export default async function ProfilePage() {
         Above the toggles on purpose. What somebody bought and how far
         through it they are outranks a notification switch.
       */}
-      {user && <CoachingPlanCard clientId={user.id} />}
+      {user && <CoachingPlanCard clientId={user.id} timeZone={zoneOf(user.profile)} />}
 
       <Card>
         <CardContent className="pt-6">
@@ -60,11 +61,20 @@ export default async function ProfilePage() {
         <CardContent className="pt-6">
           <HealthSync
             hasToken={Boolean(healthToken)}
+            /*
+              Their evening, not the server's. lastUsedAt is an instant, and
+              formatting an instant with no timeZone uses whatever the host
+              is set to — UTC on Vercel. HealthSync tells the client to run
+              the export in the evening, so somebody in Los Angeles whose
+              shortcut fired at 7pm read "Last received Sep 2" on the evening
+              of the 1st: a date that had not happened yet where they were.
+            */
             lastUsed={
               healthToken?.lastUsedAt
                 ? healthToken.lastUsedAt.toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
+                    timeZone: zoneOf(user?.profile),
                   })
                 : null
             }

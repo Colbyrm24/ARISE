@@ -30,9 +30,29 @@ export async function uploadProgressPhoto(formData: FormData) {
   const error = await uploadPhoto(path, file);
   if (error) return;
 
-  await prisma.progressPhoto.create({
-    data: { clientId: user.id, date, angle, storagePath: path },
-  });
+  /*
+    Compensate the upload if the row can't be written.
+
+    The object goes into the bucket first, and this insert ran unguarded — so
+    a failure here left a file in private storage with nothing pointing at
+    it, which no screen can show and no delete can reach, and threw out of
+    the action so the client got Next's unhandled-error page rather than a
+    photo. sendVoiceNoteToCoach wraps the identical pair in exactly this and
+    calls removeVoiceNote on failure; the photo path was the one that skipped
+    it, on the more sensitive bucket of the two.
+  */
+  try {
+    await prisma.progressPhoto.create({
+      data: { clientId: user.id, date, angle, storagePath: path },
+    });
+  } catch (err) {
+    await removePhoto(path);
+    console.error('Could not record a progress photo', {
+      clientId: user.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
 
   // Uploading front, side and back back-to-back is one event to the coach,
   // not three — so only the first photo of the day pings them.

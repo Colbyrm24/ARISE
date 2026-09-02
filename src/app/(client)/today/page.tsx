@@ -566,13 +566,17 @@ export default async function TodayPage({
                       Now the value always renders, and the goal joins it
                       whenever there is one.
                     */}
+                    {/*
+                      The unit is a unit, not part of the total. Gluing them
+                      together — `${r.total}${r.unit}` — reached Count as NaN,
+                      so every protein row rendered in the 'none' state, which
+                      is styled the same as 'short'. The bracket never turned
+                      green on a row the client had actually hit. (The tick
+                      itself was fine: `hit` above computes countState from
+                      the numeric total.) Rendering is unchanged: [112/185g].
+                    */}
                     {r.value !== undefined ? (
-                      <Count
-                        value={r.value}
-                        total={r.total !== undefined ? `${r.total}${r.unit}` : undefined}
-                        unit={r.total === undefined ? r.unit : undefined}
-                        mode={r.mode}
-                      />
+                      <Count value={r.value} total={r.total} unit={r.unit} mode={r.mode} />
                     ) : r.goalText ? (
                       /*
                         The coach's own instruction, finally on the client's

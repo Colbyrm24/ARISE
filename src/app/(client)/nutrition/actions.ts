@@ -105,7 +105,20 @@ export async function logFood(formData: FormData) {
   const quantity = quantityOf(formData);
   if (!foodId || quantity === null) return;
 
-  const food = await prisma.food.findUnique({ where: { id: foodId } });
+  /*
+    Scoped the same way the search that offers these foods is scoped.
+
+    The list on the page reads `OR: [{ ownerId: null }, { ownerId: user.id }]`
+    — the shared library plus this client's own saved foods — but the action
+    took the posted id and looked it up unscoped, so a private custom food
+    belonging to another client was loggable, and its name then rendered on
+    the caller's screen through the `food` relation. Ids are UUIDs so nothing
+    is enumerable, but this is the same hole the ownerId column was added to
+    close, re-opened one layer down. logPlanItem below already does it right.
+  */
+  const food = await prisma.food.findFirst({
+    where: { id: foodId, OR: [{ ownerId: null }, { ownerId: user.id }] },
+  });
   if (!food) return;
 
   await prisma.nutritionLog.create({
@@ -194,6 +207,18 @@ export async function quickAddFood(formData: FormData) {
       date: todayFor(user),
       meal: mealOf(formData),
       foodId,
+      /*
+        The name the client typed, kept on the row itself.
+
+        It was read and validated up top, used for the optional Food record,
+        and then dropped — so with "Save for next time" unticked, which is
+        the default and the case this whole action exists for, foodId was
+        null and nothing carried the name. The screen falls back to 'Meal',
+        so three quick-adds in a day produced three identical rows reading
+        "Meal", and the coach's review queue showed the same. The column was
+        added for exactly this and nothing was writing it.
+      */
+      name: foodId ? null : name,
       quantity: 1,
       calories: Math.round(calories),
       protein,

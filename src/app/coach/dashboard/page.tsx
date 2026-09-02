@@ -48,7 +48,15 @@ const summaryCards = [
     label: 'Agreements Waiting',
     href: '/coach/clients?status=agreement_pending',
   },
-  { key: 'failedPayments', label: 'Failed Payments', href: '/coach/payments' },
+  /*
+    The fourth card had the same defect the header above describes fixing
+    for the other two: it counted failed payments and linked to
+    /coach/payments, which lists plans, prices and agreement templates and
+    not one payment. The coach read a number, clicked to find out whose card
+    was declining, and landed on a settings screen. There is now a segment
+    for it, so this points at the people it counted.
+  */
+  { key: 'failedPayments', label: 'Failed Payments', href: '/coach/clients?segment=declining' },
 ] as const;
 
 /** Square initial tile. Overlapped in stacks, standalone in the feed. */

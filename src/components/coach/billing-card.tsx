@@ -28,8 +28,24 @@ import {
 const money = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-const when = (d: Date | null) =>
-  d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+/*
+  The client's date, not the host's.
+
+  These are DateTime instants — a Stripe period end, a paidAt — and they were
+  formatted with no timeZone, which on Vercel is UTC. A subscription Stripe
+  renews at 8pm Eastern on 3 March read "next charge Mar 4" here, and the
+  client's own billing line (which does pass their zone) said Mar 3. Two
+  screens in the same app disagreeing about when money moves.
+*/
+const when = (d: Date | null, timeZone: string) =>
+  d
+    ? d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone,
+      })
+    : '—';
 
 const STATUS_COPY: Record<string, { label: string; variant: 'success' | 'accent' | 'outline' }> = {
   active: { label: 'Billing', variant: 'success' },
@@ -38,8 +54,33 @@ const STATUS_COPY: Record<string, { label: string; variant: 'success' | 'accent'
   canceled: { label: 'Cancelled', variant: 'outline' },
 };
 
-export async function BillingCard({ clientId }: { clientId: string }) {
-  const [subscriptions, payments] = await Promise.all([
+export async function BillingCard({
+  clientId,
+  timeZone,
+}: {
+  clientId: string;
+  timeZone: string;
+}) {
+  /*
+    The totals are asked for as totals, not filtered out of the visible list.
+
+    Every number on this card used to be derived from the newest 24 payment
+    rows — the same rows drawn in the history below — which made all of them
+    silently wrong the moment a client crossed 24 payments:
+
+      · "collected over N payments" froze, understating lifetime revenue for
+        anybody on a weekly plan past about six months
+      · the per-subscription count fell as older payments aged out, so a
+        client who FINISHED a 12-payment plan and started a second one read
+        "11 of 12 · 1 to go" with an unfilled bar — the console telling the
+        coach a fully-paid client still owed him
+      · a declined card stopped raising the banner once 24 newer rows sat on
+        top of its failure, while the dashboard tile went on counting it
+
+    A count and a sum are one round trip each and stay right forever. `take`
+    now belongs only to the list it was written for.
+  */
+  const [subscriptions, payments, succeededAgg, failingCount, paidPerSub] = await Promise.all([
     prisma.subscription.findMany({
       where: { clientId, deletedAt: null },
       include: { plan: true, paymentLink: true },
@@ -50,20 +91,33 @@ export async function BillingCard({ clientId }: { clientId: string }) {
       orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
       take: 24,
     }),
+    prisma.payment.aggregate({
+      where: { clientId, deletedAt: null, status: 'succeeded' },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.payment.count({ where: { clientId, deletedAt: null, status: 'failed' } }),
+    prisma.payment.groupBy({
+      by: ['subscriptionId'],
+      where: { clientId, deletedAt: null, status: 'succeeded', subscriptionId: { not: null } },
+      _count: { _all: true },
+    }),
   ]);
 
-  if (subscriptions.length === 0 && payments.length === 0) return null;
+  const succeededCount: number = succeededAgg?._count?._all ?? 0;
+  const collected = Number(succeededAgg?._sum?.amount ?? 0);
 
-  const succeeded = payments.filter((p) => p.status === 'succeeded');
-  const collected = succeeded.reduce((sum, p) => sum + Number(p.amount), 0);
-  const failing = payments.filter((p) => p.status === 'failed');
+  if (subscriptions.length === 0 && payments.length === 0 && succeededCount === 0) return null;
 
   // Counted per subscription rather than over the whole list, so a client on
   // their second plan doesn't read as further through it than they are.
   const paidBySubscription = new Map<string, number>();
-  for (const p of succeeded) {
-    if (!p.subscriptionId) continue;
-    paidBySubscription.set(p.subscriptionId, (paidBySubscription.get(p.subscriptionId) ?? 0) + 1);
+  for (const row of (paidPerSub ?? []) as Array<{
+    subscriptionId: string | null;
+    _count: { _all: number };
+  }>) {
+    if (!row.subscriptionId) continue;
+    paidBySubscription.set(row.subscriptionId, row._count?._all ?? 0);
   }
 
   return (
@@ -75,16 +129,16 @@ export async function BillingCard({ clientId }: { clientId: string }) {
         <div className="flex items-baseline gap-3">
           <span className="readout text-2xl text-accent glow-soft">{money(collected)}</span>
           <span className="text-sm text-muted-foreground">
-            collected over {succeeded.length} {succeeded.length === 1 ? 'payment' : 'payments'}
+            collected over {succeededCount} {succeededCount === 1 ? 'payment' : 'payments'}
           </span>
         </div>
 
-        {failing.length > 0 && (
+        {failingCount > 0 && (
           <p className="flex items-center gap-2 border border-destructive/40 bg-destructive/[0.07] px-4 py-3 text-sm">
             <AlertTriangle size={15} className="shrink-0 text-destructive" />
-            {failing.length === 1
+            {failingCount === 1
               ? 'A payment failed. Their card was declined.'
-              : `${failing.length} payments failed. Their card is being declined.`}
+              : `${failingCount} payments failed. Their card is being declined.`}
           </p>
         )}
 
@@ -117,7 +171,7 @@ export async function BillingCard({ clientId }: { clientId: string }) {
                   </>
                 )}
                 {sub.currentPeriodEnd && sub.status === 'active' && !sub.cancelAtPeriodEnd && (
-                  <> · next charge {when(sub.currentPeriodEnd)}</>
+                  <> · next charge {when(sub.currentPeriodEnd, timeZone)}</>
                 )}
               </p>
 
@@ -131,7 +185,7 @@ export async function BillingCard({ clientId }: { clientId: string }) {
                 sub.cancelAtPeriodEnd ? (
                   <div className="flex flex-wrap items-center gap-3 pt-1">
                     <p className="text-xs text-accent">
-                      Ends {when(sub.currentPeriodEnd)} · no further charges
+                      Ends {when(sub.currentPeriodEnd, timeZone)} · no further charges
                     </p>
                     <form action={keepBillingRunning}>
                       <input type="hidden" name="subscriptionId" value={sub.id} />
@@ -199,7 +253,7 @@ export async function BillingCard({ clientId }: { clientId: string }) {
                 )}
                 <span className="tabular-nums">{money(Number(p.amount))}</span>
                 <span className="text-xs text-muted-foreground">
-                  {when(p.paidAt ?? p.createdAt)}
+                  {when(p.paidAt ?? p.createdAt, timeZone)}
                 </span>
                 <span className="readout ml-auto text-[10px] uppercase text-muted-foreground">
                   {p.status === 'succeeded' ? PROVIDER_LABELS[p.provider] : p.status}
