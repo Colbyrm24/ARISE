@@ -19,7 +19,7 @@ import { scheduledToday, scheduleBetween } from '@/lib/program-deploy';
 import { LocalTime } from '@/components/local-time';
 import { WeekStrip } from '@/components/client/week-strip';
 import { GoalBar } from '@/components/client/goal-bar';
-import { todayFor, hourIn, zoneOf, startOfDay } from '@/lib/day';
+import { todayFor, hourIn, zoneOf, startOfDay, dayIn } from '@/lib/day';
 import { ProgressRing, ProgressBar } from '@/components/client/progress-ring';
 import { toggleHabit, logSteps, logCardio } from './actions';
 
@@ -225,12 +225,38 @@ export default async function TodayPage({
   const caloriesEaten = nutritionLogs.reduce((sum, l) => sum + l.calories, 0);
   const proteinEaten = Math.round(nutritionLogs.reduce((sum, l) => sum + Number(l.protein), 0));
 
-  // Rotate through the assigned program's days based on how many days have
-  // passed since it was assigned — a simple, predictable cadence with no
-  // extra scheduling data needed.
+  /*
+    Rotate through the assigned program's days — the fallback for a program
+    that was assigned but never deployed, so there are no ScheduledItem rows
+    to read. assignProgram takes exactly that path: it calls setActiveProgram
+    and nothing else, so this is the normal case, not a corner.
+
+    Two things were wrong on one line.
+
+    `assignedAt` is a `DateTime`, a real instant, and it was being subtracted
+    from a `@db.Date` day label — UTC midnight with no time in it. The gap
+    between them therefore carried the time of day the coach happened to
+    press the button, and flooring it swallowed a whole day: assigned at 9am
+    Denver, the index was 0 on day one AND day two, then 1 on day three. Every
+    client on this path repeated their first session and then ran a day behind
+    for the life of the program. Both sides are day labels now, so the
+    difference is a whole number of days, and `round` rather than `floor`
+    keeps it exact across a DST boundary where two midnights are 23 or 25
+    hours apart.
+
+    And it read `today` on a screen whose whole point is that it renders
+    `viewDate` — the comment at the top of this function says every query
+    below is scoped to viewDate. Tapping back to yesterday re-queried
+    yesterday's meals, steps and weigh-in but kept showing today's workout.
+  */
   const workouts = activeProgram?.template.workouts ?? [];
   const daysSinceStart = activeProgram
-    ? Math.max(0, Math.floor((today.getTime() - activeProgram.assignedAt.getTime()) / 86400000))
+    ? Math.max(
+        0,
+        Math.round(
+          (viewDate.getTime() - dayIn(activeProgram.assignedAt, tz).getTime()) / 86400000
+        )
+      )
     : 0;
   const todaysWorkout = workouts.length > 0 ? workouts[daysSinceStart % workouts.length] : null;
 
