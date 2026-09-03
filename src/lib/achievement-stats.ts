@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { longestRun, type AchievementStats } from '@/lib/achievements';
+import { dayIn } from '@/lib/day';
 
 /*
   Gathering the numbers the badges are made of.
@@ -10,10 +11,17 @@ import { longestRun, type AchievementStats } from '@/lib/achievements';
   just fetches.
 */
 
-/** Everything the badge board needs, in one pass. */
+/**
+ * Everything the badge board needs, in one pass.
+ *
+ * `tz` is the client's zone, and it is required rather than optional because
+ * the one value in here that is a real instant cannot be turned into a
+ * calendar day without it — see the note on `key` below.
+ */
 export async function achievementStatsFor(
   clientId: string,
-  today: Date
+  today: Date,
+  tz: string | null | undefined
 ): Promise<AchievementStats> {
   const since30 = new Date(
     Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - 29)
@@ -52,7 +60,28 @@ export async function achievementStatsFor(
       }),
     ]);
 
+  /*
+    Four sources, and only three of them are the same kind of value.
+
+    CardioLog.date, StepLog.date and DailyGoalLog.date are `@db.Date` — day
+    labels, already the client's calendar day, and `toISOString().slice(0,10)`
+    reads them back exactly. WorkoutLog.startedAt is a plain `DateTime`, a
+    real instant, and the same call on that gives the UTC calendar day.
+
+    So a client in Los Angeles who trained at 9pm Tuesday had the session
+    filed under Wednesday while their steps for the same evening were filed
+    under Tuesday — a hole punched in the streak on the day they actually
+    trained, and a phantom active day next to it. longestRun walks these keys
+    expecting consecutive days, so it broke a real streak and denied the
+    consistency badge. It fired every evening for anybody west of UTC and
+    every morning for anybody east of it.
+
+    dayIn converts the instant to the client's calendar day first; the day
+    labels are already in that shape and must not be passed through it a
+    second time, which would shift them.
+  */
   const key = (d: Date) => d.toISOString().slice(0, 10);
+  const instantKey = (d: Date) => key(dayIn(d, tz));
 
   /*
     A day counts as active if anything happened on it — same definition the
@@ -60,7 +89,7 @@ export async function achievementStatsFor(
     screen and not on the other.
   */
   const activeDays = new Set<string>();
-  for (const w of workouts) activeDays.add(key(w.startedAt));
+  for (const w of workouts) activeDays.add(instantKey(w.startedAt));
   for (const c of cardio) activeDays.add(key(c.date));
   for (const s of steps) activeDays.add(key(s.date));
   for (const g of goalLogs) activeDays.add(key(g.date));
