@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
+import { recipesVisibleToCoach } from '@/lib/recipe-scope';
 import { assignOptionPlan } from '@/lib/recipe-seed';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { isMealSlot } from '@/lib/meal-plans';
@@ -60,7 +61,11 @@ export async function addPlanItem(formData: FormData) {
   // A line built from the library takes its numbers from the library, so the
   // coach doesn't retype macros he already entered once.
   if (recipeId) {
-    const recipe = await prisma.recipe.findUnique({ where: { id: recipeId } });
+    // Scoped to what this coach can actually see, so a recipe id belonging
+    // to another coach's library cannot be pulled into a plan line.
+    const recipe = await prisma.recipe.findFirst({
+      where: { id: recipeId, ...recipesVisibleToCoach(coach.id, coach.role === 'admin') },
+    });
     if (!recipe) return;
     name = name || recipe.title;
     calories = recipe.calories * quantity;
