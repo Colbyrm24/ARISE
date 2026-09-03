@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Clock } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
+import { recipesVisibleToClient } from '@/lib/recipe-scope';
 import { prisma } from '@/lib/prisma';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 
@@ -47,16 +48,22 @@ function readIngredients(json: unknown): string[] {
 }
 
 export default async function RecipePage({ params }: { params: { id: string } }) {
+  const user = await requireEntitledClient();
+
   /*
-    The access check and the recipe at the same time. The check has to pass
-    before anything renders — and it does, because nothing is returned until
-    both settle — but the recipe lookup never needed to wait for it. It only
-    needs the id in the URL.
+    Scoped, so the id in the URL is not the whole authorisation.
+
+    This was a bare findUnique run in parallel with the access check — and the
+    check only ever answered "is this an entitled client", never "is this
+    recipe theirs to read". Any client could page through another coach's
+    entire library, ingredients and method included, one id at a time.
+
+    The parallel fetch went with it: the scope needs to know who they are, so
+    the lookup genuinely does have to wait for the check now.
   */
-  const [, recipe] = await Promise.all([
-    requireEntitledClient(),
-    prisma.recipe.findUnique({ where: { id: params.id } }),
-  ]);
+  const recipe = await prisma.recipe.findFirst({
+    where: { id: params.id, ...(await recipesVisibleToClient(user.id)) },
+  });
   if (!recipe) notFound();
 
   const ingredients = readIngredients(recipe.ingredientsJson);
