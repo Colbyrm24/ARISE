@@ -40,7 +40,7 @@ export default async function ProgressPage() {
     has been training for months opens this holding everything they earned
     before the feature existed.
   */
-  const badges = achievementsFor(await achievementStatsFor(user.id, todayFor(user)));
+  const badges = achievementsFor(await achievementStatsFor(user.id, todayFor(user), zoneOf(user.profile)));
 
   const [logs, measurements, photos, earliestPhotos, thisWeeksCheckIn] = await Promise.all([
     prisma.weightLog.findMany({
