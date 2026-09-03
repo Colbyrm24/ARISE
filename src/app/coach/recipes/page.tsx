@@ -4,10 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { requireCoach } from '@/lib/auth';
+import { recipesVisibleToCoach } from '@/lib/recipe-scope';
 import { createRecipe, deleteRecipe, loadRecipeLibrary } from './actions';
 
 export default async function CoachRecipesPage() {
-  const recipes = await prisma.recipe.findMany({ orderBy: { title: 'asc' } });
+  /*
+    His library, plus the shared one. This read had no filter at all, so the
+    list showed every coach's recipes with a delete button next to each —
+    and deleteRecipe scopes itself precisely because those ids get out.
+  */
+  const coach = await requireCoach();
+  const recipes = await prisma.recipe.findMany({
+    where: recipesVisibleToCoach(coach.id, coach.role === 'admin'),
+    orderBy: { title: 'asc' },
+  });
 
   return (
     <div className="flex flex-col gap-8">
