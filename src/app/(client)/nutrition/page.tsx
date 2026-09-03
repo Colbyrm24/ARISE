@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Check, ChevronDown, Trash2 } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
+import { recipesVisibleToClient } from '@/lib/recipe-scope';
 import { todayFor } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
 import { Progress } from '@/components/ui/progress';
@@ -187,6 +188,7 @@ export default async function NutritionPage({
   searchParams: { q?: string; cat?: string };
 }) {
   const user = await requireEntitledClient();
+  const recipeScope = await recipesVisibleToClient(user.id);
   const today = todayFor(user);
 
   const q = (searchParams.q ?? '').trim();
@@ -213,6 +215,10 @@ export default async function NutritionPage({
       own page, which is where the link goes.
     */
     prisma.recipe.findMany({
+      // The shared library plus their own coach's, the same rule the Food
+      // query below already follows. Unfiltered, this tab listed every
+      // coach's recipes to every client in the product.
+      where: recipeScope,
       select: { id: true, title: true, calories: true, protein: true, carbs: true, fat: true },
       orderBy: { title: 'asc' },
     }),

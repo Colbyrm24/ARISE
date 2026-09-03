@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireClient, requireEntitledClient } from '@/lib/auth';
 import { todayFor } from '@/lib/day';
+import { recipesVisibleToClient } from '@/lib/recipe-scope';
 import {
   isAllowedMealPhoto,
   mealPhotoPath,
@@ -89,7 +90,14 @@ export async function logMeal(formData: FormData) {
   const quantity = quantityOf(formData);
   if (!recipeId || quantity === null) return;
 
-  const recipe = await prisma.recipe.findUnique({ where: { id: recipeId } });
+  /*
+    Scoped like the list it came from. A Server Action is a public endpoint,
+    so an id from another coach's library would log fine here even once the
+    screen stopped offering it.
+  */
+  const recipe = await prisma.recipe.findFirst({
+    where: { id: recipeId, ...(await recipesVisibleToClient(user.id)) },
+  });
   if (!recipe) return;
 
   await prisma.nutritionLog.create({
