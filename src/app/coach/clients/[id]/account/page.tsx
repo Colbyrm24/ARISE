@@ -328,6 +328,7 @@ export default async function ClientAccountPage({
                     is actually charged. See payment-actions.ts. */}
                 <Input name="priceOverride" type="number" step="0.01" min="0" placeholder="Override price ($, ARISE-priced plans only)" />
                 <Input name="termMonthsOverride" type="number" min="1" placeholder="Override duration (months, optional)" />
+                <Input name="contractTotalOverride" inputMode="decimal" placeholder="Total program value (optional)" />
                 {/*
                   On a fixed payment plan this is the number that ends the
                   billing — when this many payments have gone through, the
