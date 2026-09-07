@@ -261,6 +261,24 @@ export async function InvitePanel({
                 className={`readout ${fieldClass}`}
               />
             </label>
+            {/*
+              What the whole program costs, when that differs from the plan's
+              standard. This is the figure the agreement states as the total
+              the client is committing to, and on a rolling subscription it is
+              the only thing that says when the charges stop.
+            */}
+            <label className="flex flex-col gap-1">
+              <span className="readout text-[10px] uppercase text-muted-foreground">
+                Total value
+              </span>
+              <input
+                name="contractTotalOverride"
+                type="text"
+                inputMode="decimal"
+                placeholder="plan default"
+                className={`readout ${fieldClass}`}
+              />
+            </label>
           </div>
 
           <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
