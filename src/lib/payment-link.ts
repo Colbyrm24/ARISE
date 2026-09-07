@@ -35,6 +35,7 @@ export type LinkTerms = {
   startDate: Date;
   priceOverride: number | null;
   termMonthsOverride: number | null;
+  contractTotalOverride: number | null;
   numberOfPaymentsOverride: number | null;
 };
 
@@ -163,6 +164,7 @@ export async function createStripePaymentLink(terms: LinkTerms) {
       provider: 'stripe',
       priceOverride: applied,
       termMonthsOverride: terms.termMonthsOverride,
+      contractTotalOverride: terms.contractTotalOverride,
       numberOfPaymentsOverride: terms.numberOfPaymentsOverride,
       startDate,
       checkoutUrl,

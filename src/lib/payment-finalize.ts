@@ -26,6 +26,7 @@ async function createAgreementAndPayment(
   const paymentFrequency = paymentLink.paymentFrequencyOverride ?? paymentLink.plan.paymentFrequency;
   const numberOfPayments = paymentLink.numberOfPaymentsOverride ?? paymentLink.plan.numberOfPayments;
   const termMonths = paymentLink.termMonthsOverride ?? paymentLink.plan.termMonths;
+  const contractTotal = paymentLink.contractTotalOverride ?? paymentLink.plan.contractTotal;
 
   const client = await prisma.client.findUnique({
     where: { userId: paymentLink.clientId },
@@ -55,6 +56,21 @@ async function createAgreementAndPayment(
     payment_structure: paymentStructure,
     start_date: formatAgreementDate(paymentLink.startDate),
     term_months: String(termMonths),
+    /*
+      The figure the client is actually committing to.
+
+      A rolling subscription has no payment count to multiply, so this cannot
+      be derived from price - $250/month toward a $4,500 program is 18 charges
+      only if nobody ever pays a lump early. It has to be stored and stated.
+
+      Falls back to the per-payment price when no total is set, which is right
+      for the plans where one payment IS the whole thing: a template reading
+      "the total value of this program is $2,400" stays true, rather than
+      printing a raw {{total_value}} into a signed contract.
+    */
+    total_value: contractTotal
+      ? `$${Number(contractTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : formattedPrice,
     // signed_date intentionally left as a literal placeholder — filled in
     // by the sign action, at the moment the client actually signs.
   });
