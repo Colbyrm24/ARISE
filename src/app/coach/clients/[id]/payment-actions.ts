@@ -28,6 +28,7 @@ export async function createPaymentLink(formData: FormData) {
   const priceOverrideRaw = formData.get('priceOverride') as string | null;
   const termMonthsOverrideRaw = formData.get('termMonthsOverride') as string | null;
   const numberOfPaymentsOverrideRaw = formData.get('numberOfPaymentsOverride') as string | null;
+  const contractTotalOverrideRaw = formData.get('contractTotalOverride') as string | null;
   const manualCheckoutUrl = (formData.get('manualCheckoutUrl') as string | null)?.trim();
 
   if (!clientId || !planId || !agreementTemplateId || !provider || !startDateRaw) return;
@@ -52,6 +53,10 @@ export async function createPaymentLink(formData: FormData) {
   // default. This is what decides when their subscription stops, so it is
   // stored on the link rather than living only in Stripe's metadata.
   const numberOfPaymentsOverride = parseCount(numberOfPaymentsOverrideRaw);
+  // The total the agreement states. On a rolling subscription there is no
+  // payment count to multiply, so this is the only figure that says when the
+  // charges are meant to stop.
+  const contractTotalOverride = parsePrice(contractTotalOverrideRaw);
 
   /*
     parsePrice fixed the crash above and left the quieter half of the same
@@ -67,6 +72,7 @@ export async function createPaymentLink(formData: FormData) {
   const unreadable =
     (!isBlankField(priceOverrideRaw) && priceOverride === null) ||
     (!isBlankField(termMonthsOverrideRaw) && termMonthsOverride === null) ||
+    (!isBlankField(contractTotalOverrideRaw) && contractTotalOverride === null) ||
     (!isBlankField(numberOfPaymentsOverrideRaw) && numberOfPaymentsOverride === null);
   if (unreadable) return;
   /*
@@ -91,6 +97,7 @@ export async function createPaymentLink(formData: FormData) {
       startDate,
       priceOverride,
       termMonthsOverride,
+      contractTotalOverride,
       numberOfPaymentsOverride,
     });
     if (!link) return;
@@ -108,6 +115,7 @@ export async function createPaymentLink(formData: FormData) {
         provider,
         priceOverride,
         termMonthsOverride,
+      contractTotalOverride,
         numberOfPaymentsOverride,
         startDate,
         checkoutUrl: manualCheckoutUrl,
