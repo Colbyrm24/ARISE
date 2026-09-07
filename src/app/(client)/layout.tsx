@@ -2,6 +2,7 @@ import { requireClient } from '@/lib/auth';
 import { BottomNav } from '@/components/client/bottom-nav';
 import { SideNav } from '@/components/client/side-nav';
 import { backgroundOf } from '@/lib/backgrounds';
+import { TimezoneSync } from '@/components/client/timezone-sync';
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   // Server-side check — a coach account can never render this layout,
@@ -40,6 +41,13 @@ export default async function ClientLayout({ children }: { children: React.React
       {/* From lg the named rail replaces the five-item bar; below it, nothing
           moves. See components/client/side-nav.tsx. */}
       <SideNav />
+      {/*
+        Renders nothing. Corrects Profile.timezone from the browser on first
+        load, because until this existed nothing ever set it for a client and
+        every one of them was treated as Eastern — which filed a Pacific
+        client's evening meals under tomorrow. See timezone-actions.ts.
+      */}
+      <TimezoneSync stored={user.profile?.timezone} />
       <main className="mx-auto w-full max-w-md px-4 pb-24 pt-6 lg:max-w-5xl lg:px-10 lg:pb-12 lg:pl-64 lg:pt-12">
         {children}
       </main>
