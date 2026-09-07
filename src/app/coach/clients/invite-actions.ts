@@ -91,7 +91,8 @@ export async function createClientInvite(formData: FormData) {
   const price = override(formData.get('priceOverride'), parsePrice);
   const payments = override(formData.get('numberOfPaymentsOverride'), parseCount);
   const term = override(formData.get('termMonthsOverride'), parseCount);
-  if (!price.ok || !payments.ok || !term.ok) return;
+  const total = override(formData.get('contractTotalOverride'), parsePrice);
+  if (!price.ok || !payments.ok || !term.ok || !total.ok) return;
 
   await prisma.clientInvite.create({
     data: {
@@ -107,6 +108,7 @@ export async function createClientInvite(formData: FormData) {
       priceOverride: price.value,
       numberOfPaymentsOverride: payments.value,
       termMonthsOverride: term.value,
+      contractTotalOverride: total.value,
       startDate,
     },
   });
