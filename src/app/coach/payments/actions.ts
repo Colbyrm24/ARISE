@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import { parsePrice, isBlankField } from '@/lib/billing';
 import { requireCoach } from '@/lib/auth';
 import type { BillingType, PaymentFrequency, PaymentProviderType } from '@prisma/client';
 
@@ -20,9 +21,18 @@ export async function createPlan(formData: FormData) {
   const paymentFrequency = (formData.get('paymentFrequency') as PaymentFrequency | null) || null;
   const numberOfPaymentsRaw = formData.get('numberOfPayments') as string | null;
   const termMonths = formData.get('termMonths') as string | null;
+  // Blank when the price already IS the total. Parsed rather than trusted so
+  // "4,500" lands as 4500 instead of silently becoming null - the same trap
+  // that once had a comma in a price charging the plan default instead.
+  const contractTotalRaw = formData.get('contractTotal') as string | null;
+  const contractTotal = isBlankField(contractTotalRaw) ? null : parsePrice(contractTotalRaw);
   const defaultProvider = formData.get('defaultProvider') as PaymentProviderType | null;
 
   if (!name || !price || !billingType || !termMonths || !defaultProvider) return;
+  // An unreadable total is refused rather than dropped, because a plan that
+  // silently has no total prints the per-payment price into the agreement as
+  // if it were the whole program.
+  if (!isBlankField(contractTotalRaw) && contractTotal === null) return;
 
   await prisma.plan.create({
     data: {
@@ -33,6 +43,7 @@ export async function createPlan(formData: FormData) {
       numberOfPayments:
         billingType === 'payment_plan' && numberOfPaymentsRaw ? Number(numberOfPaymentsRaw) : null,
       termMonths: Number(termMonths),
+      contractTotal,
       defaultProvider,
     },
   });

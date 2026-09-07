@@ -267,6 +267,10 @@ export default async function CoachPaymentsPage() {
                 placeholder="Number of payments (payment plans only)"
               />
               <Input name="termMonths" type="number" min="1" placeholder="Agreement duration (months)" required />
+              {/* Blank when the price already IS the total. Set it when the
+                  program is worth more than one payment and the charges roll
+                  until it is met. */}
+              <Input name="contractTotal" inputMode="decimal" placeholder="Total program value (optional)" />
               <select name="defaultProvider" className={selectClass} required defaultValue="stripe">
                 <option value="stripe">Stripe</option>
                 <option value="fanbasis">FanBasis</option>
