@@ -242,6 +242,8 @@ export async function POST(request: Request) {
       startDate: invite.startDate,
       priceOverride: invite.priceOverride === null ? null : Number(invite.priceOverride),
       termMonthsOverride: invite.termMonthsOverride,
+      contractTotalOverride:
+        invite.contractTotalOverride === null ? null : Number(invite.contractTotalOverride),
       numberOfPaymentsOverride: invite.numberOfPaymentsOverride,
     });
   } catch {
