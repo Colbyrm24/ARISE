@@ -250,6 +250,13 @@ model Plan {
   billingType      BillingType         @map("billing_type")
   paymentFrequency PaymentFrequency?   @map("payment_frequency") // null when billingType = one_time
   numberOfPayments Int?                @map("number_of_payments") // null = ongoing subscription with no fixed count
+  // What the whole program costs, when that is a different question from what
+  // each payment costs. A rolling subscription has no payment count to
+  // multiply, so the total cannot be derived - $250/month toward a $4,500
+  // program is 18 charges only if nobody ever pays a lump early, and the
+  // agreement has to state the figure the client is actually committing to.
+  // Null on plans where price already IS the total.
+  contractTotal    Decimal?            @map("contract_total") @db.Decimal(10, 2)
   termMonths       Int                 @map("term_months") // agreement duration: 3, 4, 6, 12...
   defaultProvider  PaymentProviderType @map("default_provider")
   active           Boolean             @default(true)
@@ -311,6 +318,7 @@ model PaymentLink {
   paymentFrequencyOverride PaymentFrequency?   @map("payment_frequency_override")
   numberOfPaymentsOverride Int?                @map("number_of_payments_override")
   termMonthsOverride       Int?                @map("term_months_override")
+  contractTotalOverride    Decimal?            @map("contract_total_override") @db.Decimal(10, 2)
   startDate                DateTime            @map("start_date") @db.Date
   checkoutUrl              String              @map("checkout_url")
   providerRef              String              @map("provider_ref") // Stripe Checkout Session id, or manual FanBasis reference
@@ -353,6 +361,9 @@ model ClientInvite {
   priceOverride            Decimal?          @map("price_override") @db.Decimal(10, 2)
   numberOfPaymentsOverride Int?              @map("number_of_payments_override")
   termMonthsOverride       Int?              @map("term_months_override")
+  // Same three-lever pattern as the rest: the plan carries the standard total
+  // and this carries the one he agreed with this person.
+  contractTotalOverride    Decimal?          @map("contract_total_override") @db.Decimal(10, 2)
   startDate                DateTime          @map("start_date") @db.Date
   // A client who is ALREADY paying him somewhere else.
   //
