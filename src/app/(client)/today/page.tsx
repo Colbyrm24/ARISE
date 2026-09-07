@@ -797,6 +797,50 @@ export default async function TodayPage({
                   />
                 </div>
               </>
+            ) : nutritionLogs.length > 0 ? (
+              /*
+                What they ate, even with nothing to compare it against.
+
+                The whole card used to be gated on `target`, so a client whose
+                coach hadn't set macros yet logged a meal, came back to this
+                screen — the one they open most — and saw "your coach hasn't
+                set your targets yet" and no trace of the thing they had just
+                entered. caloriesEaten and proteinEaten were computed a few
+                hundred lines up and then thrown away.
+
+                That is indistinguishable from the app losing the entry, and it
+                is what it looked like to a real client who said he had "logged
+                more meals than just the protein waffles". Every new client
+                lands here with no targets, because targets are the coach's
+                first job and logging is the client's — so the gap between
+                signing up and being set up is exactly when this fires.
+
+                Rings need a target to mean anything, so this is the plain
+                figures instead. The prompt underneath is the honest version of
+                the old line: nothing is wrong, there is just nothing to
+                measure against yet.
+              */
+              <>
+                <div className="flex items-start justify-center gap-10">
+                  <div className="text-center">
+                    <p className="readout text-2xl text-accent glow-soft">
+                      {caloriesEaten.toLocaleString()}
+                    </p>
+                    <p className="readout mt-1 text-[10px] uppercase text-muted-foreground">
+                      Calories
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="readout text-2xl text-accent glow-soft">{proteinEaten}g</p>
+                    <p className="readout mt-1 text-[10px] uppercase text-muted-foreground">
+                      Protein
+                    </p>
+                  </div>
+                </div>
+                <p className="border-t border-border/60 pt-3 text-center text-xs text-muted-foreground">
+                  {carbsEaten}g carbs · {fatEaten}g fat · your coach will set your targets soon
+                </p>
+              </>
             ) : (
               <p className="text-sm text-muted-foreground">Your coach hasn’t set your targets yet.</p>
             )}
