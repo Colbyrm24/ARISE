@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { requiredPayments, paymentsRemaining } from '@/lib/billing';
+import { contractProgress, chargesRemaining, contractOverrunning } from '@/lib/contract';
 import { PROVIDER_LABELS } from '@/lib/plans';
 import {
   endBillingNow,
@@ -80,7 +81,15 @@ export async function BillingCard({
     A count and a sum are one round trip each and stay right forever. `take`
     now belongs only to the list it was written for.
   */
-  const [subscriptions, payments, succeededAgg, failingCount, paidPerSub] = await Promise.all([
+  const [
+    subscriptions,
+    payments,
+    succeededAgg,
+    failingCount,
+    paidPerSub,
+    paidPerLink,
+    contractAgreements,
+  ] = await Promise.all([
     prisma.subscription.findMany({
       where: { clientId, deletedAt: null },
       include: { plan: true, paymentLink: true },
@@ -101,6 +110,36 @@ export async function BillingCard({
       by: ['subscriptionId'],
       where: { clientId, deletedAt: null, status: 'succeeded', subscriptionId: { not: null } },
       _count: { _all: true },
+      // Summed here as well as counted, because a contract is measured in
+      // dollars rather than in charges — a client who sends an extra $1,000
+      // has moved through their total without adding to the count.
+      _sum: { amount: true },
+    }),
+    /*
+      The first charge, which belongs to the link rather than to the
+      subscription. finalizeStripeSession writes it with `paymentLinkId` set
+      and `subscriptionId` null (the subscription row does not exist yet at
+      that point), so a contract measured only through the subscription would
+      permanently understate itself by exactly one payment.
+    */
+    prisma.payment.groupBy({
+      by: ['paymentLinkId'],
+      where: { clientId, deletedAt: null, status: 'succeeded', paymentLinkId: { not: null } },
+      _sum: { amount: true },
+    }),
+    /*
+      What this client actually signed up to pay in total, per contract.
+
+      Read off the agreement rather than the plan: the plan's figure is
+      editable and the payment link's override can be superseded by a later
+      link, while this row is the frozen record of the deal. Agreements with
+      no total are plans that state their end in payments, and there is
+      nothing here to show for them.
+    */
+    prisma.agreement.findMany({
+      where: { clientId, deletedAt: null, contractTotal: { not: null } },
+      select: { id: true, paymentLinkId: true, contractTotal: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
     }),
   ]);
 
@@ -112,13 +151,65 @@ export async function BillingCard({
   // Counted per subscription rather than over the whole list, so a client on
   // their second plan doesn't read as further through it than they are.
   const paidBySubscription = new Map<string, number>();
+  const amountBySubscription = new Map<string, number>();
   for (const row of (paidPerSub ?? []) as Array<{
     subscriptionId: string | null;
     _count: { _all: number };
+    _sum: { amount: unknown };
   }>) {
     if (!row.subscriptionId) continue;
     paidBySubscription.set(row.subscriptionId, row._count?._all ?? 0);
+    amountBySubscription.set(row.subscriptionId, Number(row._sum?.amount ?? 0));
   }
+
+  const amountByLink = new Map<string, number>();
+  for (const row of (paidPerLink ?? []) as Array<{
+    paymentLinkId: string | null;
+    _sum: { amount: unknown };
+  }>) {
+    if (!row.paymentLinkId) continue;
+    amountByLink.set(row.paymentLinkId, Number(row._sum?.amount ?? 0));
+  }
+
+  /*
+    Everything paid against one contract: the signup charge, which is filed
+    under the payment link, plus every renewal, which is filed under the
+    subscription that link created.
+
+    Keyed by payment link because that is the one id both the agreement and
+    the subscription hold. An agreement with no link — the "they already pay
+    me elsewhere" migration path — has no contract to measure, and asking for
+    payments with a null link would sweep in every unrelated charge on the
+    account, so those are skipped rather than guessed at.
+  */
+  const paidTowardLink = (linkId: string) => {
+    let total = amountByLink.get(linkId) ?? 0;
+    for (const sub of subscriptions) {
+      if (sub.paymentLinkId === linkId) total += amountBySubscription.get(sub.id) ?? 0;
+    }
+    return total;
+  };
+
+  type ContractRow = {
+    id: string;
+    linkId: string;
+    total: number;
+    progress: NonNullable<ReturnType<typeof contractProgress>>;
+  };
+
+  const contracts: ContractRow[] = [];
+  for (const a of (contractAgreements ?? []) as Array<{
+    id: string;
+    paymentLinkId: string | null;
+    contractTotal: unknown;
+  }>) {
+    if (!a.paymentLinkId) continue;
+    const total = Number(a.contractTotal ?? 0);
+    const progress = contractProgress(total, paidTowardLink(a.paymentLinkId));
+    if (!progress) continue;
+    contracts.push({ id: a.id, linkId: a.paymentLinkId, total, progress });
+  }
+  const contractByLink = new Map(contracts.map((c) => [c.linkId, c]));
 
   return (
     <Card>
@@ -151,6 +242,17 @@ export async function BillingCard({
           const paid = paidBySubscription.get(sub.id) ?? 0;
           const left = paymentsRemaining(paid, required);
           const copy = STATUS_COPY[sub.status] ?? STATUS_COPY.active!;
+          const contract = sub.paymentLinkId ? contractByLink.get(sub.paymentLinkId) : undefined;
+          const overrunning = contractOverrunning(contract?.progress ?? null, sub);
+          // The price this client is actually charged, not the plan's list
+          // price — an override is exactly the case where the two differ, and
+          // "6 charges to go" computed off the wrong one is worse than silence.
+          const charges = contract
+            ? chargesRemaining(
+                contract.progress.remaining,
+                Number(sub.paymentLink?.priceOverride ?? sub.plan.price)
+              )
+            : null;
 
           return (
             <div key={sub.id} className="flex flex-col gap-2 border border-border px-4 py-3">
@@ -174,6 +276,56 @@ export async function BillingCard({
                   <> · next charge {when(sub.currentPeriodEnd, timeZone)}</>
                 )}
               </p>
+
+              {/*
+                Progress against the total they signed for.
+
+                A rolling plan has no payment count to run out, so the line
+                above can only ever say "ongoing · 7 payments so far" — true,
+                and useless for the one question the agreement now answers:
+                how much of the $4,500 is left. That figure was captured, put
+                into the contract, and then read by nothing.
+              */}
+              {contract && (
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-foreground">{money(contract.progress.paid)}</span> of{' '}
+                    {money(contract.total)} contract
+                    {contract.progress.met
+                      ? ' · paid in full'
+                      : ` · ${money(contract.progress.remaining)} left${
+                          charges ? ` · about ${charges} more ${charges === 1 ? 'charge' : 'charges'}` : ''
+                        }`}
+                  </p>
+                  <div
+                    className="h-1 w-full bg-secondary/60"
+                    role="img"
+                    aria-label={`${money(contract.progress.paid)} of ${money(contract.total)} paid`}
+                  >
+                    <div
+                      className={contract.progress.met ? 'h-full bg-success' : 'h-full bg-accent'}
+                      style={{ width: `${contract.progress.percent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/*
+                The one thing the agreement promises that nothing automates.
+
+                requiredPayments() returns null for a rolling subscription, so
+                isPaidInFull can never fire and Stripe will keep charging a
+                client who has paid every dollar they owe — the exact thing
+                Section 3 tells them will not happen. Loud, and next to the
+                buttons that stop it, because the only mechanism is him.
+              */}
+              {overrunning && (
+                <p className="flex items-center gap-2 border border-destructive/40 bg-destructive/[0.07] px-4 py-3 text-sm">
+                  <AlertTriangle size={15} className="shrink-0 text-destructive" />
+                  They&apos;ve paid the full {money(contract!.total)}. Billing is still running —
+                  end it below unless you&apos;re re-signing them.
+                </p>
+              )}
 
               {/*
                 Ending a client used to be a status change that Stripe never
@@ -236,6 +388,45 @@ export async function BillingCard({
             </div>
           );
         })}
+
+        {/*
+          A contract whose payments are not coming through a subscription
+          listed above.
+
+          Section 3 of the agreement expects exactly this shape: somebody
+          paying a deposit and then one-time installments toward the total,
+          with no recurring plan behind it. Rendered inside the subscription
+          block when there is one, and here when there isn't, so the figure
+          never quietly disappears for the arrangement the contract was
+          written to describe.
+        */}
+        {contracts
+          .filter((c) => !subscriptions.some((s) => s.paymentLinkId === c.linkId))
+          .map((c) => (
+            <div key={c.id} className="flex flex-col gap-2 border border-border px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium">Contract</p>
+                <Badge variant={c.progress.met ? 'success' : 'outline'}>
+                  {c.progress.met ? 'Paid in full' : 'Open'}
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                <span className="text-foreground">{money(c.progress.paid)}</span> of{' '}
+                {money(c.total)}
+                {c.progress.met ? '' : ` · ${money(c.progress.remaining)} left`}
+              </p>
+              <div
+                className="h-1 w-full bg-secondary/60"
+                role="img"
+                aria-label={`${money(c.progress.paid)} of ${money(c.total)} paid`}
+              >
+                <div
+                  className={c.progress.met ? 'h-full bg-success' : 'h-full bg-accent'}
+                  style={{ width: `${c.progress.percent}%` }}
+                />
+              </div>
+            </div>
+          ))}
 
         {payments.length > 0 && (
           <ul className="flex flex-col">
