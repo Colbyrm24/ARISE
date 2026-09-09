@@ -441,6 +441,12 @@ model Agreement {
   numberOfPayments Int?              @map("number_of_payments")
   startDate        DateTime          @map("start_date") @db.Date
   termMonths       Int               @map("term_months")
+  // The total this client committed to, snapshotted like every other term on
+  // this row. Plan.contractTotal is editable and the override lives on a
+  // payment link that can be superseded, so without a copy here what somebody
+  // actually signed for survives only as prose inside renderedText, which
+  // nothing can add up. Null on plans that state their end in payments.
+  contractTotal    Decimal?          @map("contract_total") @db.Decimal(10, 2)
   status           String            @default("pending_signature") // pending_signature | signed
   createdAt        DateTime          @default(now()) @map("created_at")
   deletedAt        DateTime?         @map("deleted_at") // soft delete only
