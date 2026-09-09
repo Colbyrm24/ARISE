@@ -138,6 +138,10 @@ async function createAgreementAndPayment(
         numberOfPayments,
         startDate: paymentLink.startDate,
         termMonths,
+        // Snapshotted, not looked up later. The same figure that has just been
+        // rendered into {{total_value}} above, so the sentence the client signs
+        // and the number the app measures against can never drift apart.
+        contractTotal,
       },
       update: {},
     }),
