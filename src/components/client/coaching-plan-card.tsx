@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { requiredPayments, paymentsRemaining } from '@/lib/billing';
+import { contractProgress } from '@/lib/contract';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManageBillingButton } from '@/components/client/manage-billing-button';
 
@@ -70,6 +71,7 @@ export async function CoachingPlanCard({
 
   let subscriptions;
   let counts: number[];
+  let contractByLink = new Map<string, NonNullable<ReturnType<typeof contractProgress>>>();
   try {
     subscriptions = await prisma.subscription.findMany({
       where: {
@@ -101,6 +103,82 @@ export async function CoachingPlanCard({
 
   const paidBy = new Map(subscriptions.map((s, i) => [s.id, counts[i] ?? 0]));
 
+  /*
+    What is left of the total they signed for.
+
+    Its own try, and deliberately after the early returns above. This reads
+    agreements.contract_total, a column added by a migration applied by hand,
+    so there is a window where this code is live and the column is not — and
+    in that window the client's plan, count and next payment date must still
+    render. A missing column costs them one line, not the card.
+
+    Worth showing at all because of what the rewritten agreement says: billing
+    is rolling and continues until the total is met. Without this line their
+    own screen says "7 payments in · next payment Oct 2" and stops, which
+    reads like a subscription with no end — the exact anxiety the stated total
+    was supposed to remove. With it, they can see the finish line they agreed
+    to and that paying extra moves it closer.
+  */
+  try {
+    const linkIds = subscriptions
+      .map((s) => s.paymentLinkId)
+      .filter((id): id is string => Boolean(id));
+
+    if (linkIds.length > 0) {
+      const [agreements, byLink, bySub] = await Promise.all([
+        prisma.agreement.findMany({
+          where: { clientId, deletedAt: null, contractTotal: { not: null } },
+          select: { paymentLinkId: true, contractTotal: true },
+        }),
+        prisma.payment.groupBy({
+          by: ['paymentLinkId'],
+          where: { clientId, deletedAt: null, status: 'succeeded', paymentLinkId: { not: null } },
+          _sum: { amount: true },
+        }),
+        prisma.payment.groupBy({
+          by: ['subscriptionId'],
+          where: { clientId, deletedAt: null, status: 'succeeded', subscriptionId: { not: null } },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const amountByLink = new Map<string, number>();
+      for (const row of (byLink ?? []) as Array<{
+        paymentLinkId: string | null;
+        _sum: { amount: unknown };
+      }>) {
+        if (row.paymentLinkId) amountByLink.set(row.paymentLinkId, Number(row._sum?.amount ?? 0));
+      }
+      const amountBySub = new Map<string, number>();
+      for (const row of (bySub ?? []) as Array<{
+        subscriptionId: string | null;
+        _sum: { amount: unknown };
+      }>) {
+        if (row.subscriptionId) amountBySub.set(row.subscriptionId, Number(row._sum?.amount ?? 0));
+      }
+
+      for (const a of (agreements ?? []) as Array<{
+        paymentLinkId: string | null;
+        contractTotal: unknown;
+      }>) {
+        // The signup charge is filed under the link and every renewal under
+        // the subscription that link created, so a contract is both.
+        if (!a.paymentLinkId || !linkIds.includes(a.paymentLinkId)) continue;
+        let paid = amountByLink.get(a.paymentLinkId) ?? 0;
+        for (const s of subscriptions) {
+          if (s.paymentLinkId === a.paymentLinkId) paid += amountBySub.get(s.id) ?? 0;
+        }
+        const progress = contractProgress(Number(a.contractTotal ?? 0), paid);
+        if (progress) contractByLink.set(a.paymentLinkId, progress);
+      }
+    }
+  } catch {
+    contractByLink = new Map();
+  }
+
+  const money = (n: number) =>
+    `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
@@ -116,17 +194,29 @@ export async function CoachingPlanCard({
           });
           const paid = paidBy.get(sub.id) ?? 0;
           const left = paymentsRemaining(paid, required);
-          const pct =
-            required && required > 0 ? Math.min(100, Math.round((paid / required) * 100)) : null;
+          const contract = sub.paymentLinkId ? contractByLink.get(sub.paymentLinkId) : undefined;
+          /*
+            The contract bar wins when there is one. A rolling plan has no
+            payment count to fill, so `pct` is null for exactly the plans a
+            total was stated for — and where both exist, the dollars are the
+            thing they actually agreed to.
+          */
+          const pct = contract
+            ? contract.percent
+            : required && required > 0
+              ? Math.min(100, Math.round((paid / required) * 100))
+              : null;
 
           return (
             <div key={sub.id} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <p className="text-[15px] font-semibold">{sub.plan.name}</p>
                 <p className="readout text-[11px] uppercase text-muted-foreground">
-                  {required === null
-                    ? `${paid} ${paid === 1 ? 'payment' : 'payments'} in`
-                    : `${paid} of ${required} payments`}
+                  {contract
+                    ? `${money(contract.paid)} of ${money(contract.total)}`
+                    : required === null
+                      ? `${paid} ${paid === 1 ? 'payment' : 'payments'} in`
+                      : `${paid} of ${required} payments`}
                 </p>
               </div>
 
@@ -144,8 +234,15 @@ export async function CoachingPlanCard({
               )}
 
               <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
-                {left !== null && left > 0 && `${left} to go · `}
-                {required !== null && left === 0 && 'Paid in full · '}
+                {contract
+                  ? contract.met
+                    ? 'Paid in full · '
+                    : `${money(contract.remaining)} to go · `
+                  : left !== null && left > 0
+                    ? `${left} to go · `
+                    : required !== null && left === 0
+                      ? 'Paid in full · '
+                      : ''}
                 {sub.currentPeriodEnd && sub.status === 'active' && !sub.cancelAtPeriodEnd
                   ? `Next payment ${when(sub.currentPeriodEnd, timeZone)}`
                   : sub.cancelAtPeriodEnd && sub.currentPeriodEnd
