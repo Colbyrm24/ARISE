@@ -1,6 +1,11 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { contractProgress, chargesRemaining, contractOverrunning } from '../contract';
+import {
+  contractProgress,
+  chargesRemaining,
+  contractOverrunning,
+  contractPaid,
+} from '../contract';
 
 describe('contractProgress', () => {
   test('the ordinary case: part-way through a stated total', () => {
@@ -115,6 +120,85 @@ describe('contractOverrunning', () => {
     assert.equal(
       contractOverrunning(contractProgress(4500, 4500), { status: 'active', cancelAtPeriodEnd: null }),
       true
+    );
+  });
+});
+
+describe('contractPaid', () => {
+  const base = {
+    linkId: 'L1',
+    subscriptions: [{ id: 'S1', paymentLinkId: 'L1' }],
+  };
+
+  test('signup charge plus renewals', () => {
+    assert.equal(
+      contractPaid({
+        ...base,
+        linkSums: new Map([['L1', 250]]),
+        renewalSums: new Map([['S1', 1000]]),
+      }),
+      1250
+    );
+  });
+
+  /*
+    The bug this function exists to stop. The signup row carries BOTH ids once
+    the first invoice adopts it, so a caller handing in overlapping sums —
+    "all payments on the link" plus "all payments on the subscription" —
+    double-counts it. The contract here is that renewalSums must already
+    exclude it; this test pins the shape the caller has to provide.
+  */
+  test('the signup charge is counted once, not once per id it carries', () => {
+    // $250 signup + 3 x $250 renewals = $1,000 collected.
+    const correct = contractPaid({
+      ...base,
+      linkSums: new Map([['L1', 250]]),
+      renewalSums: new Map([['S1', 750]]),
+    });
+    assert.equal(correct, 1000);
+
+    // What the broken caller passed: the subscription sum still containing
+    // the adopted signup row. Proves the sums must be disjoint.
+    const overlapping = contractPaid({
+      ...base,
+      linkSums: new Map([['L1', 250]]),
+      renewalSums: new Map([['S1', 1000]]),
+    });
+    assert.equal(overlapping, 1250);
+    assert.notEqual(overlapping, correct);
+  });
+
+  test('a second contract on the same client is not credited the first one money', () => {
+    assert.equal(
+      contractPaid({
+        linkId: 'L2',
+        subscriptions: [
+          { id: 'S1', paymentLinkId: 'L1' },
+          { id: 'S2', paymentLinkId: 'L2' },
+        ],
+        linkSums: new Map([['L1', 250], ['L2', 400]]),
+        renewalSums: new Map([['S1', 750], ['S2', 800]]),
+      }),
+      1200
+    );
+  });
+
+  test('a contract with no subscription behind it is just the link payments', () => {
+    assert.equal(
+      contractPaid({
+        linkId: 'L1',
+        subscriptions: [],
+        linkSums: new Map([['L1', 1500]]),
+        renewalSums: new Map(),
+      }),
+      1500
+    );
+  });
+
+  test('nothing paid yet', () => {
+    assert.equal(
+      contractPaid({ ...base, linkSums: new Map(), renewalSums: new Map() }),
+      0
     );
   });
 });
