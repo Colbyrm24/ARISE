@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
+import { requireCoach } from '@/lib/auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,10 +49,27 @@ async function readStripePrices(): Promise<{ prices: ClassifiedStripePrice[]; er
 }
 
 export default async function CoachPaymentsPage() {
+  // The layout already refuses a non-coach, but the link list below needs an
+  // id to scope on, and taking it from the session is the only honest source.
+  const coach = await requireCoach();
+
   const [plans, templates, recentLinks] = await Promise.all([
     prisma.plan.findMany({ orderBy: { createdAt: 'desc' } }),
     prisma.agreementTemplate.findMany({ orderBy: { createdAt: 'desc' } }),
+    /*
+      Scoped to this coach's own clients.
+
+      This read had no coach filter, so with a second coach account on the
+      deployment the ten newest links in the whole database rendered here —
+      other people's client names, or their raw email when no profile name was
+      set, next to the plan they were sold and whether they had paid. Every
+      row also linked to /coach/clients/<id>, which the client layout's
+      ownership guard then 404s, so the leak was visible and the link was
+      dead. Same filter the clients, programs, recipes and dashboard reads
+      already apply.
+    */
     prisma.paymentLink.findMany({
+      where: { client: { coachId: coach.id } },
       include: { client: { include: { user: { include: { profile: true } } } }, plan: true },
       orderBy: { createdAt: 'desc' },
       take: 10,
