@@ -5,6 +5,28 @@ import { runAutoMessages } from '@/lib/auto-message';
 export const dynamic = 'force-dynamic';
 
 /*
+  The default is ten seconds, and this route needs far more than that.
+
+  runAutoMessages walks every active client and does six to eight sequential
+  round trips each — pick a trigger, read the thread, write the message, write
+  the send record, touch the relationship, notify, fan out push. At forty
+  clients that is a few hundred serialised queries. Killed at ten seconds it
+  gets through the front of the roster and abandons the tail, and because the
+  one-per-client-per-day record is only written for the clients it reached,
+  the SAME tail is skipped again tomorrow: the people at the back of the list
+  never get an automatic message at all. Nothing reports it either, because
+  the response never returns and Vercel Cron does not retry.
+
+  60 rather than more because this deployment is on Vercel's Hobby plan,
+  where 60 is the ceiling — asking for 300 there is not honoured. That is
+  enough for a roster of this size today and it is six times what the route
+  had. If the roster outgrows it the real fix is batching the per-client
+  writes rather than a bigger number, and the symptom to watch for is the
+  same one: the clients at the end of the list stop hearing from it.
+*/
+export const maxDuration = 60;
+
+/*
   The daily run.
 
   Sends all three automatic messages — the morning check-in, the nudge to
