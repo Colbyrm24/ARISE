@@ -49,9 +49,23 @@ export async function deleteWorkout(formData: FormData) {
   if (!workout) return;
 
   try {
-    await prisma.workout.delete({ where: { id: workout.id } });
+    /*
+      Unpin it from the week first.
+
+      program_days.workout_id has no on-delete action, so deleting a workout
+      that a weekday still points at throws — and the catch below swallowed
+      it, so the trash icon silently did nothing for any day that had been
+      placed on the calendar. The row is deleted rather than blanked because
+      a program_days row with kind='workout' and no workout is the state the
+      client's Today screen renders as a dead Start button.
+    */
+    await prisma.$transaction([
+      prisma.programDay.deleteMany({ where: { workoutId: workout.id } }),
+      prisma.workout.delete({ where: { id: workout.id } }),
+    ]);
   } catch {
-    // Has logged workouts against it — leave it in place.
+    // Deployed to a client, or has logged sessions against it — both are
+    // foreign keys and both are right, so it stays.
   }
 
   revalidatePath(`/coach/programs/${workout.templateId}`);
