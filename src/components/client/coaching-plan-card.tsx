@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { requiredPayments, paymentsRemaining } from '@/lib/billing';
-import { contractProgress } from '@/lib/contract';
+import { contractProgress, contractPaid } from '@/lib/contract';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManageBillingButton } from '@/components/client/manage-billing-button';
 
@@ -135,9 +135,24 @@ export async function CoachingPlanCard({
           where: { clientId, deletedAt: null, status: 'succeeded', paymentLinkId: { not: null } },
           _sum: { amount: true },
         }),
+        /*
+          Renewals only. `paymentLinkId: null` is what keeps this disjoint
+          from the link sum above: the signup charge is written against the
+          payment link and then ADOPTED by the first invoice, which stamps
+          subscriptionId onto that same row. Summing both sets without this
+          filter counted that charge twice for the life of the contract, so
+          this screen told a client "$500 of $4,500" after one $250 payment
+          and "Paid in full" a whole charge before it was.
+        */
         prisma.payment.groupBy({
           by: ['subscriptionId'],
-          where: { clientId, deletedAt: null, status: 'succeeded', subscriptionId: { not: null } },
+          where: {
+            clientId,
+            deletedAt: null,
+            status: 'succeeded',
+            subscriptionId: { not: null },
+            paymentLinkId: null,
+          },
           _sum: { amount: true },
         }),
       ]);
@@ -161,13 +176,16 @@ export async function CoachingPlanCard({
         paymentLinkId: string | null;
         contractTotal: unknown;
       }>) {
-        // The signup charge is filed under the link and every renewal under
-        // the subscription that link created, so a contract is both.
+        // The signup charge comes from the link sum and every renewal from the
+        // subscription sum, and the two queries are scoped so that no row
+        // appears in both.
         if (!a.paymentLinkId || !linkIds.includes(a.paymentLinkId)) continue;
-        let paid = amountByLink.get(a.paymentLinkId) ?? 0;
-        for (const s of subscriptions) {
-          if (s.paymentLinkId === a.paymentLinkId) paid += amountBySub.get(s.id) ?? 0;
-        }
+        const paid = contractPaid({
+          linkId: a.paymentLinkId,
+          linkSums: amountByLink,
+          renewalSums: amountBySub,
+          subscriptions,
+        });
         const progress = contractProgress(Number(a.contractTotal ?? 0), paid);
         if (progress) contractByLink.set(a.paymentLinkId, progress);
       }
