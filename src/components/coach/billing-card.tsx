@@ -4,7 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { requiredPayments, paymentsRemaining } from '@/lib/billing';
-import { contractProgress, chargesRemaining, contractOverrunning } from '@/lib/contract';
+import {
+  contractProgress,
+  chargesRemaining,
+  contractOverrunning,
+  contractPaid,
+} from '@/lib/contract';
 import { PROVIDER_LABELS } from '@/lib/plans';
 import {
   endBillingNow,
@@ -88,6 +93,7 @@ export async function BillingCard({
     failingCount,
     paidPerSub,
     paidPerLink,
+    renewalsPerSub,
     contractAgreements,
   ] = await Promise.all([
     prisma.subscription.findMany({
@@ -110,21 +116,47 @@ export async function BillingCard({
       by: ['subscriptionId'],
       where: { clientId, deletedAt: null, status: 'succeeded', subscriptionId: { not: null } },
       _count: { _all: true },
-      // Summed here as well as counted, because a contract is measured in
-      // dollars rather than in charges — a client who sends an extra $1,000
-      // has moved through their total without adding to the count.
-      _sum: { amount: true },
     }),
     /*
-      The first charge, which belongs to the link rather than to the
-      subscription. finalizeStripeSession writes it with `paymentLinkId` set
-      and `subscriptionId` null (the subscription row does not exist yet at
-      that point), so a contract measured only through the subscription would
-      permanently understate itself by exactly one payment.
+      Contract money, in two halves that cannot overlap.
+
+      A contract is measured in dollars rather than charges — somebody who
+      sends an extra $1,000 has moved through their total without adding to
+      the count — so the sums below are what the progress bar runs on.
+
+      The split is the important part. The signup charge is written by
+      finalizeStripeSession against the payment LINK, and then the first
+      `invoice.paid` ADOPTS that same row and stamps `subscriptionId` onto it
+      (see the signupPayment branch in subscription-sync). So for the rest of
+      that contract's life one row carries BOTH ids.
+
+      A previous version of this card summed "payments on the link" plus
+      "payments on the subscription" and added them together. That counted the
+      signup charge twice for the whole life of the plan: a $250/month client
+      read $500 after one charge, and hit "paid in full · $4,500 of $4,500"
+      on charge 17 of 18 — at which point the overrun banner told the coach to
+      end billing $250 short of the total the client had signed for, while the
+      "collected" figure two rows up still said $4,250. Two numbers on one
+      card disagreeing, in the direction that loses money.
+
+      Keying the second half on `paymentLinkId: null` makes the two sets
+      disjoint by construction, so each row is counted exactly once whichever
+      ids it happens to carry.
     */
     prisma.payment.groupBy({
       by: ['paymentLinkId'],
       where: { clientId, deletedAt: null, status: 'succeeded', paymentLinkId: { not: null } },
+      _sum: { amount: true },
+    }),
+    prisma.payment.groupBy({
+      by: ['subscriptionId'],
+      where: {
+        clientId,
+        deletedAt: null,
+        status: 'succeeded',
+        subscriptionId: { not: null },
+        paymentLinkId: null,
+      },
       _sum: { amount: true },
     }),
     /*
@@ -151,15 +183,23 @@ export async function BillingCard({
   // Counted per subscription rather than over the whole list, so a client on
   // their second plan doesn't read as further through it than they are.
   const paidBySubscription = new Map<string, number>();
-  const amountBySubscription = new Map<string, number>();
   for (const row of (paidPerSub ?? []) as Array<{
     subscriptionId: string | null;
     _count: { _all: number };
-    _sum: { amount: unknown };
   }>) {
     if (!row.subscriptionId) continue;
     paidBySubscription.set(row.subscriptionId, row._count?._all ?? 0);
-    amountBySubscription.set(row.subscriptionId, Number(row._sum?.amount ?? 0));
+  }
+
+  // Renewals only — the signup charge is carried by amountByLink below, and
+  // this map deliberately excludes it so the two never double up.
+  const renewalAmountBySubscription = new Map<string, number>();
+  for (const row of (renewalsPerSub ?? []) as Array<{
+    subscriptionId: string | null;
+    _sum: { amount: unknown };
+  }>) {
+    if (!row.subscriptionId) continue;
+    renewalAmountBySubscription.set(row.subscriptionId, Number(row._sum?.amount ?? 0));
   }
 
   const amountByLink = new Map<string, number>();
@@ -182,13 +222,13 @@ export async function BillingCard({
     payments with a null link would sweep in every unrelated charge on the
     account, so those are skipped rather than guessed at.
   */
-  const paidTowardLink = (linkId: string) => {
-    let total = amountByLink.get(linkId) ?? 0;
-    for (const sub of subscriptions) {
-      if (sub.paymentLinkId === linkId) total += amountBySubscription.get(sub.id) ?? 0;
-    }
-    return total;
-  };
+  const paidTowardLink = (linkId: string) =>
+    contractPaid({
+      linkId,
+      linkSums: amountByLink,
+      renewalSums: renewalAmountBySubscription,
+      subscriptions,
+    });
 
   type ContractRow = {
     id: string;
