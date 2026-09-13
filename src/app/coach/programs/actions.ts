@@ -45,6 +45,23 @@ export async function deleteTemplate(formData: FormData) {
 
   try {
     await prisma.$transaction([
+      /*
+        The week rows go FIRST, and that ordering is the whole fix.
+
+        program_days.workout_id references workouts(id) with NO on-delete
+        action (prisma/program-migration.sql), so deleting the workouts while
+        a weekday still points at one of them violates the FK and aborts the
+        transaction. The catch below then swallowed it — so the delete button
+        did nothing at all for any template whose week had been filled in,
+        which is every template built with the editor. The coach pressed
+        delete, the page revalidated, and the program was still sitting there.
+
+        canDelete() upstream only knows about assignments and logged sessions,
+        so it drew a live button over this. Clearing the weekdays first leaves
+        the genuine blocks — scheduled_items and workout_logs — still able to
+        refuse, which is what they are there for.
+      */
+      prisma.programDay.deleteMany({ where: { templateId: id } }),
       prisma.workout.deleteMany({ where: { templateId: id } }),
       prisma.workoutTemplate.delete({ where: { id } }),
     ]);
