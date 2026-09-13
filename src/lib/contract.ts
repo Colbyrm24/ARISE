@@ -106,3 +106,36 @@ export function contractOverrunning(
   if (subscription.status !== 'active') return false;
   return !subscription.cancelAtPeriodEnd;
 }
+
+/**
+ * Everything paid toward one contract, counted once.
+ *
+ * The awkward part is not the arithmetic, it is that a single Payment row can
+ * belong to a contract by two different routes. finalizeStripeSession writes
+ * the signup charge against the payment LINK; the first `invoice.paid` then
+ * adopts that same row and stamps `subscriptionId` onto it. From then on one
+ * row carries both ids.
+ *
+ * So the caller must hand this two DISJOINT sums:
+ *   - `linkSums`    — payments whose paymentLinkId is set (the signup charge)
+ *   - `renewalSums` — payments whose subscriptionId is set AND paymentLinkId
+ *                     is null (every charge after the first)
+ *
+ * Adding overlapping sets instead is a real bug that shipped: it credited the
+ * signup charge twice for the life of the plan, so a $250/month client read
+ * $500 after one payment and reached "paid in full" a whole charge early,
+ * which told the coach to stop billing short of the signed total.
+ */
+export function contractPaid(args: {
+  linkId: string;
+  linkSums: Map<string, number>;
+  renewalSums: Map<string, number>;
+  subscriptions: Array<{ id: string; paymentLinkId: string | null }>;
+}): number {
+  const { linkId, linkSums, renewalSums, subscriptions } = args;
+  let total = linkSums.get(linkId) ?? 0;
+  for (const sub of subscriptions) {
+    if (sub.paymentLinkId === linkId) total += renewalSums.get(sub.id) ?? 0;
+  }
+  return total;
+}

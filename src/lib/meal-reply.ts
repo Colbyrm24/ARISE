@@ -171,6 +171,25 @@ export function macroReply(input: ReplyInput) {
     if (input.failureReason === 'not-food') {
       return `Haha not sure what I'm looking at there my man. Send the plate over and I'll get you the numbers. ${closerFor(id, meal, false)}`;
     }
+    /*
+      The reader was unavailable — not the photo's fault, and not the
+      client's.
+
+      This used to fall through to the "couldn't get a clear read" line, which
+      asks the client to estimate their own portions. That is the wrong thing
+      to say twice over: the photo was never looked at, so there is nothing
+      wrong with it, and the whole reason they send photos is so they don't
+      have to do the estimating. The coach's own banner on this card says
+      "that was the reader failing, not the photo — the client did nothing
+      wrong" while the box underneath it was prefilled with the opposite.
+
+      It matters more than a wording nit right now: with no API key on the
+      deployment, `unavailable` is the outcome of EVERY photo, so this was
+      the default reply to every client who used the feature.
+    */
+    if (input.failureReason === 'unavailable') {
+      return `Got your photo my man, my end just didnt process it. Tell me roughly whats on the plate and Ill get you the numbers now. ${closerFor(id, meal, false)}`;
+    }
     return `Couldnt get a clear read on that one my man. Roughly how much was on the plate and Ill get you the numbers. ${closerFor(id, meal, false)}`;
   }
 

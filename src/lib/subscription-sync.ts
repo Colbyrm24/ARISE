@@ -413,8 +413,24 @@ export async function handleInvoicePaymentFailed(invoice: {
     training on the first retry is a worse outcome than a few free days, so
     this notifies and nothing more. The lockout lives in
     handleSubscriptionChanged, which fires once Stripe has actually given up.
+
+    Once per invoice, though. Stripe retries a failing invoice about four
+    times over two weeks and re-delivers anything it did not get a 2xx for,
+    and this fired on every one of them — so a single expired card produced
+    four-plus identical "A payment failed" rows in the coach's feed and four
+    identical pushes. The Payment row directly above is already deduped on
+    the invoice id; the announcement was not. With two clients declining at
+    once the feed could not tell them apart, which is also why the name is in
+    the text now.
   */
-  await notifyCoach(sub.clientId, 'A payment failed. Their card was declined.');
+  if (!already) {
+    const who = await prisma.user.findUnique({
+      where: { id: sub.clientId },
+      include: { profile: true },
+    });
+    const name = who?.profile?.fullName || who?.email || 'A client';
+    await notifyCoach(sub.clientId, `${name}'s payment failed — their card was declined.`);
+  }
 }
 
 /**
@@ -483,7 +499,29 @@ export async function handleSubscriptionChanged(subscription: {
     scheduled to end at period end is untouched — they paid for that period
     and it isn't over yet.
   */
-  if (subscription.status === 'canceled' || subscription.status === 'unpaid') {
+  /*
+    A plan that FINISHED is not a plan that failed, and this used to treat
+    them identically.
+
+    stopIfPaidInFull cancels the subscription at Stripe the moment a fixed
+    plan's last payment lands. Stripe then delivers
+    customer.subscription.deleted, which arrives here with status 'canceled'.
+    mergeStatus correctly refuses to downgrade the local row off `completed` —
+    and then this block read the STRIPE status off the event rather than the
+    row, so it paused the client anyway.
+
+    The result: a client finished six of six payments, ARISE told the coach
+    "Payment plan complete", and the same webhook locked that client out of
+    the product they had just paid for in full. `paused` is not in ENTITLED,
+    so every screen bounced them to /welcome to sort out a payment that was
+    already settled, and nothing writes `completed` onto Client.status, so
+    the only way back was the coach noticing and clicking a chip.
+
+    Read the merged row, not the event.
+  */
+  const finished = mergeStatus(sub.status, localSubscriptionStatus(subscription.status)) === 'completed';
+
+  if (!finished && (subscription.status === 'canceled' || subscription.status === 'unpaid')) {
     await pauseForBilling(
       sub.clientId,
       subscription.status === 'unpaid'
