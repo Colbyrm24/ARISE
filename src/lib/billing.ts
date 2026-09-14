@@ -67,6 +67,41 @@ export function paymentsRemaining(
   return Math.max(0, required - paymentsSucceeded);
 }
 
+/**
+ * Which Payment rows count toward a fixed plan's payment count.
+ *
+ * This is the `where` for the one query that decides when billing stops, and
+ * it is a function rather than an inline object because of a real off-by-one
+ * that was live in the database.
+ *
+ * The signup charge is written by the checkout path against the payment LINK,
+ * with no subscriptionId — the link is all that exists at that moment. It only
+ * gets a subscriptionId when the first `invoice.paid` arrives and adopts it.
+ * For any client who signed up before that event was subscribed, that adoption
+ * never happened, so the row still carries a link and no subscription. Counting
+ * on subscriptionId alone therefore started at 0 instead of 1, and a
+ * six-payment plan took a seventh payment. Three rows in the live database are
+ * in exactly that state.
+ *
+ * So the count is "on this subscription OR on the link it came from". Payment
+ * rows are counted, not summed, and paymentLinkId is unique on Payment, so the
+ * adopted signup row matching both legs is still one row.
+ *
+ * The dangerous shape, and the reason for the length-one OR: writing
+ * `OR: [{ subscriptionId }, { paymentLinkId: sub.paymentLinkId }]`
+ * unconditionally means that when paymentLinkId is null the second leg becomes
+ * `paymentLinkId: null`, which matches every renewal payment of every client in
+ * the database. That is not an off-by-one, it is a plan that finishes itself on
+ * somebody else's money. The leg is only ever added when there is a link.
+ */
+export function paymentsCountedFor(sub: { id: string; paymentLinkId: string | null }) {
+  const legs: Array<{ subscriptionId?: string; paymentLinkId?: string }> = [
+    { subscriptionId: sub.id },
+  ];
+  if (sub.paymentLinkId) legs.push({ paymentLinkId: sub.paymentLinkId });
+  return { status: 'succeeded' as const, deletedAt: null, OR: legs };
+}
+
 /*
   Stripe's subscription statuses are a superset of what a coach needs to see.
   Collapsing them here keeps that vocabulary out of the rest of the app.

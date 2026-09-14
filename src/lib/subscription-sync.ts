@@ -10,6 +10,7 @@ import {
   amountFromCents,
   checkoutRefs,
   refundOutcome,
+  paymentsCountedFor,
 } from '@/lib/billing';
 
 /*
@@ -65,6 +66,21 @@ function termsOf(sub: {
     billingType: sub.plan.billingType as 'one_time' | 'subscription' | 'payment_plan',
     numberOfPayments: sub.paymentLink?.numberOfPaymentsOverride ?? sub.plan.numberOfPayments,
   };
+}
+
+/**
+ * Whether the one payment row on this link has been refunded.
+ *
+ * paymentLinkId is unique on Payment, so this is a single row or nothing. Its
+ * only caller is the guard in handleInvoicePaid that stops a redelivered first
+ * invoice writing a refund back to `succeeded`.
+ */
+async function refundedOnLink(paymentLinkId: string) {
+  const row = await prisma.payment.findUnique({
+    where: { paymentLinkId },
+    select: { status: true },
+  });
+  return row?.status === 'refunded';
 }
 
 async function findSubscription(stripeSubscriptionId: string) {
@@ -228,6 +244,29 @@ export async function handleInvoicePaid(invoice: {
           paidAt,
         },
       });
+    } else if (role === 'first' && sub.paymentLinkId && (await refundedOnLink(sub.paymentLinkId))) {
+      /*
+        A refunded signup charge. Leave it exactly as it is.
+
+        This branch is the hole in the fix directly above. Excluding refunded
+        rows from the `signupPayment` lookup stops THAT update from promoting
+        one — and then drops through to the upsert below, which keys on the
+        same unique paymentLinkId and whose `update` writes
+        `status: 'succeeded'` unconditionally. So the refund was erased by the
+        branch written to protect it.
+
+        It only bites when the row is not found by invoice id at the top of
+        this function, which is the case for any signup charge no first
+        invoice ever adopted: the row still carries the payment_intent id.
+        That is the same population as the undercount in stopIfPaidInFull, and
+        there are rows in that state in the live database.
+
+        Nothing to write. A refunded charge is money returned; it should not
+        count toward the plan, and the count already excludes it by status.
+        Doing nothing is also idempotent, so a Resend of this invoice from the
+        Stripe dashboard — the realistic trigger, somebody investigating the
+        complaint that prompted the refund — changes nothing a second time.
+      */
     } else if (role === 'first' && sub.paymentLinkId) {
       /*
         The signup charge, and the finalize path has not written its row yet.
@@ -315,9 +354,16 @@ export async function stopIfPaidInFull(subscriptionId: string) {
   const required = requiredPayments(termsOf(sub));
   if (required === null) return;
 
-  const paid = await prisma.payment.count({
-    where: { subscriptionId: sub.id, status: 'succeeded', deletedAt: null },
-  });
+  /*
+    Counted through paymentsCountedFor, not on subscriptionId alone. The
+    signup charge is written against the payment link and only acquires a
+    subscriptionId if the first invoice.paid arrives to adopt it — which for
+    every client who signed up before that event was subscribed never
+    happened. Counting only linked rows started at zero instead of one and
+    took one payment too many. See the helper for why the link leg is
+    conditional.
+  */
+  const paid = await prisma.payment.count({ where: paymentsCountedFor(sub) });
   if (!isPaidInFull(paid, required)) return;
 
   /*

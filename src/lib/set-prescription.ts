@@ -151,3 +151,96 @@ export function summarise(sets: SetShape[]): Prescription {
     headline: pieces.join(' · '),
   };
 }
+
+/*
+  Reading what a client typed into a set row.
+
+  `logSet` took the two boxes on the row and did `Number(raw)` on each, with
+  no check of any kind. Three things came through that gate:
+
+  · A fat-fingered 22555 instead of 225. actual_weight is Decimal(6,2), so
+    Postgres rejects anything over 9999.99 — the server action throws, there
+    is no error boundary above it, and the client mid-session loses the whole
+    screen to a generic error page. The number pad on a phone makes this the
+    single likeliest typo on the busiest screen in the app.
+  · A negative weight, stored happily, which then makes total_volume negative
+    and drags the client's whole trend down.
+  · NaN, from a crafted request, straight into Prisma.
+
+  Every other logger in this codebase — logWeight, logMeasurement, logSteps,
+  logCardio — bounds its numbers. The one a client touches every single day
+  was the exception.
+
+  Kept here, pure, so the bounds are tested rather than trusted.
+*/
+
+/** The most weight worth believing, in pounds. Well under Decimal(6,2). */
+export const MAX_LOGGED_WEIGHT = 2000;
+/** Enough for any real set, including a long burnout. */
+export const MAX_LOGGED_REPS = 200;
+
+/**
+ * What to write for one of the two boxes.
+ *
+ * Three outcomes, deliberately distinct:
+ *
+ *   `undefined` — the field was not on the form. Leave the stored value be.
+ *   `null`      — the field was there and empty. The client cleared it.
+ *   a number    — a value inside the bounds.
+ *
+ * Unreadable input is treated as `undefined` rather than `null`: a crafted or
+ * corrupted field should change nothing, not wipe what is already recorded.
+ *
+ * The `null` case is the fix for its own small bug. `actualWeight ?? undefined`
+ * meant a cleared box was indistinguishable from an absent one, so Prisma
+ * skipped the field and the old number stayed — a client who noticed they had
+ * typed the wrong weight, blanked the box and re-ticked the row watched the
+ * wrong weight sit there with no way to remove it.
+ */
+export function parseLoggedNumber(
+  raw: string | null | undefined,
+  { max, integer }: { max: number; integer: boolean }
+): number | null | undefined {
+  if (raw === null || raw === undefined) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) return undefined;
+  if (n < 0 || n > max) return undefined;
+
+  return integer ? Math.round(n) : Math.round(n * 100) / 100;
+}
+
+/** The weight box: two decimal places, capped below what the column allows. */
+export function parseLoggedWeight(raw: string | null | undefined) {
+  return parseLoggedNumber(raw, { max: MAX_LOGGED_WEIGHT, integer: false });
+}
+
+/** The reps box: whole reps only. */
+export function parseLoggedReps(raw: string | null | undefined) {
+  return parseLoggedNumber(raw, { max: MAX_LOGGED_REPS, integer: true });
+}
+
+/*
+  A ceiling on how many sets one exercise can be programmed with.
+
+  `Math.max(1, Number(formData.get('numSets')) || 3)` had a floor and no roof,
+  and the input had `min="1"` and no `max`. A coach typing 30 instead of 3
+  wrote thirty WorkoutSet rows, which the client then meets as thirty rows of
+  two inputs and a form on the screen they use every day — and `deleteWorkoutExercise`
+  swallows its own error once any of those sets has been logged, so there was
+  no way to undo it. `type="number"` also accepts `1e9`, and
+  `Array.from({ length: 1e9 })` is an out-of-memory crash rather than a typo.
+
+  Ten is past anything real: Colby's own programming is two working sets plus
+  a drop set.
+*/
+export const MAX_SETS_PER_EXERCISE = 10;
+
+/** How many sets to actually create, from whatever was typed in the box. */
+export function parseSetCount(raw: string | null | undefined): number {
+  const n = Number((raw ?? '').trim());
+  if (!Number.isFinite(n)) return 3;
+  return Math.min(Math.max(1, Math.round(n)), MAX_SETS_PER_EXERCISE);
+}
