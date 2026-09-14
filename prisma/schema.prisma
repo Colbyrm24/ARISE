@@ -811,6 +811,12 @@ model WorkoutLogSet {
   workoutLog WorkoutLog @relation(fields: [workoutLogId], references: [id], onDelete: Cascade)
   workoutSet WorkoutSet @relation(fields: [workoutSetId], references: [id])
 
+  // One row per set per session. logSet was findFirst-then-create with
+  // nothing behind it, so two taps a moment apart both inserted — invisible
+  // on screen, because the page reads these through a Map keyed on
+  // workoutSetId, and counted twice by the volume total. Applied by hand:
+  // prisma/log-set-unique-migration.sql.
+  @@unique([workoutLogId, workoutSetId])
   @@map("workout_log_sets")
 }
 
