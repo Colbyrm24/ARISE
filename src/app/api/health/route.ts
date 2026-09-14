@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { clientIdForToken, parseHealthPayload } from '@/lib/health-token';
+import { isUniqueViolation } from '@/lib/db-conflict';
 
 /*
   POST /api/health
@@ -91,17 +92,17 @@ export async function POST(request: NextRequest) {
   }
 
   if (reading.weight !== undefined) {
-    // One weight per day, same as the client's own logging screen enforces.
-    const existing = await prisma.weightLog.findFirst({
-      where: { clientId, date: reading.date },
+    /*
+      One weight per day, same as the client's own logging screen — and now
+      the same mechanism, too. Both sides used to find-then-insert, and this
+      is the other half of that race: the phone posting while the client taps
+      Log on the Progress screen wrote the day twice.
+    */
+    await prisma.weightLog.upsert({
+      where: { clientId_date: { clientId, date: reading.date } },
+      create: { clientId, date: reading.date, weight: reading.weight },
+      update: { weight: reading.weight },
     });
-    if (existing) {
-      await prisma.weightLog.update({ where: { id: existing.id }, data: { weight: reading.weight } });
-    } else {
-      await prisma.weightLog.create({
-        data: { clientId, date: reading.date, weight: reading.weight },
-      });
-    }
     written.push('weight');
   }
 
@@ -117,11 +118,13 @@ export async function POST(request: NextRequest) {
       everything a client types in — so the row is found and updated the same
       way the weight branch above does it.
 
-      The narrow race (two posts landing together, both finding nothing, both
-      inserting) leaves a visible duplicate rather than a wrong total, and the
-      next post overwrites the older of the two. That is worth accepting to
-      avoid a migration; a partial unique index on (client_id, date, meal)
-      where source = 'apple_health' would close it if it ever bites.
+      The narrow race this comment used to accept — two posts landing
+      together, both finding nothing, both inserting — is closed. The index it
+      proposed as the fix, a partial unique on (client_id, date, meal) where
+      source = 'apple_health', now exists; it was free to add while the table
+      was empty, which is not a window that comes back. Prisma cannot upsert
+      against a partial index, so the insert below is the check: if the
+      database says the row is there, update it instead.
     */
     const existing = await prisma.nutritionLog.findFirst({
       where: { clientId, date: reading.date, source: 'apple_health', meal: n.meal },
@@ -142,9 +145,19 @@ export async function POST(request: NextRequest) {
     if (existing) {
       await prisma.nutritionLog.update({ where: { id: existing.id }, data: numbers });
     } else {
-      await prisma.nutritionLog.create({
-        data: { clientId, date: reading.date, meal: n.meal, ...numbers },
-      });
+      try {
+        await prisma.nutritionLog.create({
+          data: { clientId, date: reading.date, meal: n.meal, ...numbers },
+        });
+      } catch (err) {
+        // Lost the race to a post that landed a moment earlier. The row it
+        // wrote is the one to update — not a reason to fail the sync.
+        if (!isUniqueViolation(err)) throw err;
+        await prisma.nutritionLog.updateMany({
+          where: { clientId, date: reading.date, source: 'apple_health', meal: n.meal },
+          data: numbers,
+        });
+      }
     }
     written.push('nutrition');
   }
