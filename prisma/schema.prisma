@@ -1,6 +1,11 @@
 // ARISE — main database schema
 // This mirrors the schema approved in coaching-platform-architecture.md.
-// Run `npm run db:migrate` once DATABASE_URL is set to turn this into real tables.
+// NOT the source of truth for the live database, and not safe to push at it.
+// See the README: the tables were created with `db push` and then changed by
+// the loose .sql files in this folder, applied by hand. `prisma migrate dev`
+// offers to reset production and `db push` drops the indexes that exist only
+// in the database (the partial uniques on bookings, daily_goals and
+// nutrition_logs). `npm run db:status` only reports.
 
 generator client {
   provider = "prisma-client-js"
@@ -778,7 +783,14 @@ model ClientProgram {
   client   Client          @relation(fields: [clientId], references: [userId])
   template WorkoutTemplate @relation(fields: [templateId], references: [id])
 
-  @@index([clientId])
+  // The constraint setActiveProgram's comment said did not exist to lean on.
+  // Deactivate-all-then-find-or-create inside a transaction does not stop two
+  // concurrent calls both creating, because Postgres reads committed — and the
+  // program builder calls the same function on deploy, so assigning from the
+  // client page while a deploy finishes left two active programs and the
+  // client's Today screen picked one arbitrarily.
+  // Applied by hand: prisma/one-row-per-period-migration.sql.
+  @@unique([clientId, templateId])
   @@map("client_programs")
 }
 
@@ -932,6 +944,13 @@ model NutritionLog {
   @@index([clientId, date])
   // Drives the coach's review queue, which reads oldest-unreviewed-first.
   @@index([reviewState, createdAt])
+  // ALSO NOT DECLARED HERE. A partial unique on (client_id, date, meal)
+  // WHERE source = 'apple_health' — this table is deliberately
+  // many-rows-per-day for everything a client types in, and only the synced
+  // rows are one-per-meal-per-day. The route's own comment proposed exactly
+  // this index and accepted the race rather than pay for a migration; it is
+  // free while the table is empty, so it is in.
+  // prisma/one-row-per-period-migration.sql.
   @@map("nutrition_logs")
 }
 
@@ -946,7 +965,13 @@ model NutritionTarget {
 
   client Client @relation(fields: [clientId], references: [userId])
 
-  @@index([clientId, effectiveDate])
+  // One target per client per day. The action that writes these always
+  // INSERTED, so a coach who set 2,800, spotted a typo and re-saved 2,400
+  // left two rows sharing a date — and which number the client ate to was
+  // whatever Postgres handed back first. It could differ between their Today
+  // screen and the coach's card on the same page load, on the one number the
+  // whole product is about. Applied by hand: prisma/one-row-per-period-migration.sql.
+  @@unique([clientId, effectiveDate])
   @@map("nutrition_targets")
 }
 
@@ -965,6 +990,14 @@ model DailyGoal {
   client Client         @relation(fields: [clientId], references: [userId])
   logs   DailyGoalLog[]
 
+  // NOT DECLARED HERE, DELIBERATELY. There is a partial unique index in the
+  // database on (client_id, goal_type) WHERE active AND goal_type <> 'custom'
+  // — one active habit of each kind per client, except custom, which a client
+  // is meant to be able to have several of and which are told apart by their
+  // text. Prisma's schema language cannot express either condition, so this
+  // lives only in SQL (prisma/one-row-per-period-migration.sql) and the code
+  // handles the conflict directly. Same situation as the bookings index; a
+  // `db push` would silently drop both.
   @@index([clientId])
   @@map("daily_goals")
 }
@@ -994,8 +1027,10 @@ model StepLog {
 
   client Client @relation(fields: [clientId], references: [userId])
 
+  // No plain @@index beside this: it was declared on the same two columns as
+  // the unique, so it never served a query the unique could not, and every
+  // write paid for both. Dropped in prisma/one-row-per-period-migration.sql.
   @@unique([clientId, date])
-  @@index([clientId, date])
   @@map("step_logs")
 }
 
@@ -1007,7 +1042,13 @@ model WeightLog {
 
   client Client @relation(fields: [clientId], references: [userId])
 
-  @@index([clientId, date])
+  // One weigh-in per day, which both writers already believed they were
+  // enforcing in prose. Two of them run independently — the client's Progress
+  // screen and their Apple Health automation — and both checked-then-inserted,
+  // so a 7am tap while the phone posted the same morning's reading wrote the
+  // day twice: the trend line bent, "latest" became arbitrary, and Remove
+  // only deleted one of them. Applied by hand: prisma/one-row-per-period-migration.sql.
+  @@unique([clientId, date])
   @@map("weight_logs")
 }
 
@@ -1020,7 +1061,9 @@ model Measurement {
 
   client Client @relation(fields: [clientId], references: [userId])
 
-  @@index([clientId, date])
+  // Same shape as WeightLog above, one row per measurement per day.
+  // Applied by hand: prisma/one-row-per-period-migration.sql.
+  @@unique([clientId, date, type])
   @@map("measurements")
 }
 
@@ -1047,7 +1090,11 @@ model CheckIn {
 
   client Client @relation(fields: [clientId], references: [userId])
 
-  @@index([clientId, weekOf])
+  // One check-in per week — stated in the action's own comment and enforced
+  // by nothing, so two submits gave the coach two check-ins and two
+  // notifications for one week, with the adherence number reading whichever
+  // it found. Applied by hand: prisma/one-row-per-period-migration.sql.
+  @@unique([clientId, weekOf])
   @@map("check_ins")
 }
 
