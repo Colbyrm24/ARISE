@@ -9,6 +9,7 @@ import { requireCoach, isEntitled } from '@/lib/auth';
 import { todayIn, zoneOf } from '@/lib/day';
 import { dayKey } from '@/lib/month-grid';
 import { STATUS_LABELS } from '@/lib/client-status';
+import { MAX_SETS_PER_EXERCISE, MAX_LOGGED_WEIGHT } from '@/lib/set-prescription';
 import { ProgramWeek } from '@/components/coach/program-week';
 import {
   addWorkout,
@@ -271,10 +272,30 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
                         </optgroup>
                       ))}
                     </select>
-                    <Input name="numSets" type="number" min="1" placeholder="Sets" defaultValue={3} />
+                    {/*
+                      max, not just min. Typing 30 instead of 3 used to write
+                      thirty set rows onto the client's daily screen, with no
+                      way to take them back once one had been logged. The
+                      action caps it too — this is so the box says so.
+                    */}
+                    <Input
+                      name="numSets"
+                      type="number"
+                      min="1"
+                      max={MAX_SETS_PER_EXERCISE}
+                      placeholder="Sets"
+                      defaultValue={3}
+                    />
                     <Input name="targetReps" placeholder="Reps (e.g. 8-10)" />
-                    <Input name="targetWeight" type="number" step="0.5" placeholder="Weight (lb)" />
-                    <Input name="restSeconds" type="number" placeholder="Rest (sec)" />
+                    <Input
+                      name="targetWeight"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max={MAX_LOGGED_WEIGHT}
+                      placeholder="Weight (lb)"
+                    />
+                    <Input name="restSeconds" type="number" min="0" max="3600" placeholder="Rest (sec)" />
                     <Button type="submit" size="sm" variant="secondary" className="col-span-2 w-fit sm:col-span-5">
                       Add Exercise
                     </Button>

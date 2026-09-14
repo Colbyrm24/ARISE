@@ -10,6 +10,7 @@ import {
   ownedWorkoutExercise,
 } from '@/lib/coach-guard';
 import { deployProgram, setActiveProgram, DEFAULT_WEEKS } from '@/lib/program-deploy';
+import { parseLoggedWeight, parseSetCount } from '@/lib/set-prescription';
 
 /*
   Server Actions for the single-program builder: add/remove days, and
@@ -80,12 +81,20 @@ export async function addWorkoutExercise(formData: FormData) {
   const workoutId = owned.id;
   const templateId = owned.templateId;
 
-  const numSets = Math.max(1, Number(formData.get('numSets')) || 3);
+  // Capped. See parseSetCount: this had a floor of 1 and no ceiling, so a
+  // typed 30 wrote thirty set rows onto the client's daily screen and 1e9
+  // was an out-of-memory crash.
+  const numSets = parseSetCount(formData.get('numSets') as string | null);
   const targetReps = (formData.get('targetReps') as string | null)?.trim() || null;
-  const targetWeightRaw = formData.get('targetWeight') as string | null;
   const restSecondsRaw = formData.get('restSeconds') as string | null;
-  const targetWeight = targetWeightRaw ? Number(targetWeightRaw) : null;
-  const restSeconds = restSecondsRaw ? Number(restSecondsRaw) : null;
+  // Same Decimal(6,2) column as a logged weight, so the same bounds.
+  const targetWeight = parseLoggedWeight(formData.get('targetWeight') as string | null) ?? null;
+  const restSecondsParsed = restSecondsRaw ? Number(restSecondsRaw) : null;
+  // Rest is an Int column; an hour is already absurd for a rest period.
+  const restSeconds =
+    restSecondsParsed !== null && Number.isFinite(restSecondsParsed)
+      ? Math.min(Math.max(0, Math.round(restSecondsParsed)), 3600)
+      : null;
 
   const order = await prisma.workoutExercise.count({ where: { workoutId } });
 
