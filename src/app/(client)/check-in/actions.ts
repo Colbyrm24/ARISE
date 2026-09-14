@@ -31,18 +31,22 @@ export async function submitCheckIn(formData: FormData) {
     where: { clientId: user.id, weekOf: week },
   });
 
-  // One check-in per week — submitting again replaces it rather than
-  // stacking, so the coach never has to guess which one is current.
-  if (existing) {
-    await prisma.checkIn.update({
-      where: { id: existing.id },
-      data: { answersJson: answers, submittedAt: new Date() },
-    });
-  } else {
-    await prisma.checkIn.create({
-      data: { clientId: user.id, weekOf: week, answersJson: answers },
-    });
-  }
+  /*
+    One check-in per week — submitting again replaces it rather than stacking,
+    so the coach never has to guess which one is current. That was the rule and
+    find-then-insert was the mechanism, with no constraint behind it: two
+    submits a moment apart both missed the read, both inserted, and the coach
+    got two check-ins and two notifications for one week with the adherence
+    number reading whichever it happened to find.
+
+    The read above stays, but only to decide whether to announce it. Losing
+    that race now means one extra notification rather than a duplicate row.
+  */
+  await prisma.checkIn.upsert({
+    where: { clientId_weekOf: { clientId: user.id, weekOf: week } },
+    create: { clientId: user.id, weekOf: week, answersJson: answers },
+    update: { answersJson: answers, submittedAt: new Date() },
+  });
 
   // Only announce the first submission of a week — editing your own answers
   // shouldn't ping the coach again and again.
