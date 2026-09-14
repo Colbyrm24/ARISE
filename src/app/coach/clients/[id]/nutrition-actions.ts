@@ -51,8 +51,24 @@ export async function setNutritionTarget(formData: FormData) {
     select: { profile: { select: { timezone: true } } },
   });
 
-  await prisma.nutritionTarget.create({
-    data: { clientId, calories, protein, carbs, fat, effectiveDate: todayFor(client) },
+  /*
+    Upsert, not create.
+
+    This always inserted, against a table with no unique on
+    (client_id, effective_date). So a coach who set 2,800, spotted a typo and
+    re-saved 2,400 left two rows sharing a date — and which one the client ate
+    to was whatever Postgres returned first. `planVsTarget` and
+    `getDayContexts` both resolve with `orderBy: effectiveDate desc` and take
+    the first, so the two screens could disagree on the same page load, on the
+    one number the whole product is about.
+
+    Correcting a number you just typed is the normal case, not the edge case.
+  */
+  const effectiveDate = todayFor(client);
+  await prisma.nutritionTarget.upsert({
+    where: { clientId_effectiveDate: { clientId, effectiveDate } },
+    create: { clientId, calories, protein, carbs, fat, effectiveDate },
+    update: { calories, protein, carbs, fat },
   });
 
   revalidatePath(`/coach/clients/${clientId}`);

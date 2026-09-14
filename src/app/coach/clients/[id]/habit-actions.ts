@@ -7,6 +7,7 @@ import { coachOwnsClient } from '@/lib/coach-guard';
 import { todayFor } from '@/lib/day';
 import { isHabitType } from '@/lib/habits';
 import { notify } from '@/lib/notifications';
+import { isUniqueViolation } from '@/lib/db-conflict';
 
 /*
   The coach's side of daily habits.
@@ -49,9 +50,33 @@ export async function addHabit(formData: FormData) {
     }
   }
 
-  await prisma.dailyGoal.create({
-    data: { clientId, goalType, targetValue: rawTarget || null, active: true },
-  });
+  /*
+    The insert is the check.
+
+    There is a partial unique index behind this now — one ACTIVE habit of each
+    kind per client, excluding custom — and Prisma cannot upsert against a
+    partial index, so a conflict here means the read above lost a race and the
+    habit already exists. Adding "steps" twice used to give the client the same
+    habit twice on their Today screen, to be ticked twice, because the logs are
+    unique per goal rather than per goal type.
+
+    Custom habits never conflict: the index excludes them, deliberately, since
+    a client is meant to be able to have several and they are told apart by
+    their text.
+  */
+  try {
+    await prisma.dailyGoal.create({
+      data: { clientId, goalType, targetValue: rawTarget || null, active: true },
+    });
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    await prisma.dailyGoal.updateMany({
+      where: { clientId, goalType, active: true },
+      data: { targetValue: rawTarget || null },
+    });
+    refresh(clientId);
+    return;
+  }
 
   await notify(clientId, 'habit', 'Your coach added a daily habit.');
   refresh(clientId);
