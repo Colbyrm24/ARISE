@@ -7,6 +7,10 @@ import {
   setTypeLabel,
   describeSet,
   summarise,
+  parseLoggedWeight,
+  parseLoggedReps,
+  MAX_LOGGED_WEIGHT,
+  MAX_LOGGED_REPS,
   type SetShape,
 } from '../set-prescription';
 
@@ -112,4 +116,75 @@ test('an untyped program still gets a sensible line', () => {
 
 test('no sets at all is empty, not a lie', () => {
   assert.equal(summarise([]).headline, '');
+});
+
+/*
+  The logger's two boxes. Every case here is something that reached the
+  database, or reached Postgres and threw, before these existed.
+*/
+
+test('an ordinary set is read as typed', () => {
+  assert.equal(parseLoggedWeight('225'), 225);
+  assert.equal(parseLoggedReps('8'), 8);
+  assert.equal(parseLoggedWeight('102.5'), 102.5);
+});
+
+test('the typo that used to crash the screen mid-session', () => {
+  /*
+    22555 instead of 225 on a phone number pad. actual_weight is
+    Decimal(6,2), so Postgres rejected it, the server action threw, and with
+    no error boundary above it the client lost the whole workout screen to a
+    generic error page. Rejected here instead, and rejected as `undefined`
+    so the value already recorded is left alone.
+  */
+  assert.equal(parseLoggedWeight('22555'), undefined);
+  assert.equal(parseLoggedWeight(String(MAX_LOGGED_WEIGHT + 1)), undefined);
+  assert.equal(parseLoggedReps(String(MAX_LOGGED_REPS + 1)), undefined);
+});
+
+test('the boundary itself is allowed', () => {
+  assert.equal(parseLoggedWeight(String(MAX_LOGGED_WEIGHT)), MAX_LOGGED_WEIGHT);
+  assert.equal(parseLoggedReps(String(MAX_LOGGED_REPS)), MAX_LOGGED_REPS);
+});
+
+test('a negative weight is refused, not stored', () => {
+  // It stored fine and made total_volume negative, which dragged the
+  // client's entire volume trend down with it.
+  assert.equal(parseLoggedWeight('-500'), undefined);
+  assert.equal(parseLoggedReps('-3'), undefined);
+});
+
+test('junk and NaN change nothing rather than wiping the row', () => {
+  assert.equal(parseLoggedWeight('abc'), undefined);
+  assert.equal(parseLoggedWeight('NaN'), undefined);
+  assert.equal(parseLoggedWeight('Infinity'), undefined);
+  assert.equal(parseLoggedWeight('1e99'), undefined);
+});
+
+test('an empty box means the client cleared it', () => {
+  /*
+    The distinction the old code could not make. `?? undefined` treated a
+    blanked box as an absent field, Prisma skipped it, and the wrong weight
+    stayed on the row with no way to remove it.
+  */
+  assert.equal(parseLoggedWeight(''), null);
+  assert.equal(parseLoggedWeight('   '), null);
+  assert.equal(parseLoggedReps(''), null);
+});
+
+test('an absent field is not a cleared one', () => {
+  assert.equal(parseLoggedWeight(null), undefined);
+  assert.equal(parseLoggedWeight(undefined), undefined);
+});
+
+test('zero is a real value, not an empty box', () => {
+  // Bodyweight sets are logged at 0, and 0 must not read as "no answer".
+  assert.equal(parseLoggedWeight('0'), 0);
+  assert.equal(parseLoggedReps('0'), 0);
+});
+
+test('reps are whole; weight keeps half-pound plates', () => {
+  assert.equal(parseLoggedReps('8.6'), 9);
+  assert.equal(parseLoggedWeight('102.567'), 102.57);
+  assert.equal(parseLoggedWeight('47.5'), 47.5);
 });

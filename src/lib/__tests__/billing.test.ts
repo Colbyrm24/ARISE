@@ -12,6 +12,7 @@ import {
   parseCount,
   isBlankField,
   refundOutcome,
+  paymentsCountedFor,
   checkoutRefs,
 } from '../billing';
 
@@ -305,4 +306,60 @@ test('a refunded payment stops counting toward a fixed plan', () => {
   // Third payment refunded -> two succeeded -> four still to collect.
   assert.equal(paymentsRemaining(2, required), 4);
   assert.equal(isPaidInFull(5, required), false);
+});
+
+describe('paymentsCountedFor', () => {
+  test('counts the subscription and the link it came from', () => {
+    const w = paymentsCountedFor({ id: 'sub_1', paymentLinkId: 'link_1' });
+    assert.equal(w.status, 'succeeded');
+    assert.equal(w.deletedAt, null);
+    assert.deepEqual(w.OR, [{ subscriptionId: 'sub_1' }, { paymentLinkId: 'link_1' }]);
+  });
+
+  /*
+    The bug this exists to stop, from the other side.
+
+    A signup charge that no first invoice ever adopted carries a link and no
+    subscriptionId, so a count keyed on the subscription alone starts at zero
+    instead of one — and a six-payment plan takes a seventh. Including the
+    link leg is what makes that row visible. Three rows in the live database
+    were in exactly that state.
+  */
+  test('the unadopted signup charge is inside the filter', () => {
+    const w = paymentsCountedFor({ id: 'sub_1', paymentLinkId: 'link_1' });
+    const unadoptedSignup = { subscriptionId: null, paymentLinkId: 'link_1' };
+    const matches = w.OR.some((leg) =>
+      Object.entries(leg).every(
+        ([k, v]) => unadoptedSignup[k as keyof typeof unadoptedSignup] === v
+      )
+    );
+    assert.equal(matches, true);
+  });
+
+  /*
+    And the far worse failure in the other direction.
+
+    Writing the link leg unconditionally means a subscription with no payment
+    link produces `paymentLinkId: null`, which matches every renewal payment
+    of every client in the database — a plan that finishes itself on somebody
+    else's money. So: no link, no leg, and never a null in the filter.
+  */
+  test('no payment link means no link leg at all — not a null one', () => {
+    const w = paymentsCountedFor({ id: 'sub_1', paymentLinkId: null });
+    assert.equal(w.OR.length, 1);
+    assert.deepEqual(w.OR, [{ subscriptionId: 'sub_1' }]);
+    assert.equal(JSON.stringify(w).includes('paymentLinkId'), false);
+  });
+
+  test('an empty-string link is treated as no link', () => {
+    assert.equal(paymentsCountedFor({ id: 'sub_1', paymentLinkId: '' }).OR.length, 1);
+  });
+
+  test('only succeeded, undeleted rows are ever counted', () => {
+    for (const linkId of ['link_1', null]) {
+      const w = paymentsCountedFor({ id: 'sub_1', paymentLinkId: linkId });
+      assert.equal(w.status, 'succeeded');
+      assert.equal(w.deletedAt, null);
+    }
+  });
 });
