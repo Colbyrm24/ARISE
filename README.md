@@ -17,9 +17,28 @@ This code was written in a sandboxed environment with no internet access, so it 
 ```bash
 npm install
 cp .env.example .env.local   # then fill in your Supabase values
-npm run db:migrate           # creates the actual tables from prisma/schema.prisma
 npm run dev
 ```
+
+### Never run `prisma migrate dev` or `prisma db push` against this database
+
+There is no usable migration history. The tables were created with
+`prisma db push` and then changed by the loose `.sql` files in `prisma/`,
+applied by hand in the Supabase SQL editor — `prisma/migrations/` holds one
+folder and there is no `migration_lock.toml`. So Prisma compares the live
+schema against a history that does not describe it, declares drift, and offers
+to **reset**: drop every table, with `DATABASE_URL` pointing at production.
+
+`npm run db:migrate` was exactly that command, and the line above used to tell
+a new operator to run it. It is now `npm run db:status`, which only reports.
+`db push` is no safer for a different reason — it removes anything not declared
+in `schema.prisma`, including the partial unique index on `bookings` that is
+the only thing stopping two clients booking the same slot.
+
+Until the database is baselined properly (one migration per hand-applied
+`.sql` file, marked applied with `prisma migrate resolve --applied`), a schema
+change means: write a new `.sql` file in `prisma/`, run it in the Supabase SQL
+editor, and mirror it into `prisma/schema.prisma` by hand.
 
 ## Project structure
 

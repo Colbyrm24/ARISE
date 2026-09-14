@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
+    "db:status": "prisma migrate status",
     "db:studio": "prisma studio",
     "test": "node --import tsx --test 'src/lib/__tests__/*.test.ts'",
     "typecheck": "node scripts/check-schema-comments.mjs && node scripts/check-groupby-casts.mjs && node scripts/gen-prisma-stub.mjs > .prisma-stub.d.ts && tsc --noEmit -p tsconfig.typecheck.json"
