@@ -222,10 +222,16 @@ export { dateOnly, addDays };
  * up with two rows, both active, and which one won a `findFirst` was up to
  * Postgres.
  *
- * There is no unique constraint on (clientId, templateId) to lean on, so the
- * row is found rather than keyed, inside a transaction. Deactivating
- * everything first and reactivating exactly one also collapses any duplicates
- * an earlier deploy already left behind.
+ * There is now a unique constraint on (clientId, templateId), so the row is
+ * keyed rather than found. That is the part the transaction could not do on
+ * its own: Postgres reads committed, so two concurrent calls both saw no row
+ * and both created one — and this function is called from two places, the
+ * client page and the program builder's deploy, which is exactly how they
+ * overlapped. The client ended up with two active programs and the Today
+ * screen picked one of them arbitrarily.
+ *
+ * Deactivating everything first and reactivating exactly one still collapses
+ * any duplicates an earlier deploy already left behind.
  */
 export async function setActiveProgram(clientId: string, templateId: string) {
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -234,15 +240,10 @@ export async function setActiveProgram(clientId: string, templateId: string) {
       data: { active: false },
     });
 
-    const existing = await tx.clientProgram.findFirst({
-      where: { clientId, templateId },
-      orderBy: { assignedAt: 'desc' },
+    await tx.clientProgram.upsert({
+      where: { clientId_templateId: { clientId, templateId } },
+      create: { clientId, templateId, active: true },
+      update: { active: true },
     });
-
-    if (existing) {
-      await tx.clientProgram.update({ where: { id: existing.id }, data: { active: true } });
-    } else {
-      await tx.clientProgram.create({ data: { clientId, templateId, active: true } });
-    }
   });
 }
