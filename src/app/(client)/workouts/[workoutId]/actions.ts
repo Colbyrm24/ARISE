@@ -10,6 +10,7 @@ import { openSessionSince } from '@/lib/session-window';
 import { displayName, notifyCoach } from '@/lib/notifications';
 import { workoutFinishedBody } from '@/lib/activity';
 import { parseLoggedWeight, parseLoggedReps } from '@/lib/set-prescription';
+import { isUniqueViolation } from '@/lib/db-conflict';
 
 /*
   `today` is the lifter's today, not the server's.
@@ -262,12 +263,6 @@ async function writeLoggedSet({
   }
 }
 
-/** A Postgres unique-constraint violation, as Prisma reports it. */
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002'
-  );
-}
 
 /**
  * Every set row the submitted form carried a number for.
