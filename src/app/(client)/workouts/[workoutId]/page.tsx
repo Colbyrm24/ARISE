@@ -14,9 +14,16 @@ import {
   Cell,
 } from '@/components/ui/system-window';
 import { demoLinkFor } from '@/lib/exercise-video';
-import { describeSet, summarise, setTypeLabel, type SetType } from '@/lib/set-prescription';
-import { LogSetButton } from '@/components/client/log-set-button';
-import { logSet, completeWorkout } from './actions';
+import {
+  describeSet,
+  summarise,
+  setTypeLabel,
+  MAX_LOGGED_WEIGHT,
+  MAX_LOGGED_REPS,
+  type SetType,
+} from '@/lib/set-prescription';
+import { LogSetButton, FinishButton, ReopenButton } from '@/components/client/log-set-button';
+import { logSet, completeWorkout, reopenWorkout } from './actions';
 
 
 export default async function WorkoutSessionPage({ params }: { params: { workoutId: string } }) {
@@ -165,11 +172,34 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
       )}
 
       {/*
-        One window per exercise. Stacking the lit edges is deliberate — a
-        session reads as a column of panels, each one closing out as its sets
-        fill in.
+        One form for the whole session, and this is the fix for the worst bug
+        on the screen clients touch every day.
+
+        Every set row used to be its own `<form>`, with "Finish workout" a
+        separate form below carrying two hidden ids and nothing else. So a
+        client who did the obvious thing — work down the page filling in
+        weights and reps, then tap the big button at the bottom — had every
+        number they typed thrown away. `completeWorkout` redirected to
+        /workouts and the session was recorded as done with zero volume.
+        Nothing warned them, and nothing they could do afterwards got it back.
+
+        Now the inputs, the ticks and Finish are all in one form, so whichever
+        button they press, everything they typed is submitted with it. The
+        buttons differ only in `formAction`: a tick posts to `logSet`, which
+        pulls out the one row named by its own `setId` value; Finish posts to
+        `completeWorkout`, which saves every row that has a number in it and
+        then closes the session.
+
+        Sets are named `w_<id>` / `r_<id>` because one form means one flat
+        namespace, and the action has to be able to find a specific row's two
+        boxes among all of them.
+
+        One form also means `useFormStatus` is shared, so a tick can no longer
+        tell from `pending` alone whether it was the button pressed — which is
+        why LogSetButton now reads the in-flight FormData and compares set ids.
       */}
-      <div className="flex flex-col gap-4">
+      <form action={logSet} className="flex flex-col gap-4">
+        <input type="hidden" name="workoutId" value={workout.id} />
         {workout.workoutExercises.map((we) => {
           const done = we.sets.filter((s) => loggedBySetId.has(s.id)).length;
           const demo = demoLinkFor(we.exercise);
@@ -371,12 +401,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                           submits, shows a tick when the set is logged, and
                           says so to a screen reader.
                         */}
-                        <form
-                          action={logSet}
-                          className="flex shrink-0 items-end gap-1.5 self-end pl-9 sm:self-auto sm:pl-0"
-                        >
-                          <input type="hidden" name="workoutId" value={workout.id} />
-                          <input type="hidden" name="workoutSetId" value={set.id} />
+                        <div className="flex shrink-0 items-end gap-1.5 self-end pl-9 sm:self-auto sm:pl-0">
                           {/*
                             The unit sits above its own box rather than inside
                             it as a placeholder. A placeholder disappears the
@@ -390,12 +415,24 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                             <input
                               type="number"
                               step="0.5"
+                              min="0"
+                              max={MAX_LOGGED_WEIGHT}
                               inputMode="decimal"
-                              name="actualWeight"
+                              name={`w_${set.id}`}
+                              id={`w_${set.id}`}
                               aria-label={`Weight in pounds for set ${i + 1}`}
                               disabled={isComplete}
+                              /*
+                                `!= null`, not truthiness. A logged bodyweight
+                                set stores 0, and `logged?.actualWeight ? …`
+                                made that render as an empty box — so the one
+                                set on the screen that WAS recorded looked
+                                like the one that wasn't.
+                              */
                               defaultValue={
-                                logged?.actualWeight ? Number(logged.actualWeight) : undefined
+                                logged?.actualWeight != null
+                                  ? Number(logged.actualWeight)
+                                  : undefined
                               }
                               className={field}
                             />
@@ -407,7 +444,10 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                             <input
                               type="number"
                               inputMode="numeric"
-                              name="actualReps"
+                              min="0"
+                              max={MAX_LOGGED_REPS}
+                              name={`r_${set.id}`}
+                              id={`r_${set.id}`}
                               aria-label={`Reps for set ${i + 1}`}
                               disabled={isComplete}
                               defaultValue={logged?.actualReps ?? undefined}
@@ -419,9 +459,13 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                               <Cell on={Boolean(logged)} />
                             </span>
                           ) : (
-                            <LogSetButton logged={Boolean(logged)} setNumber={i + 1} />
+                            <LogSetButton
+                              logged={Boolean(logged)}
+                              setNumber={i + 1}
+                              setId={set.id}
+                            />
                           )}
-                        </form>
+                        </div>
                       </li>
                     );
                   })}
@@ -430,15 +474,40 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             </SystemWindow>
           );
         })}
-      </div>
 
-      {!isComplete && (
-        <form action={completeWorkout}>
-          <input type="hidden" name="workoutLogId" value={todayLog?.id ?? ''} />
+        {!isComplete && (
+          <>
+            <input type="hidden" name="workoutLogId" value={todayLog?.id ?? ''} />
+            {/*
+              Inside the same form as every set, which is the whole point —
+              pressing this now carries the numbers rather than discarding
+              them. FinishButton names itself in the submitted FormData so
+              completeWorkout knows it was this button and not a tick.
+            */}
+            <FinishButton remaining={totalSets - doneSets} action={completeWorkout} />
+          </>
+        )}
+      </form>
+
+      {/*
+        A way back in.
+
+        Finishing was irreversible and there was no action that could undo it:
+        `completedAt` disabled every input, replaced every tick with a static
+        square and hid the Finish button, and nothing anywhere set it back to
+        null. So a client who caught that full-width button with a thumb after
+        set one — bottom of a long scroll, one hand, mid-session — could not
+        log another set that day, and their session was recorded as done with
+        one set in it.
+      */}
+      {isComplete && (
+        <form action={reopenWorkout} className="flex flex-col gap-2">
           <input type="hidden" name="workoutId" value={workout.id} />
-          <Button type="submit" className="w-full">
-            Finish workout
-          </Button>
+          <input type="hidden" name="workoutLogId" value={todayLog?.id ?? ''} />
+          <ReopenButton />
+          <p className="readout text-center text-[10px] uppercase text-muted-foreground">
+            Finished by accident? This puts the session back.
+          </p>
         </form>
       )}
     </div>
