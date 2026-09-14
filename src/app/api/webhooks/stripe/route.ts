@@ -37,6 +37,17 @@ import {
  * verification, which is why this reads request.text() instead of
  * request.json().
  */
+/*
+  Vercel's default function timeout is 10 seconds, and this route can spend
+  most of that before it touches the database: finalizeStripeSession makes up
+  to two live Stripe API round trips, then a four-statement transaction, then
+  fans out web push. On a slow Stripe minute the function was killed, Stripe
+  got no 2xx, and the client sat on "Finalizing your payment…" — the exact
+  failure the RETRYABLE set below exists to prevent, arriving by a route that
+  set has no say over. 60 is the Hobby-plan ceiling.
+*/
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const signature = request.headers.get('stripe-signature');
@@ -83,7 +94,21 @@ export async function POST(request: NextRequest) {
     So that one event fails loudly and lets Stripe retry, which is the thing
     Stripe is actually good at.
   */
-  const RETRYABLE = new Set<string>(['checkout.session.completed']);
+  /*
+    charge.refunded is in here for the same reason, reached the same way.
+
+    "Another invoice.paid is always coming" is what makes acknowledging an
+    error safe for the recurring handlers. A refund fires ONCE — Stripe does
+    not re-send it because more money moved, because no more money moves. So a
+    transient database blip inside handleChargeRefunded is the whole story:
+    the row stays `succeeded` forever, goes on counting toward a fixed plan,
+    the plan cancels itself a payment early, the coach's screen says the
+    client paid in full, and the notification telling him money went back
+    never fires either. Nothing later corrects any of it.
+
+    One-shot money events fail loudly and let Stripe retry.
+  */
+  const RETRYABLE = new Set<string>(['checkout.session.completed', 'charge.refunded']);
 
   try {
     switch (event.type) {
