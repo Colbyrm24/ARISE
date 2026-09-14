@@ -92,6 +92,7 @@ export async function BillingCard({
     succeededAgg,
     failingCount,
     paidPerSub,
+    unadoptedPerLink,
     paidPerLink,
     renewalsPerSub,
     contractAgreements,
@@ -115,6 +116,33 @@ export async function BillingCard({
     prisma.payment.groupBy({
       by: ['subscriptionId'],
       where: { clientId, deletedAt: null, status: 'succeeded', subscriptionId: { not: null } },
+      _count: { _all: true },
+    }),
+    /*
+      The signup charges no first invoice ever adopted.
+
+      A signup charge is written against the payment LINK with no
+      subscriptionId, and normally the first `invoice.paid` adopts it and
+      stamps the subscription on. For a client who signed up before that event
+      was subscribed, the adoption never happened — the row still carries a
+      link and no subscription — so the count above, which requires a
+      subscriptionId, skipped it. The coach's card read "5 of 6 · 1 to go" on a
+      plan that had taken all six, and the same undercount in
+      stopIfPaidInFull took a seventh payment.
+
+      `subscriptionId: null` is what keeps this disjoint from the count above:
+      a row is in exactly one of the two sets, so adding them cannot
+      double-count an adopted signup charge.
+    */
+    prisma.payment.groupBy({
+      by: ['paymentLinkId'],
+      where: {
+        clientId,
+        deletedAt: null,
+        status: 'succeeded',
+        paymentLinkId: { not: null },
+        subscriptionId: null,
+      },
       _count: { _all: true },
     }),
     /*
@@ -190,6 +218,22 @@ export async function BillingCard({
     if (!row.subscriptionId) continue;
     paidBySubscription.set(row.subscriptionId, row._count?._all ?? 0);
   }
+
+  // The unadopted signup charges, keyed by the link that carries them, ready
+  // to be added to the count above. Disjoint from it by `subscriptionId: null`.
+  const unadoptedByLink = new Map<string, number>();
+  for (const row of (unadoptedPerLink ?? []) as Array<{
+    paymentLinkId: string | null;
+    _count: { _all: number };
+  }>) {
+    if (!row.paymentLinkId) continue;
+    unadoptedByLink.set(row.paymentLinkId, row._count?._all ?? 0);
+  }
+
+  /** Every succeeded charge that belongs to this plan, adopted or not. */
+  const paidFor = (sub: { id: string; paymentLinkId: string | null }) =>
+    (paidBySubscription.get(sub.id) ?? 0) +
+    (sub.paymentLinkId ? unadoptedByLink.get(sub.paymentLinkId) ?? 0 : 0);
 
   // Renewals only — the signup charge is carried by amountByLink below, and
   // this map deliberately excludes it so the two never double up.
@@ -279,7 +323,7 @@ export async function BillingCard({
             numberOfPayments:
               sub.paymentLink?.numberOfPaymentsOverride ?? sub.plan.numberOfPayments,
           });
-          const paid = paidBySubscription.get(sub.id) ?? 0;
+          const paid = paidFor(sub);
           const left = paymentsRemaining(paid, required);
           const copy = STATUS_COPY[sub.status] ?? STATUS_COPY.active!;
           const contract = sub.paymentLinkId ? contractByLink.get(sub.paymentLinkId) : undefined;
