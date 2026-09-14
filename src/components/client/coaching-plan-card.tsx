@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { requiredPayments, paymentsRemaining } from '@/lib/billing';
+import { requiredPayments, paymentsRemaining, paymentsCountedFor } from '@/lib/billing';
 import { contractProgress, contractPaid } from '@/lib/contract';
 import { Card, CardContent } from '@/components/ui/card';
 import { ManageBillingButton } from '@/components/client/manage-billing-button';
@@ -90,12 +90,14 @@ export async function CoachingPlanCard({
 
     // Three at most, so three counts rather than a groupBy — the same number
     // of round trips, and none of the cast gymnastics groupBy needs here.
+    //
+    // Through paymentsCountedFor so this number agrees with the one that
+    // actually stops the billing. Keyed on subscriptionId alone it missed a
+    // signup charge that no first invoice ever adopted, so the client read
+    // "5 of 6" on the one screen that answers "how many have I got left?"
+    // while six had already been taken.
     counts = await Promise.all(
-      subscriptions.map((s) =>
-        prisma.payment.count({
-          where: { subscriptionId: s.id, status: 'succeeded', deletedAt: null },
-        })
-      )
+      subscriptions.map((s) => prisma.payment.count({ where: paymentsCountedFor(s) }))
     );
   } catch {
     return null;
