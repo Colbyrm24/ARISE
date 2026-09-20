@@ -6,6 +6,8 @@ import { createStripePaymentLink } from '@/lib/payment-link';
 import { attachClientToCoach } from '@/lib/onboard-client';
 import { arrivingStatus, statusForExistingClient } from '@/lib/invite-arrival';
 import { promoteIfIntakeComplete } from '@/lib/intake';
+import { buildAgreementText } from '@/lib/agreement';
+import { describePaymentStructure } from '@/lib/plans';
 
 /*
   The whole funnel, in one request.
@@ -135,7 +137,17 @@ export async function POST(request: Request) {
     this week makes every week-count and every "how long have they been with
     me" answer wrong from day one.
   */
-  const arriving = arrivingStatus(invite.skipPayment);
+  /*
+    A skip-payment invite the coach attached a template to: no money, but a
+    contract. `invite.plan` is already loaded, and the template is the only
+    thing this needs that isn't.
+  */
+  const migrationTemplate =
+    invite.skipPayment && invite.agreementTemplateId
+      ? await prisma.agreementTemplate.findUnique({ where: { id: invite.agreementTemplateId } })
+      : null;
+
+  const arriving = arrivingStatus(invite.skipPayment, Boolean(migrationTemplate));
 
   if (!existing) {
     await prisma.client.create({
@@ -173,7 +185,7 @@ export async function POST(request: Request) {
   await attachClientToCoach(dbUser.id, invite.coachId);
 
   /*
-    The whole point of the flag: no checkout, no agreement, no money.
+    The whole point of the flag: no checkout, no money.
 
     Claimed above like any other invite, so the link is single-use either way.
     The coach is told in the same breath, because a client arriving without a
@@ -181,6 +193,73 @@ export async function POST(request: Request) {
     to announce them.
   */
   if (invite.skipPayment) {
+    /*
+      A contract without a payment.
+
+      Skipping the checkout and skipping the agreement used to be one decision,
+      so the clients being moved off the old platform — the ones with live
+      money already attached — were the only group who got into the product
+      with nothing signed. They are the group that most needs a document.
+
+      Everything below the row is already built: the agreement page and the
+      sign action read an Agreement and never touch a payment link, and
+      signing moves `agreement_pending` to `onboarding` on its own. So this is
+      only the row, rendered from the same token map the paid path uses, with
+      the terms coming off the invite instead of a PaymentLink.
+
+      paymentLinkId stays null — the column is nullable and its unique index
+      ignores nulls in Postgres, so any number of these can coexist.
+    */
+    if (migrationTemplate) {
+      const coach = await prisma.user.findUnique({
+        where: { id: invite.coachId },
+        include: { profile: true },
+      });
+
+      const price = Number(invite.priceOverride ?? invite.plan.price);
+      const numberOfPayments =
+        invite.numberOfPaymentsOverride ?? invite.plan.numberOfPayments;
+      const termMonths = invite.termMonthsOverride ?? invite.plan.termMonths;
+      const contractTotal = invite.contractTotalOverride ?? invite.plan.contractTotal;
+
+      const agreement = await prisma.agreement.create({
+        data: {
+          clientId: dbUser.id,
+          templateId: migrationTemplate.id,
+          templateVersion: migrationTemplate.version,
+          renderedText: buildAgreementText(migrationTemplate.body, {
+            clientName: fullName || user.email || 'Client',
+            coachName: coach?.profile?.fullName ?? 'Your Coach',
+            price,
+            paymentStructure: describePaymentStructure({
+              price,
+              billingType: invite.plan.billingType,
+              paymentFrequency: invite.plan.paymentFrequency,
+              numberOfPayments,
+            }),
+            startDate: invite.startDate,
+            termMonths,
+            contractTotal: contractTotal === null ? null : Number(contractTotal),
+          }),
+          planId: invite.planId,
+          price,
+          paymentFrequency: invite.plan.paymentFrequency,
+          numberOfPayments,
+          startDate: invite.startDate,
+          termMonths,
+          contractTotal,
+        },
+      });
+
+      await notify(
+        invite.coachId,
+        'account',
+        `${fullName || user.email} joined from your existing-client link and is signing their agreement.`,
+        { clientId: dbUser.id }
+      );
+      return NextResponse.json({ redirectTo: `/agreement/${agreement.id}` });
+    }
+
     /*
       They may have filled the intake already.
 
