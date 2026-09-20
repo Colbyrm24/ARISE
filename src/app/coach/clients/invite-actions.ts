@@ -99,10 +99,19 @@ export async function createClientInvite(formData: FormData) {
       token: inviteToken(),
       coachId: coach.id,
       planId,
-      // Dropped entirely on a skip-payment invite: there is no checkout to
-      // attach an agreement to, and storing one would imply a document the
-      // client is never shown.
-      agreementTemplateId: skipPayment ? null : agreementTemplateId,
+      /*
+        Kept on a skip-payment invite too, which it used to be thrown away on.
+
+        Skipping the CHECKOUT and skipping the CONTRACT were the same decision,
+        so every client moved off the old platform arrived inside the app with
+        nothing signed — the one group with live money already attached. There
+        is no payment link for their agreement to hang off, but there does not
+        need to be: Agreement.paymentLinkId is nullable and the join route
+        renders the terms straight off this invite.
+
+        Still optional. Blank means the old behaviour, straight to the intake.
+      */
+      agreementTemplateId: template ? agreementTemplateId : null,
       skipPayment,
       name: name || null,
       priceOverride: price.value,
