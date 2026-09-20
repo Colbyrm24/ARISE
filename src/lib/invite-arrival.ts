@@ -21,13 +21,22 @@ import type { ClientStatus } from '@prisma/client';
 const ENTITLED_HERE = new Set(['onboarding', 'active', 'ending_soon', 'completed']);
 
 /** Where a person lands when they use an invite. */
-export function arrivingStatus(skipPayment: boolean): ClientStatus {
+export function arrivingStatus(skipPayment: boolean, requiresAgreement = false): ClientStatus {
   /*
     Somebody already paying goes straight to the intake, which is an entitled
     status — they can open the app the moment they finish signing up, which is
     the whole point of moving them across. Everybody else owes money first.
+
+    Unless he attached an agreement to their link. Skipping the CHECKOUT and
+    skipping the CONTRACT used to be the same flag, so every client moved off
+    the old platform landed inside the app with nothing signed — the one group
+    with live money attached and no document saying what they agreed to. When
+    a template is on the invite they stop at `agreement_pending` instead, which
+    is not entitled, and signing moves them on to `onboarding` exactly like it
+    does for somebody who paid.
   */
-  return skipPayment ? 'onboarding' : 'payment_pending';
+  if (!skipPayment) return 'payment_pending';
+  return requiresAgreement ? 'agreement_pending' : 'onboarding';
 }
 
 /**
@@ -51,7 +60,12 @@ export function arrivingStatus(skipPayment: boolean): ClientStatus {
  * already training, and pushing them back out to pay is the failure this
  * whole function exists to prevent.
  *
- * Somebody already entitled is never touched by either kind.
+ * An existing-client invite CARRYING AN AGREEMENT behaves like the plain one:
+ * it moves anybody not already entitled, just to `agreement_pending` instead
+ * of `onboarding`. It stops at the same wall — somebody already training is
+ * never pulled back out of the app to sign something, because the alternative
+ * is locking a paying client out of a product they are mid-session in over a
+ * document the coach can chase them for directly.
  */
 export function statusForExistingClient(
   current: ClientStatus,
@@ -60,6 +74,6 @@ export function statusForExistingClient(
   if (ENTITLED_HERE.has(current)) return null;
   if (current === arriving) return null;
 
-  if (arriving === 'onboarding') return 'onboarding';
+  if (arriving === 'onboarding' || arriving === 'agreement_pending') return arriving;
   return current === 'lead' ? 'payment_pending' : null;
 }

@@ -33,3 +33,64 @@ export function formatAgreementDate(date: Date, timeZone: string = 'UTC') {
     timeZone,
   });
 }
+
+/** A dollar figure as a contract states it. */
+export function formatAgreementMoney(amount: number) {
+  return `$${amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/**
+ * The terms an agreement is rendered from, wherever they came from.
+ *
+ * A paying client's terms live on their PaymentLink. A client moved across
+ * from another platform has no payment link at all, so theirs live on the
+ * invite that let them in. Same four levers either way — price, structure,
+ * term, total — so the token map is written once, here, rather than once per
+ * caller.
+ *
+ * That is not tidiness. These tokens ARE the contract: {{price}} and
+ * {{total_value}} are the numbers somebody signs their name under. Two copies
+ * of this map would eventually disagree about what a client agreed to, and
+ * the only record of which one was right is prose inside a frozen
+ * renderedText that nothing can add up.
+ */
+export type AgreementTerms = {
+  clientName: string;
+  coachName: string;
+  price: number;
+  paymentStructure: string;
+  startDate: Date;
+  termMonths: number;
+  contractTotal: number | null;
+};
+
+/**
+ * Renders a template body into the text a client will actually sign.
+ *
+ * `signed_date` is deliberately left as a literal placeholder: the sign
+ * action fills it in, in the signer's own timezone, at the moment they sign.
+ */
+export function buildAgreementText(body: string, terms: AgreementTerms) {
+  const formattedPrice = formatAgreementMoney(terms.price);
+
+  return renderAgreementTemplate(body, {
+    client_name: terms.clientName,
+    coach_name: terms.coachName,
+    price: formattedPrice,
+    payment_structure: terms.paymentStructure,
+    start_date: formatAgreementDate(terms.startDate),
+    term_months: String(terms.termMonths),
+    /*
+      Falls back to the per-payment price when no total is set, which is right
+      for the plans where one payment IS the whole thing: a template reading
+      "the total value of this program is $2,400" stays true, rather than
+      printing a raw {{total_value}} into a signed contract.
+    */
+    total_value: terms.contractTotal
+      ? formatAgreementMoney(Number(terms.contractTotal))
+      : formattedPrice,
+  });
+}
