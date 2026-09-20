@@ -159,8 +159,8 @@ export async function InvitePanel({
             <span className="flex flex-col gap-0.5">
               <span className="text-[13px]">They already pay me somewhere else</span>
               <span className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
-                No checkout and no agreement. They sign up and go straight to the intake. Set
-                Starts to the date they actually began with you.
+                No checkout. They still sign the agreement picked below. Set Starts to the date
+                they actually began with you.
               </span>
             </span>
           </label>
@@ -324,7 +324,9 @@ export async function InvitePanel({
                     <p className="readout mt-0.5 text-[10px] text-muted-foreground">
                       {invite.plan.name} ·{' '}
                       {invite.skipPayment
-                        ? 'already paying elsewhere'
+                        ? invite.agreementTemplateId
+                          ? 'already paying elsewhere · signs the agreement'
+                          : 'already paying elsewhere · nothing to sign'
                         : describePaymentStructure({
                             price: effective,
                             billingType: invite.plan.billingType,
