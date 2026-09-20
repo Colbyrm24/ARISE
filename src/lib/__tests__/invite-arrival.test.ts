@@ -19,6 +19,42 @@ test('a paying invite lands at payment, an existing-client invite at the intake'
   assert.equal(arrivingStatus(true), 'onboarding');
 });
 
+test('an existing-client invite carrying an agreement stops at the signature', () => {
+  /*
+    The gap this closed. Skipping the checkout used to skip the contract too,
+    so the clients moved off the old platform — the only ones with live money
+    already attached — were the only ones who got into the product with
+    nothing signed.
+  */
+  assert.equal(arrivingStatus(true, true), 'agreement_pending');
+  // Still only about the checkout: a paying link is unaffected, because its
+  // agreement is created by the payment, not by arriving.
+  assert.equal(arrivingStatus(false, true), 'payment_pending');
+});
+
+test('an agreement invite moves the same people the plain one does', () => {
+  assert.equal(statusForExistingClient(s('lead'), s('agreement_pending')), 'agreement_pending');
+  assert.equal(
+    statusForExistingClient(s('payment_pending'), s('agreement_pending')),
+    'agreement_pending'
+  );
+  assert.equal(statusForExistingClient(s('paused'), s('agreement_pending')), 'agreement_pending');
+  assert.equal(statusForExistingClient(s('cancelled'), s('agreement_pending')), 'agreement_pending');
+});
+
+test('an agreement invite never pulls somebody already training back out to sign', () => {
+  /*
+    Deliberate. Locking a client out of a product they are mid-session in over
+    a document is worse than the coach chasing the signature directly.
+  */
+  assert.equal(statusForExistingClient(s('active'), s('agreement_pending')), null);
+  assert.equal(statusForExistingClient(s('onboarding'), s('agreement_pending')), null);
+  assert.equal(statusForExistingClient(s('ending_soon'), s('agreement_pending')), null);
+  assert.equal(statusForExistingClient(s('completed'), s('agreement_pending')), null);
+  // And no needless write when they are already there.
+  assert.equal(statusForExistingClient(s('agreement_pending'), s('agreement_pending')), null);
+});
+
 test('a brand new lead is moved to wherever the invite points', () => {
   assert.equal(statusForExistingClient(s('lead'), s('payment_pending')), 'payment_pending');
   assert.equal(statusForExistingClient(s('lead'), s('onboarding')), 'onboarding');
