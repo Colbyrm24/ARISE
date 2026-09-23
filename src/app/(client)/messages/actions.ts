@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
 import { notify, displayName, coachIdForClient } from '@/lib/notifications';
+import { afterResponse } from '@/lib/after-response';
 import {
   isAllowedVoiceNote,
   removeVoiceNote,
@@ -39,8 +40,20 @@ export async function sendMessageToCoach(formData: FormData) {
     data: { senderId: user.id, recipientId: coachId, body },
   });
 
-  const name = await displayName(user.id);
-  await notify(coachId, 'message', `${name}: ${body.slice(0, 80)}`, { clientId: user.id });
+  /*
+    The message is sent. Everything below announces it, and announcing it used
+    to be what the client was actually waiting on — a name lookup, a
+    notification row, and a web push to every one of the coach's devices, that
+    last one an HTTPS call to a push service with no timeout. Tapping Send in
+    a gym meant watching that whole chain finish.
+
+    It runs after the response now. The row is written either way; the nudge
+    catching up a second later costs nobody anything.
+  */
+  afterResponse(async () => {
+    const name = await displayName(user.id);
+    await notify(coachId, 'message', `${name}: ${body.slice(0, 80)}`, { clientId: user.id });
+  });
 
   revalidatePath('/messages');
   // A waiting client sends from /welcome, which is the only screen they can
@@ -87,8 +100,12 @@ export async function sendVoiceNoteToCoach(formData: FormData): Promise<VoiceNot
     return { error: 'That did not send — try again.' };
   }
 
-  const name = await displayName(user.id);
-  await notify(coachId, 'message', `${name} sent a voice message`, { clientId: user.id });
+  // Same reasoning as the text path: the recording is saved, so the push can
+  // catch up on its own time rather than holding the recorder open.
+  afterResponse(async () => {
+    const name = await displayName(user.id);
+    await notify(coachId, 'message', `${name} sent a voice message`, { clientId: user.id });
+  });
 
   revalidatePath('/messages');
   revalidatePath('/welcome');
