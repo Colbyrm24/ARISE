@@ -7,6 +7,7 @@ import { zoneOf } from '@/lib/day';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NutritionTargetForm } from '@/components/coach/nutrition-target-form';
 import { assignProgram, unassignProgram } from './program-actions';
 import { setNutritionTarget } from './nutrition-actions';
 
@@ -168,18 +169,26 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
       </div>
     </div>
   )}
-  <form action={setNutritionTarget} className="flex flex-col gap-2">
-    <input type="hidden" name="clientId" value={client.userId} />
-    <div className="grid grid-cols-2 gap-2">
-      <Input name="calories" type="number" min="0" placeholder="Calories" required defaultValue={currentTarget?.calories ?? undefined} />
-      <Input name="protein" type="number" step="0.1" min="0" placeholder="Protein (g)" required defaultValue={currentTarget ? Number(currentTarget.protein) : undefined} />
-      <Input name="carbs" type="number" step="0.1" min="0" placeholder="Carbs (g)" required defaultValue={currentTarget ? Number(currentTarget.carbs) : undefined} />
-      <Input name="fat" type="number" step="0.1" min="0" placeholder="Fat (g)" required defaultValue={currentTarget ? Number(currentTarget.fat) : undefined} />
-    </div>
-    <Button type="submit" size="sm" variant="secondary" className="w-fit">
-      {currentTarget ? 'Update Target' : 'Set Target'}
-    </Button>
-  </form>
+  {/*
+    A client component now, because the calorie box drives the other three
+    and that has to happen as he types. The Prisma Decimal columns are
+    turned into plain numbers here — they do not survive the trip to the
+    browser as Decimals.
+  */}
+  <NutritionTargetForm
+    action={setNutritionTarget}
+    clientId={client.userId}
+    current={
+      currentTarget
+        ? {
+            calories: currentTarget.calories,
+            protein: Number(currentTarget.protein),
+            carbs: Number(currentTarget.carbs),
+            fat: Number(currentTarget.fat),
+          }
+        : null
+    }
+  />
 </CardContent>
 </Card>
       </div>
