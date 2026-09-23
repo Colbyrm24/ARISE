@@ -1,14 +1,19 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmojiPicker } from '@/components/messages/emoji-picker';
+import { SendButton } from '@/components/messages/send-button';
 import { VoiceRecorder } from '@/components/messages/voice-recorder';
 import type { VoiceNoteResult } from '@/lib/voice-notes';
 
 /**
  * Plain form post so sending works even before any JS loads — important
  * on a phone mid-workout with a bad connection.
+ *
+ * The Send control is its own client component because it does two jobs this
+ * one cannot: it shows the send in progress, and it empties the field the
+ * moment you press it. See send-button.tsx for why that second one was worth
+ * a file.
  */
 export function Composer({
   action,
@@ -53,7 +58,7 @@ export function Composer({
       <EmojiPicker targetName="body" />
       {extra}
       {voiceAction && <VoiceRecorder action={voiceAction} hidden={hidden} />}
-      <Button type="submit">Send</Button>
+      <SendButton fieldName="body" />
     </form>
   );
 }
