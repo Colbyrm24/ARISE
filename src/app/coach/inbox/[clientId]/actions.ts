@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { notify, displayName } from '@/lib/notifications';
+import { afterResponse } from '@/lib/after-response';
 import {
   isAllowedVoiceNote,
   removeVoiceNote,
@@ -35,8 +36,15 @@ export async function sendMessageToClient(formData: FormData) {
     data: { senderId: coach.id, recipientId: clientId, body },
   });
 
-  const name = await displayName(coach.id);
-  await notify(clientId, 'message', `${name}: ${body.slice(0, 80)}`);
+  /*
+    Off the critical path. The name lookup, the notification row and the web
+    push to the client's phone all happen after the response — a push service
+    having a slow afternoon should not be what Send feels like.
+  */
+  afterResponse(async () => {
+    const name = await displayName(coach.id);
+    await notify(clientId, 'message', `${name}: ${body.slice(0, 80)}`);
+  });
 
   revalidatePath(`/coach/inbox/${clientId}`);
   revalidatePath('/coach/inbox');
@@ -82,8 +90,10 @@ export async function sendVoiceNoteToClient(formData: FormData): Promise<VoiceNo
     return { error: 'That did not send — try again.' };
   }
 
-  const name = await displayName(coach.id);
-  await notify(clientId, 'message', `${name} sent a voice message`);
+  afterResponse(async () => {
+    const name = await displayName(coach.id);
+    await notify(clientId, 'message', `${name} sent a voice message`);
+  });
 
   revalidatePath(`/coach/inbox/${clientId}`);
   revalidatePath('/coach/inbox');
