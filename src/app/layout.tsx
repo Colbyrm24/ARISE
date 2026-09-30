@@ -29,6 +29,25 @@ export const metadata: Metadata = {
   title: 'ARISE',
   description: 'Private coaching, built around the way you train.',
   manifest: '/manifest.json',
+  /*
+    iOS does not take `display: standalone` from the manifest on its own.
+
+    Without apple-mobile-web-app-capable, a client who taps Add to Home
+    Screen gets an icon that opens a Safari tab with the address bar still
+    there — and, more expensively, web push never becomes available, because
+    iOS only grants it to a home-screen app running standalone. The whole
+    reach-the-phone story depends on this one meta tag.
+
+    statusBarStyle is 'black' rather than 'black-translucent' on purpose:
+    translucent puts the page under the notch and would need safe-area
+    padding threaded through every shell. Black matches --background
+    (#03060e) closely enough that the seam is invisible.
+  */
+  appleWebApp: {
+    capable: true,
+    title: 'ARISE',
+    statusBarStyle: 'black',
+  },
   icons: {
     icon: '/icon.png',
     apple: '/apple-icon.png',
