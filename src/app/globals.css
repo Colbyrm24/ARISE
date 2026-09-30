@@ -436,6 +436,97 @@ body::before {
       0 0 22px -2px hsl(var(--accent) / 0.55),
       0 0 60px 4px hsl(var(--system) / 0.45);
   }
+
+  /*
+    Long-form prose, for /privacy and /terms only.
+
+    Everything else in ARISE is read in glances — a set count, a macro, a row
+    in a queue — so nothing in the app needed a paragraph style until now.
+    These two pages are the opposite: somebody reads them start to finish,
+    signed out, deciding whether to hand over their bodyweight and their
+    photographs. So this is the one place that gets ordinary reading
+    typography, and none of the glow.
+
+    Descendant selectors rather than classes on every element: the content is
+    written as plain headings and paragraphs on purpose, so that changing a
+    sentence later never means remembering a class name.
+  */
+  .legal {
+    font-size: 0.9375rem;
+    line-height: 1.75;
+    color: hsl(var(--muted-foreground));
+    /*
+      The measure, in characters rather than pixels, so it holds if the type
+      scale ever moves. The wrapper this sits in is wider on purpose — the
+      heading bloom needs somewhere to go — but a 95-character line of body
+      text is genuinely tiring to read, and these are the two pages in ARISE
+      somebody reads top to bottom.
+    */
+    max-width: 64ch;
+  }
+  .legal > h1 {
+    font-variation-settings: 'wdth' 125, 'wght' 900;
+    letter-spacing: -0.035em;
+    text-transform: uppercase;
+    font-size: 1.875rem;
+    line-height: 1.1;
+    text-wrap: balance;
+    color: hsl(var(--foreground));
+  }
+  /* The effective date sits directly under the title as a readout. */
+  .legal > h1 + p {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    margin-top: 0.75rem;
+  }
+  .legal > h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.4;
+    margin-top: 2.5rem;
+    color: hsl(var(--foreground));
+  }
+  .legal > h3 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin-top: 1.75rem;
+    color: hsl(var(--foreground));
+  }
+  .legal > p,
+  .legal > ul,
+  .legal > ol {
+    margin-top: 1rem;
+  }
+  .legal ul {
+    list-style: none;
+    padding-left: 1.125rem;
+  }
+  .legal li {
+    position: relative;
+    margin-top: 0.5rem;
+  }
+  /* A dash rather than a bullet — it sits on the baseline and reads quieter. */
+  .legal ul > li::before {
+    content: '—';
+    position: absolute;
+    left: -1.125rem;
+    color: hsl(var(--accent) / 0.7);
+  }
+  .legal ol {
+    padding-left: 1.375rem;
+  }
+  .legal strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+  .legal a {
+    color: hsl(var(--accent));
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }
 
 /*
