@@ -3,6 +3,7 @@ import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { getSiteUrl } from '@/lib/site-url';
+import { arisePortalConfigurationId } from '@/lib/stripe-portal';
 
 /*
   The way out of a declining card.
@@ -54,9 +55,21 @@ export async function POST() {
   }
 
   try {
+    const siteUrl = getSiteUrl();
+    /*
+      Never opened on the account default. Stripe's default portal lets a
+      customer cancel their own subscription, which for a signed fixed-term
+      coaching plan is not a self-serve decision — see lib/stripe-portal.ts.
+      If this configuration cannot be built, the portal does not open at all;
+      falling back to the default would be the one failure mode this exists
+      to prevent.
+    */
+    const configuration = await arisePortalConfigurationId(siteUrl);
+
     const session = await stripe.billingPortal.sessions.create({
       customer: client.stripeCustomerId,
-      return_url: `${getSiteUrl()}/profile`,
+      configuration,
+      return_url: `${siteUrl}/profile`,
     });
     return NextResponse.json({ url: session.url });
   } catch (err) {

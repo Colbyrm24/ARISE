@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-16">
@@ -44,6 +46,31 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       </div>
 
       <div className="relative w-full max-w-sm">{children}</div>
+
+      {/*
+        The only place a signed-out person can reach the legal pages.
+
+        Everything else linking to /privacy is inside the app, behind a login,
+        which is no use to the two audiences who actually need to read it before
+        there is an account: somebody deciding whether to sign up, and a
+        reviewer at Apple or Stripe checking the policy exists and is reachable
+        without credentials. Kept faint and below the card — present, not
+        competing with the sign-in button.
+      */}
+      <nav className="relative mt-12 flex gap-6">
+        <Link
+          href="/privacy"
+          className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+        >
+          Privacy
+        </Link>
+        <Link
+          href="/terms"
+          className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+        >
+          Terms
+        </Link>
+      </nav>
     </div>
   );
 }

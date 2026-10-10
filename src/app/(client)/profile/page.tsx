@@ -6,6 +6,7 @@ import { BackgroundPicker } from '@/components/client/background-picker';
 import { backgroundOf } from '@/lib/backgrounds';
 import { Badge } from '@/components/ui/badge';
 import { SignOutButton } from '@/components/client/sign-out-button';
+import { DeleteAccount } from '@/components/client/delete-account';
 import { PushToggle } from '@/components/push-toggle';
 import { HealthSync } from '@/components/health-sync';
 import { prisma } from '@/lib/prisma';
@@ -176,9 +177,35 @@ export default async function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Progress, check-ins, and account settings expand here in later phases. */}
+      {/*
+        Reachable from inside the app as well as from the sign-in screen. A
+        client who wants to know what happens to their progress photos should
+        not have to sign out to find out.
+      */}
+      <nav className="flex justify-center gap-6">
+        {[
+          { href: '/privacy', label: 'Privacy' },
+          { href: '/terms', label: 'Terms' },
+        ].map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
 
       <SignOutButton />
+
+      {/*
+        Deletion sits below sign-out and renders as one muted line until it is
+        tapped. Required to be here — an app that creates accounts has to let a
+        person delete theirs without emailing anybody — and deliberately the
+        quietest control on the screen.
+      */}
+      {user && <DeleteAccount email={user.email} />}
     </div>
   );
 }
