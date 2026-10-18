@@ -3,6 +3,7 @@ import { BottomNav } from '@/components/client/bottom-nav';
 import { SideNav } from '@/components/client/side-nav';
 import { backgroundOf } from '@/lib/backgrounds';
 import { TimezoneSync } from '@/components/client/timezone-sync';
+import { InstallGuide } from '@/components/client/install-guide';
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   // Server-side check — a coach account can never render this layout,
@@ -54,6 +55,13 @@ export default async function ClientLayout({ children }: { children: React.React
       <div className="lg:hidden">
         <BottomNav />
       </div>
+      {/*
+        Slides up on a phone that hasn't added ARISE to its home screen yet.
+        On an iPhone that is the only way notifications can reach them — see
+        components/client/install-guide.tsx. Renders nothing on desktop or
+        once installed.
+      */}
+      <InstallGuide />
     </div>
   );
 }
