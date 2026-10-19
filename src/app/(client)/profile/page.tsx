@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { SignOutButton } from '@/components/client/sign-out-button';
 import { DeleteAccount } from '@/components/client/delete-account';
 import { PushToggle } from '@/components/push-toggle';
+import { InstallGuide } from '@/components/client/install-guide';
 import { HealthSync } from '@/components/health-sync';
 import { prisma } from '@/lib/prisma';
 import { avatarSrc } from '@/lib/avatars';
@@ -51,6 +52,9 @@ export default async function ProfilePage() {
         through it they are outranks a notification switch.
       */}
       {user && <CoachingPlanCard clientId={user.id} timeZone={zoneOf(user.profile)} />}
+
+      {/* Hides itself once ARISE is on the home screen, and on desktop. */}
+      <InstallGuide variant="card" />
 
       <Card>
         <CardContent className="pt-6">
