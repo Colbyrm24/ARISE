@@ -1,18 +1,15 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Dumbbell, Apple } from 'lucide-react';
+import { Dumbbell, Apple, CalendarDays } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
-import { zoneOf } from '@/lib/day';
+import { todayIn, zoneOf } from '@/lib/day';
+import { dayKey } from '@/lib/month-grid';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { StartProgramForm } from '@/components/coach/start-program';
 import { NutritionTargetForm } from '@/components/coach/nutrition-target-form';
-import { assignProgram, unassignProgram } from './program-actions';
+import { startProgram, unassignProgram } from './program-actions';
 import { setNutritionTarget } from './nutrition-actions';
-
-const selectClass =
-  'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 /*
   Overview — the two things a coach changes most: what they are training
@@ -71,6 +68,28 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
   });
 
   const activeProgram = client.clientPrograms[0] ?? null;
+
+  // Their today, so a program started from here begins on the client's day.
+  const defaultStart = dayKey(todayIn(clientZone));
+
+  // How far their calendar runs, so "is anything actually scheduled?" has an
+  // answer on this card instead of a trip to the Calendar tab.
+  const lastScheduled = activeProgram
+    ? await prisma.scheduledItem.findFirst({
+        where: { clientId: client.userId },
+        orderBy: { date: 'desc' },
+        select: { date: true },
+      })
+    : null;
+  const runsThrough = lastScheduled
+    ? lastScheduled.date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : null;
+  const programOptions = programTemplates.map((t) => ({ id: t.id, name: t.name }));
   const currentTarget = client.nutritionTargets[0] ?? null;
 
   return (
@@ -80,7 +99,15 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
             <CardTitle>Training</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {activeProgram ? (
+            {programTemplates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No programs built yet —{' '}
+                <Link href="/coach/programs" className="text-accent hover:underline">
+                  create one
+                </Link>{' '}
+                to start them on it.
+              </p>
+            ) : activeProgram ? (
               <div className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -96,38 +123,45 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
                   </form>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {activeProgram.template._count.workouts} day
-                  {activeProgram.template._count.workouts === 1 ? '' : 's'} ·{' '}
+                  {runsThrough ? (
+                    <>Calendar runs through {runsThrough}</>
+                  ) : (
+                    <span className="text-destructive">Nothing on their calendar yet — start it below</span>
+                  )}{' '}
+                  ·{' '}
                   <Link href={`/coach/programs/${activeProgram.templateId}`} className="text-accent hover:underline">
-                    View / edit program
+                    Edit program
                   </Link>
                 </p>
+                <Link
+                  href={`/coach/clients/${client.userId}/calendar`}
+                  className="inline-flex w-fit items-center gap-2 border border-border px-3 py-2 text-xs text-foreground transition-colors hover:border-accent/50 hover:text-accent"
+                >
+                  <CalendarDays size={14} />
+                  Move sessions on their calendar
+                </Link>
+                <details className="group border-t border-border pt-3" open={!runsThrough}>
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    Switch program or restart from a date
+                  </summary>
+                  <div className="pt-3">
+                    <StartProgramForm
+                      clientId={client.userId}
+                      programs={programOptions}
+                      defaultStart={defaultStart}
+                      currentTemplateId={activeProgram.templateId}
+                      action={startProgram}
+                    />
+                  </div>
+                </details>
               </div>
-            ) : programTemplates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No programs built yet —{' '}
-                <Link href="/coach/programs" className="text-accent hover:underline">
-                  create one
-                </Link>{' '}
-                to assign here.
-              </p>
             ) : (
-              <form action={assignProgram} className="flex flex-col gap-3">
-                <input type="hidden" name="clientId" value={client.userId} />
-                <select name="templateId" className={selectClass} required defaultValue="">
-                  <option value="" disabled>
-                    Assign a program…
-                  </option>
-                  {programTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-                <Button type="submit" size="sm" className="w-fit">
-                  Assign
-                </Button>
-              </form>
+              <StartProgramForm
+                clientId={client.userId}
+                programs={programOptions}
+                defaultStart={defaultStart}
+                action={startProgram}
+              />
             )}
 
             {client.workoutLogs.length > 0 && (

@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { pickPrimary } from '@/lib/schedule-move';
 
 /*
   Turning a week into months.
@@ -200,13 +201,20 @@ export async function scheduledToday(clientId: string, today: Date) {
     server — so from early evening onward a client west of Greenwich was shown
     tomorrow's session, or a rest day on a day they were meant to train.
   */
-  return prisma.scheduledItem.findFirst({
+  const items = await prisma.scheduledItem.findMany({
     where: { clientId, date: today },
     include: {
       workout: { select: { id: true, name: true, estMinutes: true } },
       cardioType: { select: { id: true, name: true, unit: true } },
     },
   });
+  /*
+    A day should hold one session, but a coach moving a session onto a day the
+    client already finished can leave two. This was a findFirst with no
+    ordering, so which one the client saw was up to Postgres — and "Rest day"
+    winning on a training day is the worst answer. pickPrimary decides.
+  */
+  return pickPrimary(items);
 }
 
 export { dateOnly, addDays };
