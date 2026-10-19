@@ -2,11 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
-import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
-import { cn } from '@/lib/utils';
+import { ScheduleBoard, type BoardDay, type BoardItem } from '@/components/coach/schedule-board';
 import { todayIn, zoneOf } from '@/lib/day';
+import { moveSession, pushBack, removeSession, setDaySession } from './actions';
 import {
-  WEEKDAYS,
   dayKey as key,
   inMonth as inGivenMonth,
   monthGrid,
@@ -22,9 +21,13 @@ import {
   been doing", and it answers it the way a coach actually asks it — by
   looking at a month and seeing where the gaps are.
 
-  The whole thing is read-only on purpose. Editing a day belongs on the
-  program screen, where a change ripples through the deploy; letting
-  somebody drag a session around here would quietly desync the two.
+  It is also where a coach rearranges a client's month, Trainerize-style:
+  drag a session to another day (the two days swap), or tap a day to change
+  it, remove it, or push everything after it back. That used to be refused
+  here on the grounds that it would desync from the program — but the deploy
+  COPIES rows on purpose so one client's Tuesday can change without touching
+  anyone else's, and an edited row keeps its deploy's ownership, so
+  re-deploying the program still replaces it cleanly.
 
   Every date in play is stored as a Postgres `date` at UTC midnight, so the
   grid is built in UTC too. Mixing local dates in here is how a session
@@ -41,7 +44,21 @@ export default async function ClientCalendarPage({
   const client = await prisma.client.findUnique({
     where: { userId: params.id },
     // timezone, because "today" on this grid is the CLIENT's today.
-    select: { userId: true, user: { select: { profile: { select: { timezone: true } } } } },
+    select: {
+      userId: true,
+      user: { select: { profile: { select: { timezone: true } } } },
+      // Which workouts can be placed on a day: only ones from the program
+      // they are on. The client's workout screen refuses anything else.
+      clientPrograms: {
+        where: { active: true },
+        take: 1,
+        select: {
+          template: {
+            select: { workouts: { orderBy: { dayOrder: 'asc' }, select: { id: true, name: true } } },
+          },
+        },
+      },
+    },
   });
 
   if (!client) notFound();
@@ -75,20 +92,6 @@ export default async function ClientCalendarPage({
     infers a value type of {} from an array that isn't a tuple, and the error
     surfaces somewhere else entirely.
   */
-  type DaySession = { id: string; kind: string; label: string; done: boolean };
-  const sessionsByDay = new Map<string, DaySession[]>();
-  for (const item of scheduled) {
-    const k = key(item.date);
-    const list = sessionsByDay.get(k) ?? [];
-    list.push({
-      id: item.id,
-      kind: item.kind,
-      label: item.label,
-      done: Boolean(item.completedAt),
-    });
-    sessionsByDay.set(k, list);
-  }
-
   const foodByDay = new Map<string, { calories: number; meals: number }>();
   for (const log of nutrition) {
     const k = key(log.date);
@@ -125,6 +128,34 @@ export default async function ClientCalendarPage({
     they train today".
   */
   const todayKey = key(todayIn(zoneOf(client.user?.profile)));
+
+  /*
+    Plain values only from here on — the board is a client component and a
+    Date or a Prisma Decimal does not survive the trip to the browser intact.
+  */
+  const boardItems: BoardItem[] = scheduled.map((item) => ({
+    id: item.id,
+    date: key(item.date),
+    kind: item.kind,
+    label: item.label,
+    done: Boolean(item.completedAt),
+  }));
+
+  const boardDays: BoardDay[] = days.map((day) => {
+    const k = key(day);
+    const food = foodByDay.get(k);
+    const weight = weightByDay.get(k);
+    return {
+      key: k,
+      dayOfMonth: day.getUTCDate(),
+      // Days either side of the month stay visible but recede, so the
+      // month's own shape is what you read first.
+      outside: !inMonth(day),
+      today: k === todayKey,
+      food: food ? `${food.calories.toLocaleString('en-US')} cal · ${food.meals}` : undefined,
+      weight: weight !== undefined ? `${weight} lbs` : undefined,
+    };
+  });
 
   const prev = monthKey(month === 0 ? year - 1 : year, month === 0 ? 11 : month - 1);
   const next = monthKey(month === 11 ? year + 1 : year, month === 11 ? 0 : month + 1);
@@ -178,88 +209,16 @@ export default async function ClientCalendarPage({
         </dl>
       </div>
 
-      <SystemWindow plain>
-        <SystemWindowContent className="p-0">
-          <div className="grid grid-cols-7 border-b border-border/60">
-            {WEEKDAYS.map((d) => (
-              <div
-                key={d}
-                className="readout px-2 py-2 text-center text-[10px] uppercase text-muted-foreground"
-              >
-                {d}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7">
-            {days.map((day) => {
-              const k = key(day);
-              const outside = !inMonth(day);
-              const sessions = sessionsByDay.get(k) ?? [];
-              const food = foodByDay.get(k);
-              const weight = weightByDay.get(k);
-
-              return (
-                <div
-                  key={k}
-                  className={cn(
-                    'min-h-[104px] border-b border-r border-border/40 p-1.5',
-                    // Days either side of the month stay visible but recede,
-                    // so the month's own shape is what you read first.
-                    outside && 'opacity-35',
-                    k === todayKey && 'bg-accent/[0.07]'
-                  )}
-                >
-                  <div className="mb-1 flex justify-end">
-                    <span
-                      className={cn(
-                        'readout text-[11px] tabular-nums',
-                        k === todayKey ? 'text-accent' : 'text-muted-foreground'
-                      )}
-                    >
-                      {day.getUTCDate()}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    {sessions.map((s) => (
-                      <span
-                        key={s.id}
-                        title={s.label}
-                        className={cn(
-                          'block truncate border px-1.5 py-0.5 text-[10px] leading-tight',
-                          s.kind === 'rest'
-                            ? 'border-border/50 text-muted-foreground'
-                            : s.done
-                              ? // Done is the loud state. A month of hollow
-                                // chips with a few filled ones is the whole
-                                // point of looking at this screen.
-                                'border-accent/60 bg-accent/15 text-foreground'
-                              : 'border-border/60 text-muted-foreground'
-                        )}
-                      >
-                        {s.label}
-                      </span>
-                    ))}
-
-                    {food && (
-                      <span className="readout block truncate text-[10px] text-muted-foreground">
-                        {food.calories.toLocaleString('en-US')} cal · {food.meals}
-                      </span>
-                    )}
-
-                    {weight !== undefined && (
-                      <span className="readout block text-[10px] text-accent/80">
-                        {weight} lbs
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SystemWindowContent>
-      </SystemWindow>
+      <ScheduleBoard
+        clientId={client.userId}
+        days={boardDays}
+        items={boardItems}
+        workouts={client.clientPrograms[0]?.template.workouts ?? []}
+        moveSession={moveSession}
+        removeSession={removeSession}
+        setDaySession={setDaySession}
+        pushBack={pushBack}
+      />
     </div>
   );
 }
