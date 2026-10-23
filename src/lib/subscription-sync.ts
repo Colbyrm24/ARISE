@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { programMetaOf, recordProgramSubscription } from '@/lib/program-offer';
+import { programMetaOf, reactivateMemberIfPaying, recordProgramSubscription } from '@/lib/program-offer';
 import { stripe } from '@/lib/stripe';
 import { notify } from '@/lib/notifications';
 import {
@@ -331,6 +331,9 @@ export async function handleInvoicePaid(invoice: {
     await prisma.subscription.update({ where: { id: sub.id }, data: { status: 'active' } });
   }
 
+  // Money arrived: a member cut off for an earlier failure is back in.
+  await reactivateMemberIfPaying(sub.clientId);
+
   await stopIfPaidInFull(sub.id);
 }
 
@@ -503,7 +506,7 @@ export async function handleInvoicePaymentFailed(invoice: {
  * coach set by hand, and in the agreement_pending case it would strand
  * somebody mid-funnel under copy about a payment that never happened.
  */
-async function pauseForBilling(clientId: string, reason: string) {
+async function pauseForBilling(clientId: string, reason: string, endedSubscriptionId?: string) {
   const client = await prisma.client.findUnique({
     where: { userId: clientId },
     select: { status: true, tier: true },
@@ -518,6 +521,19 @@ async function pauseForBilling(clientId: string, reason: string) {
     this price there could be dozens a week, and none of them need him.
   */
   if (client.tier === 'program') {
+    // Only if nothing else is paying. A duplicate subscription that ARISE
+    // cancelled itself ends here too, and must not take the member's access
+    // with it while their real subscription carries on.
+    const stillPaying = await prisma.subscription.findFirst({
+      where: {
+        clientId,
+        deletedAt: null,
+        status: 'active',
+        ...(endedSubscriptionId ? { NOT: { id: endedSubscriptionId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (stillPaying) return false;
     await prisma.client.update({ where: { userId: clientId }, data: { status: 'cancelled' } });
     return true;
   }
@@ -594,12 +610,31 @@ export async function handleSubscriptionChanged(subscription: {
   */
   const finished = mergeStatus(sub.status, localSubscriptionStatus(subscription.status)) === 'completed';
 
-  if (!finished && (subscription.status === 'canceled' || subscription.status === 'unpaid')) {
+  // A member Stripe has brought back to life (a retried card went through).
+  if (subscription.status === 'active') await reactivateMemberIfPaying(sub.clientId);
+
+  /*
+    A Follow My Split subscription ending for somebody who is now a 1-on-1
+    client — the join route cancels it when a member takes up coaching. That
+    is the old product ending, not their access, and it must not pause the
+    coaching they just signed up for.
+  */
+  const memberPlanEnded =
+    (await prisma.programOffer.count({ where: { planId: sub.planId } })) > 0 &&
+    (await prisma.client.findUnique({ where: { userId: sub.clientId }, select: { tier: true } }))
+      ?.tier === 'coaching';
+
+  if (
+    !finished &&
+    !memberPlanEnded &&
+    (subscription.status === 'canceled' || subscription.status === 'unpaid')
+  ) {
     await pauseForBilling(
       sub.clientId,
       subscription.status === 'unpaid'
         ? 'Billing stopped after repeated failed payments, so their access is paused.'
-        : 'Their subscription ended at Stripe, so their access is paused.'
+        : 'Their subscription ended at Stripe, so their access is paused.',
+      sub.id
     );
   }
 }

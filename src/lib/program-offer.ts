@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe';
 import { todayIn, zoneOf } from '@/lib/day';
 import { addDays, deployProgram, setActiveProgram } from '@/lib/program-deploy';
 import { notify } from '@/lib/notifications';
+import { attachClientToCoach } from '@/lib/onboard-client';
 
 /*
   Follow My Split: from a stranger on a bio link to somebody training on the
@@ -165,11 +166,165 @@ export async function startMemberCalendar(clientId: string, templateId: string) 
 }
 
 /**
- * Turns a paid program checkout into a member who can train.
+ * Switches a paying person on as a member — exactly once.
  *
- * Idempotent: the success page and `checkout.session.completed` both land
- * here, often within the same second, and either may be first.
+ * The success page and `checkout.session.completed` both land here, usually
+ * within the same second. Checking "are they active?" and then writing lets
+ * both through, and since ScheduledItem has no unique index the calendar was
+ * written twice: two sessions a day for twelve weeks. So the status change is
+ * the lock — an updateMany that only matches somebody NOT yet active — and
+ * only the caller whose update matched writes the calendar and tells the
+ * coach.
+ *
+ * It is also the one place a tier changes. A 1-on-1 coaching record becomes
+ * a member here, after payment, and only from `lead` or `cancelled`: somebody
+ * mid-way through a $750 sign-up, or currently coached, is never converted.
  */
+async function activateMember(clientId: string, offerId: string) {
+  const offer = await prisma.programOffer.findUnique({
+    where: { id: offerId },
+    select: { id: true, templateId: true, coachId: true, title: true },
+  });
+  if (!offer) return { won: false as const };
+
+  const claim = await prisma.client.updateMany({
+    where: {
+      userId: clientId,
+      OR: [
+        { tier: 'program', status: { not: 'active' } },
+        { tier: 'coaching', status: { in: ['lead', 'cancelled'] } },
+      ],
+    },
+    data: { status: 'active', tier: 'program', offerId: offer.id, coachId: offer.coachId },
+  });
+  if (claim.count === 0) return { won: false as const, offer };
+
+  await prisma.client.updateMany({
+    where: { userId: clientId, startDate: null },
+    data: { startDate: new Date() },
+  });
+  await attachClientToCoach(clientId, offer.coachId);
+  await startMemberCalendar(clientId, offer.templateId);
+
+  const who = await prisma.user.findUnique({
+    where: { id: clientId },
+    select: { email: true, profile: { select: { fullName: true } } },
+  });
+  await notify(
+    offer.coachId,
+    'account',
+    `${who?.profile?.fullName || who?.email || 'Someone'} subscribed to ${offer.title}.`,
+    { clientId }
+  ).catch(() => null);
+
+  return { won: true as const, offer };
+}
+
+/**
+ * A second paid subscription for somebody already paying for one.
+ *
+ * Two open checkouts both paid — two tabs, or a back button — is the only way
+ * this happens, and the second one is money for nothing. It is cancelled and
+ * its first charge refunded straight away. If Stripe refuses, the coach is
+ * told by name so a person can sort it, rather than it billing on silently.
+ */
+async function undoDuplicate(clientId: string, coachId: string, stripeSubscriptionId: string) {
+  try {
+    const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+      expand: ['latest_invoice'],
+    });
+    await stripe.subscriptions.cancel(stripeSubscriptionId);
+    const invoice = sub.latest_invoice as Stripe.Invoice | null;
+    const paymentIntent =
+      invoice && typeof invoice !== 'string'
+        ? typeof invoice.payment_intent === 'string'
+          ? invoice.payment_intent
+          : invoice.payment_intent?.id ?? null
+        : null;
+    if (paymentIntent) await stripe.refunds.create({ payment_intent: paymentIntent });
+  } catch (err) {
+    console.error('Could not undo a duplicate Follow My Split subscription', {
+      clientId,
+      stripeSubscriptionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    await notify(
+      coachId,
+      'account',
+      `A member paid for Follow My Split twice and ARISE could not cancel the second one — cancel and refund subscription ${stripeSubscriptionId} in Stripe.`,
+      { clientId }
+    ).catch(() => null);
+  }
+}
+
+/**
+ * An OLDER subscription of this person's still taking money.
+ *
+ * "Older" decides which of two duplicates survives, and it has to be the same
+ * answer from both sides: each duplicate's own finalize asks this question,
+ * and "is there any other live one?" would answer yes for both and cancel
+ * both. The first one recorded locally is the one that stays.
+ */
+async function olderLiveSubscription(clientId: string, stripeSubscriptionId: string) {
+  const mine = await prisma.subscription.findFirst({
+    where: { provider: 'stripe', providerSubscriptionId: stripeSubscriptionId },
+    select: { createdAt: true },
+  });
+  return prisma.subscription.findFirst({
+    where: {
+      clientId,
+      deletedAt: null,
+      // Paid up, not merely alive: an old subscription Stripe gave up on
+      // ('unpaid', stored as past_due) must not make a fresh one a duplicate.
+      status: 'active',
+      NOT: { providerSubscriptionId: stripeSubscriptionId },
+      createdAt: { lt: mine?.createdAt ?? new Date() },
+      // Another Follow My Split subscription — never an old coaching plan,
+      // whatever state its row was left in.
+      plan: { programOffers: { some: {} } },
+    },
+    select: { id: true },
+  });
+}
+
+/**
+ * Shared by the checkout path and the "already paid" path: given a live
+ * Stripe subscription that belongs to a member, make sure everything local
+ * matches it.
+ */
+async function settleSubscription(
+  meta: ProgramMeta,
+  stripeSubscriptionId: string,
+  stripeCustomerId: string | null
+) {
+  const client = await prisma.client.findUnique({
+    where: { userId: meta.clientId },
+    select: { userId: true },
+  });
+  if (!client) return null;
+
+  const offer = await prisma.programOffer.findUnique({
+    where: { id: meta.offerId },
+    select: { coachId: true },
+  });
+
+  // Already paying on an earlier subscription: this one is a duplicate.
+  if (offer && (await olderLiveSubscription(client.userId, stripeSubscriptionId))) {
+    await undoDuplicate(client.userId, offer.coachId, stripeSubscriptionId);
+    return { clientId: client.userId };
+  }
+
+  if (stripeCustomerId) {
+    await prisma.client
+      .update({ where: { userId: client.userId }, data: { stripeCustomerId } })
+      .catch(() => null);
+  }
+  await recordProgramSubscription(meta, stripeSubscriptionId);
+  await activateMember(client.userId, meta.offerId);
+  return { clientId: client.userId };
+}
+
+/** Turns a paid program checkout into a member who can train. Idempotent. */
 export async function finalizeProgramSession(session: Stripe.Checkout.Session) {
   const meta = programMetaOf(session);
   if (!meta) return null;
@@ -177,60 +332,43 @@ export async function finalizeProgramSession(session: Stripe.Checkout.Session) {
     return null;
   }
 
-  const offer = await prisma.programOffer.findUnique({
-    where: { id: meta.offerId },
-    select: { id: true, templateId: true, coachId: true, title: true },
-  });
-  const client = await prisma.client.findUnique({
-    where: { userId: meta.clientId },
-    select: { userId: true, status: true, tier: true, startDate: true },
-  });
-  // A coaching client can't be turned into a member by a checkout; the join
-  // route refuses to make one, so this is only a guard.
-  if (!offer || !client || client.tier !== 'program') return null;
-
   const stripeCustomerId =
     typeof session.customer === 'string' ? session.customer : session.customer?.id ?? null;
   const stripeSubscriptionId =
     typeof session.subscription === 'string' ? session.subscription : session.subscription?.id ?? null;
+  if (!stripeSubscriptionId) return null;
 
-  const wasActive = client.status === 'active';
+  return settleSubscription(meta, stripeSubscriptionId, stripeCustomerId);
+}
 
-  await prisma.client.update({
-    where: { userId: client.userId },
-    data: {
-      status: 'active',
-      offerId: offer.id,
-      ...(client.startDate ? {} : { startDate: new Date() }),
-    },
+/**
+ * Somebody bounced back to the signup page who is in fact already paying —
+ * the success page failed and the webhook has not landed. Switch them on from
+ * the live subscription rather than selling them a second one.
+ */
+export async function activateFromSubscription(clientId: string, sub: Stripe.Subscription) {
+  const meta = programMetaOf(sub);
+  if (!meta || meta.clientId !== clientId) return null;
+  const customer = typeof sub.customer === 'string' ? sub.customer : sub.customer?.id ?? null;
+  return settleSubscription(meta, sub.id, customer);
+}
+
+/**
+ * A member whose card failed, was cut off, and then paid after all — Stripe
+ * moves an `unpaid` subscription back to `active` once a retried invoice
+ * succeeds. Nothing else would ever switch them back on: there is no coach
+ * watching a $16.99 member to click a chip.
+ */
+export async function reactivateMemberIfPaying(clientId: string) {
+  const client = await prisma.client.findUnique({
+    where: { userId: clientId },
+    select: { tier: true, status: true, offerId: true },
   });
-
-  if (stripeCustomerId) {
-    // Its own write: the column is unique, and a customer already recorded on
-    // this row (or, in a mess, another one) must not stop the member starting.
-    await prisma.client
-      .update({ where: { userId: client.userId }, data: { stripeCustomerId } })
-      .catch(() => null);
+  if (!client || client.tier !== 'program' || client.status !== 'cancelled' || !client.offerId) {
+    return false;
   }
-
-  if (stripeSubscriptionId) await recordProgramSubscription(meta, stripeSubscriptionId);
-
-  await startMemberCalendar(client.userId, offer.templateId);
-
-  if (!wasActive) {
-    const who = await prisma.user.findUnique({
-      where: { id: client.userId },
-      select: { email: true, profile: { select: { fullName: true } } },
-    });
-    await notify(
-      offer.coachId,
-      'account',
-      `${who?.profile?.fullName || who?.email || 'Someone'} subscribed to ${offer.title}.`,
-      { clientId: client.userId }
-    ).catch(() => null);
-  }
-
-  return { clientId: client.userId };
+  const result = await activateMember(clientId, client.offerId);
+  return result.won;
 }
 
 /**

@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { featuresFor } from '@/lib/membership';
+import { todayIn } from '@/lib/day';
 import { clientIdForToken, parseHealthPayload } from '@/lib/health-token';
 import { isUniqueViolation } from '@/lib/db-conflict';
 
@@ -65,9 +67,21 @@ export async function POST(request: NextRequest) {
   // token already resolved who they are, so this is one cheap lookup.
   const who = await prisma.user.findUnique({
     where: { id: clientId },
-    select: { profile: { select: { timezone: true } } },
+    select: {
+      profile: { select: { timezone: true } },
+      clientRecord: { select: { tier: true, birthDate: true } },
+    },
   });
   const reading = parseHealthPayload(body, who?.profile?.timezone);
+  /*
+    The phone sends whatever it has, but not everything it sends is kept. A
+    Follow My Split member under 18 has no weigh-ins in their app, and no
+    member has nutrition — writing those rows anyway would put a minor's body
+    weight on their calendar through the back door.
+  */
+  const features = featuresFor(who?.clientRecord, todayIn(who?.profile?.timezone));
+  if (reading && !features.weight) delete reading.weight;
+  if (reading && !features.nutrition) delete reading.nutrition;
   if (!reading) {
     return NextResponse.json(
       {

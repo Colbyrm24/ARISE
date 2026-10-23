@@ -71,9 +71,10 @@ export default async function WelcomePage() {
   if (user.clientRecord?.tier === 'program' && user.clientRecord.offerId) {
     const offer = await prisma.programOffer.findUnique({
       where: { id: user.clientRecord.offerId },
-      select: { slug: true },
+      select: { slug: true, active: true },
     });
-    if (offer) redirect(`/follow/${offer.slug}`);
+    // Closed offers 404, so only send them where there is a page to land on.
+    if (offer?.active) redirect(`/follow/${offer.slug}`);
   }
 
   const firstName = user.profile?.fullName?.split(' ')[0] ?? 'there';

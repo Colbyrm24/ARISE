@@ -51,6 +51,9 @@ async function memberPlan(title: string, cents: number) {
       numberOfPayments: null,
       termMonths: 1,
       defaultProvider: 'stripe',
+      // Not offered in the coaching plan pickers — this price belongs to the
+      // Follow My Split page only. Checkout reads the price off the offer.
+      active: false,
     },
   });
 }

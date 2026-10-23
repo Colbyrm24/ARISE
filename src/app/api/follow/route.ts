@@ -5,7 +5,8 @@ import { todayIn } from '@/lib/day';
 import { getSiteUrl } from '@/lib/site-url';
 import { attachClientToCoach } from '@/lib/onboard-client';
 import { parseBirthDate } from '@/lib/membership';
-import { createProgramCheckout } from '@/lib/program-offer';
+import { stripe } from '@/lib/stripe';
+import { activateFromSubscription, createProgramCheckout, programMetaOf } from '@/lib/program-offer';
 
 /*
   Follow My Split, from account to Stripe in one request.
@@ -21,7 +22,18 @@ import { createProgramCheckout } from '@/lib/program-offer';
   ends up paying $16.99. They are sent back to their app instead.
 */
 
-const CAN_BECOME_MEMBER = new Set(['lead', 'payment_pending', 'cancelled']);
+/*
+  Which existing coaching records may become a member at all.
+
+  Only somebody who never started (`lead`) or whose coaching is over
+  (`cancelled`), and only with nothing live on the money side. Even then their
+  tier is NOT changed here — it changes in finalizeProgramSession, after they
+  have actually paid. Re-tiering on the way INTO Stripe meant a coaching
+  client who opened the bio link and closed checkout was silently moved out
+  of the coach's roster and onto the member app.
+*/
+const COACHING_CAN_CONVERT = new Set(['lead', 'cancelled']);
+const LIVE_SUBSCRIPTION = ['active', 'past_due'];
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -60,11 +72,27 @@ export async function POST(request: Request) {
   if (client && client.tier === 'program' && client.status === 'active') {
     return NextResponse.json({ redirectTo: '/today' });
   }
-  if (client && client.tier !== 'program' && !CAN_BECOME_MEMBER.has(client.status)) {
-    return NextResponse.json(
-      { error: "You're already coached 1-on-1, so you have the full program in your app." },
-      { status: 409 }
-    );
+
+  if (client && client.tier !== 'program') {
+    const [liveSub, openLink] = await Promise.all([
+      prisma.subscription.findFirst({
+        where: { clientId: client.userId, deletedAt: null, status: { in: LIVE_SUBSCRIPTION } },
+        select: { id: true },
+      }),
+      prisma.paymentLink.findFirst({
+        where: { clientId: client.userId, status: 'pending' },
+        select: { id: true },
+      }),
+    ]);
+    if (!COACHING_CAN_CONVERT.has(client.status) || liveSub || openLink) {
+      return NextResponse.json(
+        {
+          error:
+            "Your account is set up for 1-on-1 coaching, so you don't need this — message your coach or open your app.",
+        },
+        { status: 409 }
+      );
+    }
   }
 
   /*
@@ -106,37 +134,76 @@ export async function POST(request: Request) {
       .catch(() => null);
   }
 
-  const memberData = {
-    tier: 'program',
-    birthDate,
-    offerId: offer.id,
-    coachId: offer.coachId,
-  };
-
   if (!client) {
     await prisma.client.create({
-      data: { userId: dbUser.id, status: 'payment_pending', ...memberData },
-    });
-  } else {
-    await prisma.client.update({
-      where: { userId: dbUser.id },
       data: {
-        ...memberData,
-        // Only the not-yet-started states move; an active member returned above.
+        userId: dbUser.id,
         status: 'payment_pending',
+        tier: 'program',
+        birthDate,
+        offerId: offer.id,
+        coachId: offer.coachId,
       },
     });
+    await attachClientToCoach(dbUser.id, offer.coachId);
+  } else if (client.tier === 'program') {
+    await prisma.client.update({
+      where: { userId: dbUser.id },
+      data: { status: 'payment_pending', birthDate, offerId: offer.id, coachId: offer.coachId },
+    });
+    await attachClientToCoach(dbUser.id, offer.coachId);
+  } else if (!client.birthDate) {
+    // A coaching lead: keep everything as it is until they pay.
+    await prisma.client.update({ where: { userId: dbUser.id }, data: { birthDate } });
   }
 
-  // The leaderboard and notifications find the coach through this row.
-  await attachClientToCoach(dbUser.id, offer.coachId);
-
   try {
+    /*
+      One Stripe customer per person, made before checkout rather than by it.
+
+      Letting Checkout create the customer from an email meant two tabs, or a
+      second tap after a slow redirect, made two customers — and the portal
+      can only ever show one, so a duplicate subscription on the other would
+      bill forever with no cancel button anywhere.
+    */
+    let stripeCustomerId = client?.stripeCustomerId ?? null;
+    if (!stripeCustomerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: firstName || existingUser?.profile?.fullName || undefined,
+        metadata: { arise_client_id: dbUser.id },
+      });
+      stripeCustomerId = customer.id;
+      await prisma.client.update({
+        where: { userId: dbUser.id },
+        data: { stripeCustomerId },
+      });
+    }
+
+    /*
+      Already paid? The success page can fail and the webhook can be slow, and
+      then this person is bounced back here still `payment_pending` — with a
+      subscription running at Stripe. Opening a second checkout would charge
+      them twice. Find the live one and switch them on instead.
+    */
+    const existingSubs = await stripe.subscriptions.list({
+      customer: stripeCustomerId,
+      status: 'all',
+      limit: 20,
+    });
+    const paying = existingSubs.data.find(
+      (sub) => programMetaOf(sub) && ['active', 'trialing', 'past_due'].includes(sub.status)
+    );
+    if (paying) {
+      await activateFromSubscription(dbUser.id, paying);
+      return NextResponse.json({ redirectTo: '/today' });
+    }
+
     const checkout = await createProgramCheckout({
       clientId: dbUser.id,
       email: user.email,
       offer: { id: offer.id, slug: offer.slug, plan: offer.plan },
-      stripeCustomerId: client?.stripeCustomerId ?? null,
+      stripeCustomerId,
       siteUrl: getSiteUrl(),
     });
     if (!checkout.url) throw new Error('Stripe returned no checkout URL');

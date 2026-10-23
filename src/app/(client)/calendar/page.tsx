@@ -15,6 +15,7 @@ import {
   parseMonth,
   shiftMonth,
 } from '@/lib/month-grid';
+import { featuresFor } from '@/lib/membership';
 
 /*
   The client's own month.
@@ -42,6 +43,8 @@ export default async function ClientCalendarPage({
   searchParams?: { m?: string };
 }) {
   const user = await requireClient();
+  // Members have no food log; under-18 members have no weigh-ins.
+  const features = featuresFor(user.clientRecord, todayFor(user));
 
   const { year, month } = parseMonth(searchParams?.m);
   const { gridStart, gridEnd, days } = monthGrid(year, month);
@@ -52,14 +55,18 @@ export default async function ClientCalendarPage({
       orderBy: [{ date: 'asc' }, { kind: 'asc' }],
       select: { id: true, date: true, kind: true, label: true, completedAt: true },
     }),
-    prisma.nutritionLog.findMany({
-      where: { clientId: user.id, date: { gte: gridStart, lte: gridEnd } },
-      select: { date: true, calories: true },
-    }),
-    prisma.weightLog.findMany({
-      where: { clientId: user.id, date: { gte: gridStart, lte: gridEnd } },
-      select: { date: true, weight: true },
-    }),
+    features.nutrition
+      ? prisma.nutritionLog.findMany({
+          where: { clientId: user.id, date: { gte: gridStart, lte: gridEnd } },
+          select: { date: true, calories: true },
+        })
+      : Promise.resolve([] as { date: Date; calories: number }[]),
+    features.weight
+      ? prisma.weightLog.findMany({
+          where: { clientId: user.id, date: { gte: gridStart, lte: gridEnd } },
+          select: { date: true, weight: true },
+        })
+      : Promise.resolve([] as { date: Date; weight: unknown }[]),
   ]);
 
   type DaySession = { id: string; kind: string; label: string; done: boolean };
@@ -147,7 +154,11 @@ export default async function ClientCalendarPage({
         </div>
 
         <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-          {summary.map((stat) => (
+          {summary
+            .filter((stat) =>
+              stat.label === 'Days logged' ? features.nutrition : stat.label === 'Weigh-ins' ? features.weight : true
+            )
+            .map((stat) => (
             <div key={stat.label} className="flex items-baseline gap-2">
               <dt className="readout text-[10px] uppercase text-muted-foreground">{stat.label}</dt>
               <dd className="readout text-sm text-foreground">{stat.value}</dd>

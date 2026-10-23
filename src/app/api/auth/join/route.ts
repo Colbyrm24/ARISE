@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { prisma } from '@/lib/prisma';
+import { stripe } from '@/lib/stripe';
 import { notify } from '@/lib/notifications';
 import { createStripePaymentLink } from '@/lib/payment-link';
 import { attachClientToCoach } from '@/lib/onboard-client';
@@ -128,8 +129,46 @@ export async function POST(request: Request) {
   */
   const existing = await prisma.client.findUnique({
     where: { userId: dbUser.id },
-    select: { status: true, startDate: true },
+    select: { status: true, startDate: true, tier: true },
   });
+
+  /*
+    A Follow My Split member taking up 1-on-1 coaching.
+
+    They become a coaching client below (tier is set on every write here), and
+    their $16.99 subscription has to stop — otherwise it bills alongside the
+    coaching plan with nothing in ARISE to show it. Cancelled outright, not at
+    period end: coaching includes everything the subscription did. A failure
+    is logged and handed to the coach rather than blocking the join.
+  */
+  if (existing?.tier === 'program') {
+    const memberSubs = await prisma.subscription.findMany({
+      where: {
+        clientId: dbUser.id,
+        deletedAt: null,
+        provider: 'stripe',
+        providerSubscriptionId: { not: null },
+        status: { in: ['active', 'past_due'] },
+      },
+      select: { providerSubscriptionId: true },
+    });
+    for (const sub of memberSubs) {
+      try {
+        await stripe.subscriptions.cancel(sub.providerSubscriptionId as string);
+      } catch (err) {
+        console.error('Could not cancel a member subscription on joining coaching', {
+          clientId: dbUser.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        await notify(
+          invite.coachId,
+          'account',
+          `${fullName || user.email} moved from Follow My Split to coaching, but their $16.99 subscription could not be cancelled automatically — cancel ${sub.providerSubscriptionId} in Stripe.`,
+          { clientId: dbUser.id }
+        );
+      }
+    }
+  }
 
   /*
     Their startDate is the one the coach typed on the invite, not today: these
@@ -154,17 +193,26 @@ export async function POST(request: Request) {
       data: {
         userId: dbUser.id,
         status: arriving,
+        tier: 'coaching',
         coachId: invite.coachId,
         ...(invite.skipPayment ? { startDate: invite.startDate } : {}),
       },
     });
   } else {
-    const next = statusForExistingClient(existing.status, arriving);
+    /*
+      A member's status describes their $16.99 subscription, not coaching —
+      an `active` member arriving on a paid invite still has to pay and sign.
+      So for them the invite's arrival status applies as if they were new.
+    */
+    const next =
+      existing.tier === 'program' ? arriving : statusForExistingClient(existing.status, arriving);
 
     await prisma.client.update({
       where: { userId: dbUser.id },
       data: {
         coachId: invite.coachId,
+        tier: 'coaching',
+        offerId: null,
         ...(next ? { status: next } : {}),
         ...(invite.skipPayment && !existing.startDate
           ? { startDate: invite.startDate }
