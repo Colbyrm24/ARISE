@@ -22,6 +22,7 @@ import { GoalBar } from '@/components/client/goal-bar';
 import { todayFor, hourIn, zoneOf, startOfDay, dayIn } from '@/lib/day';
 import { ProgressRing, ProgressBar } from '@/components/client/progress-ring';
 import { toggleHabit, logSteps, logCardio } from './actions';
+import { featuresFor } from '@/lib/membership';
 
 /*
   Which day this screen is showing.
@@ -92,9 +93,12 @@ function greeting(h: number) {
 export default async function TodayPage({
   searchParams,
 }: {
-  searchParams?: { d?: string };
+  searchParams?: { d?: string; joined?: string };
 }) {
   const user = await requireEntitledClient();
+  // What this person's app includes — a Follow My Split member has no
+  // nutrition, coach messages or habits, and under 18 no weigh-ins.
+  const features = featuresFor(user.clientRecord, todayFor(user));
   const firstName = user?.profile?.fullName?.split(' ')[0] ?? 'there';
   const tz = zoneOf(user.profile);
   const today = todayFor(user);
@@ -418,6 +422,17 @@ export default async function TodayPage({
         </div>
       </header>
 
+      {/*
+        The first screen after paying for Follow My Split. One line, so the
+        thing they actually came for — today's session, right underneath —
+        is still the first thing they see.
+      */}
+      {searchParams?.joined && (
+        <p className="border border-accent/40 bg-accent/10 px-3 py-2 text-sm lg:col-span-2">
+          You&apos;re in. Here&apos;s today — every workout is already on your calendar.
+        </p>
+      )}
+
       <div className="lg:col-span-2">
         <WeekStrip days={weekDays} />
       </div>
@@ -681,13 +696,13 @@ export default async function TodayPage({
             </Link>
           </SystemWindowContent>
         </SystemWindow>
-      ) : (
+      ) : features.habits ? (
         <SystemWindow title="Goal">
           <SystemWindowContent className="pt-4 text-sm text-muted-foreground">
             Your coach hasn’t set your daily habits yet.
           </SystemWindowContent>
         </SystemWindow>
-      )}
+      ) : null}
 
 
       {/*
@@ -744,6 +759,7 @@ export default async function TodayPage({
       )}
 
       {/* Nutrition */}
+      {features.nutrition && (
       <Link href="/nutrition">
         <SystemWindow title="Nutrition" interactive>
           <SystemWindowContent className="flex flex-col gap-4 pt-4">
@@ -847,10 +863,11 @@ export default async function TodayPage({
           </SystemWindowContent>
         </SystemWindow>
       </Link>
+      )}
 
       {/* Steps + weight sit side by side — both are single figures, not
           progressions, so they read as a readout pair rather than two cards. */}
-      <div className="grid grid-cols-2 gap-4 lg:col-span-2">
+      <div className={`grid gap-4 lg:col-span-2 ${features.weight ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {/*
           The steps entry itself, not a button that did nothing.
 
@@ -911,6 +928,7 @@ export default async function TodayPage({
           </CardContent>
         </Card>
 
+        {features.weight && (
         <Link href="/progress">
           <Card interactive className="h-full">
             <CardContent className="pt-5">
@@ -926,9 +944,11 @@ export default async function TodayPage({
             </CardContent>
           </Card>
         </Link>
+        )}
       </div>
 
       {/* Message preview */}
+      {features.messages && (
       <Link href="/messages">
         <Card interactive>
           <CardContent className="flex items-center justify-between pt-5">
@@ -949,6 +969,7 @@ export default async function TodayPage({
           </CardContent>
         </Card>
       </Link>
+      )}
 
     </div>
   );

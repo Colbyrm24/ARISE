@@ -3,7 +3,7 @@ import { stripe } from '@/lib/stripe';
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { getSiteUrl } from '@/lib/site-url';
-import { arisePortalConfigurationId } from '@/lib/stripe-portal';
+import { arisePortalConfigurationId, memberPortalConfigurationId } from '@/lib/stripe-portal';
 
 /*
   The way out of a declining card.
@@ -39,7 +39,7 @@ export async function POST() {
   */
   const client = await prisma.client.findUnique({
     where: { userId: user.id },
-    select: { stripeCustomerId: true },
+    select: { stripeCustomerId: true, tier: true },
   });
 
   if (!client?.stripeCustomerId) {
@@ -64,7 +64,10 @@ export async function POST() {
       falling back to the default would be the one failure mode this exists
       to prevent.
     */
-    const configuration = await arisePortalConfigurationId(siteUrl);
+    const configuration =
+      client.tier === 'program'
+        ? await memberPortalConfigurationId(siteUrl)
+        : await arisePortalConfigurationId(siteUrl);
 
     const session = await stripe.billingPortal.sessions.create({
       customer: client.stripeCustomerId,

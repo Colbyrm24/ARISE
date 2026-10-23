@@ -15,7 +15,7 @@ import { CreditCard } from 'lucide-react';
   created server-side against the customer on the signed-in user's own row,
   never against an id this component could pass.
 */
-export function ManageBillingButton() {
+export function ManageBillingButton({ label = 'Update payment method' }: { label?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +46,7 @@ export function ManageBillingButton() {
         className="readout inline-flex w-fit items-center gap-1.5 border border-border px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent disabled:opacity-50"
       >
         <CreditCard size={12} />
-        {busy ? 'Opening…' : 'Update payment method'}
+        {busy ? 'Opening…' : label}
       </button>
       {error && <p className="text-xs leading-relaxed text-destructive">{error}</p>}
     </div>

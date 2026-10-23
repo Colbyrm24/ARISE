@@ -41,6 +41,55 @@ const PORTAL_MARKER = 'arise-portal-v1';
  * but a warm lambda serving a burst of profile visits should not ask Stripe
  * to enumerate configurations each time.
  */
+/*
+  Follow My Split members get their own portal, with cancelling ON.
+
+  The coaching portal above has cancellation off on purpose — a signed
+  six-month plan is not something a client ends with a button. A $16.99
+  month-to-month subscription is the opposite: "cancel anytime" is the
+  promise on the page they bought from. It cancels at the end of the period
+  they already paid for, so cancelling never cuts off a month they paid for.
+*/
+const MEMBER_PORTAL_MARKER = 'arise-member-portal-v1';
+let cachedMemberId: string | null = null;
+
+export async function memberPortalConfigurationId(siteUrl: string): Promise<string> {
+  if (cachedMemberId) return cachedMemberId;
+
+  const existing = await stripe.billingPortal.configurations.list({ limit: 100 });
+  const mine = existing.data.find(
+    (c) => c.active && c.metadata?.arise_portal === MEMBER_PORTAL_MARKER
+  );
+  if (mine) {
+    cachedMemberId = mine.id;
+    return mine.id;
+  }
+
+  const created = await stripe.billingPortal.configurations.create({
+    business_profile: {
+      privacy_policy_url: `${siteUrl}/privacy`,
+      terms_of_service_url: `${siteUrl}/terms`,
+    },
+    features: {
+      payment_method_update: { enabled: true },
+      invoice_history: { enabled: true },
+      subscription_cancel: {
+        enabled: true,
+        mode: 'at_period_end',
+        cancellation_reason: {
+          enabled: true,
+          options: ['too_expensive', 'unused', 'too_complex', 'other'],
+        },
+      },
+      subscription_update: { enabled: false, default_allowed_updates: [], products: null },
+      customer_update: { enabled: true, allowed_updates: ['email'] },
+    },
+    metadata: { arise_portal: MEMBER_PORTAL_MARKER },
+  });
+  cachedMemberId = created.id;
+  return created.id;
+}
+
 let cachedId: string | null = null;
 
 /**
@@ -105,4 +154,5 @@ export async function arisePortalConfigurationId(siteUrl: string): Promise<strin
 /** Test seam — clears the warm-instance cache. */
 export function resetPortalConfigurationCache() {
   cachedId = null;
+  cachedMemberId = null;
 }

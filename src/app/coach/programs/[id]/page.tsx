@@ -87,7 +87,7 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
       onboarding, before their first day, is the normal way round.
     */
     prisma.client.findMany({
-      where: { coachId: coach.id, status: { notIn: ['cancelled', 'completed'] } },
+      where: { coachId: coach.id, tier: 'coaching', status: { notIn: ['cancelled', 'completed'] } },
       select: {
         userId: true,
         status: true,

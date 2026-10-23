@@ -57,7 +57,25 @@ export default async function LeaderboardPage() {
     where: { coachId, status: 'active' },
     select: { clientId: true },
   });
-  const clientIds = relationships.map((r) => r.clientId);
+  /*
+    Only people on the same product, and only people currently in it.
+
+    Follow My Split members and 1-on-1 clients get separate boards: a teenager
+    following the split should be ranked against other people following the
+    split, and a $750 client never needs to see a list of strangers' first
+    names. A cancelled member keeps their relationship row, so status is
+    checked here too.
+  */
+  const tier = user.clientRecord?.tier === 'program' ? 'program' : 'coaching';
+  const sameBoard = await prisma.client.findMany({
+    where: {
+      userId: { in: relationships.map((r) => r.clientId) },
+      tier,
+      status: { in: ['onboarding', 'active', 'ending_soon'] },
+    },
+    select: { userId: true },
+  });
+  const clientIds = sameBoard.map((c) => c.userId);
   if (clientIds.length === 0) return null;
 
   /*

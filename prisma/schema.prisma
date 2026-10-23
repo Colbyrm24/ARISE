@@ -56,6 +56,7 @@ model User {
   cardioTypes            CardioType[]                @relation("CardioCoach")
   autoMessages           AutoMessage[]               @relation("AutoMessageCoach")
   invitesCreated         ClientInvite[]              @relation("CoachInvites")
+  programOffers          ProgramOffer[]              @relation("OfferCoach")
 
   @@map("users")
 }
@@ -146,6 +147,18 @@ model Client {
   // portal off, so a declining card had no way to be fixed by the person
   // whose card it was.
   stripeCustomerId String?  @unique @map("stripe_customer_id")
+
+  // Which product this person bought. `coaching` is 1-on-1 with an agreement;
+  // `program` is the low-ticket "follow my split" subscription — the program
+  // on their calendar and nothing that needs the coach personally (messages,
+  // calls, check-ins, nutrition review). Applied by hand:
+  // prisma/follow-my-split-migration.sql.
+  tier        String       @default("coaching")
+  // Asked on the program signup so under-13s can be turned away and under-18s
+  // get the version without weigh-ins and progress photos. Null for anyone who
+  // came in through coaching, where it was never asked.
+  birthDate   DateTime?    @map("birth_date") @db.Date
+  offerId     String?      @map("offer_id")
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
@@ -172,8 +185,11 @@ model Client {
   scheduledItems      ScheduledItem[]
   cardioLogs          CardioLog[]
 
+  offer ProgramOffer? @relation(fields: [offerId], references: [id])
+
   @@index([coachId])
   @@index([status])
+  @@index([tier])
   @@map("clients")
 }
 
@@ -271,6 +287,7 @@ model Plan {
   agreements    Agreement[]
   paymentLinks  PaymentLink[]
   invites       ClientInvite[]
+  programOffers ProgramOffer[]
 
   @@map("plans")
 }
@@ -553,6 +570,7 @@ model WorkoutTemplate {
   clientPrograms ClientProgram[]
   programDays    ProgramDay[]
   scheduledItems ScheduledItem[]
+  programOffers  ProgramOffer[]
 
   @@map("workout_templates")
 }
@@ -1341,4 +1359,49 @@ model AuditLog {
 
   @@index([targetType, targetId])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// FOLLOW MY SPLIT — the low-ticket subscription
+// ---------------------------------------------------------------------------
+
+// A public page anybody 13+ can subscribe on: one program, one Stripe price.
+//
+// The page lives at /follow/<slug>. Paying puts the person straight onto the
+// program's calendar with no invite, no agreement and nothing for the coach to
+// do; cancelling is theirs to do from their profile.
+model ProgramOffer {
+  id         String   @id @default(uuid())
+  coachId    String   @map("coach_id")
+  slug       String   @unique
+  title      String
+  pitch      String?
+  templateId String   @map("template_id")
+  planId     String   @map("plan_id")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  coach    User            @relation("OfferCoach", fields: [coachId], references: [id])
+  template WorkoutTemplate @relation(fields: [templateId], references: [id])
+  plan     Plan            @relation(fields: [planId], references: [id])
+  members  Client[]
+  visits   OfferVisit[]
+
+  @@map("program_offers")
+}
+
+// One row per visitor per day on an offer page — the "how many looked" half
+// of the conversion number. Unique so a refresh is not a second visit.
+model OfferVisit {
+  id        String   @id @default(uuid())
+  offerId   String   @map("offer_id")
+  visitor   String
+  day       DateTime @db.Date
+  createdAt DateTime @default(now()) @map("created_at")
+
+  offer ProgramOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, visitor, day])
+  @@index([offerId, day])
+  @@map("offer_visits")
 }

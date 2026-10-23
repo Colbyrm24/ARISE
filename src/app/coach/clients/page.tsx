@@ -67,6 +67,10 @@ export default async function CoachClientsPage({
   const clients = await prisma.client.findMany({
     where: {
       coachId: coach.id,
+      // Follow My Split members have their own screen, /coach/split — at
+      // this price there can be hundreds, and they would bury the people he
+      // coaches personally.
+      tier: 'coaching',
       // An empty segment must match nobody, not everybody — `in: []` is
       // exactly right here, where omitting the clause would silently show
       // the whole roster under a heading saying otherwise.

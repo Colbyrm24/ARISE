@@ -90,7 +90,11 @@ export async function getWaitingThreads(coachId: string): Promise<WaitingThread[
     where: {
       coachId,
       status: 'active',
-      NOT: { client: { clientRecord: { status: { in: ['cancelled', 'completed'] } } } },
+      // Follow My Split members have no thread with the coach.
+      NOT: [
+        { client: { clientRecord: { status: { in: ['cancelled', 'completed'] } } } },
+        { client: { clientRecord: { tier: 'program' } } },
+      ],
     },
     include: { client: { include: { profile: true } } },
   });
@@ -215,7 +219,11 @@ export async function countWaitingThreads(coachId: string): Promise<number> {
     where: {
       coachId,
       status: 'active',
-      NOT: { client: { clientRecord: { status: { in: ['cancelled', 'completed'] } } } },
+      // Follow My Split members have no thread with the coach.
+      NOT: [
+        { client: { clientRecord: { status: { in: ['cancelled', 'completed'] } } } },
+        { client: { clientRecord: { tier: 'program' } } },
+      ],
     },
     select: { clientId: true },
   });

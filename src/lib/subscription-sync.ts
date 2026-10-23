@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { programMetaOf, recordProgramSubscription } from '@/lib/program-offer';
 import { stripe } from '@/lib/stripe';
 import { notify } from '@/lib/notifications';
 import {
@@ -123,6 +124,14 @@ async function ensureLocalSubscription(stripeSubscriptionId: string) {
     });
     const session = sessions.data[0];
     if (!session) return null;
+
+    // A Follow My Split member: no PaymentLink, the session's metadata says
+    // who it is for.
+    const program = programMetaOf(session);
+    if (program) {
+      await recordProgramSubscription(program, stripeSubscriptionId);
+      return findSubscription(stripeSubscriptionId);
+    }
 
     /*
       The stored reference is the checkout session id for an ARISE-priced
@@ -469,7 +478,13 @@ export async function handleInvoicePaymentFailed(invoice: {
     once the feed could not tell them apart, which is also why the name is in
     the text now.
   */
-  if (!already) {
+  const member = await prisma.client.findUnique({
+    where: { userId: sub.clientId },
+    select: { tier: true },
+  });
+
+  // A member's declined card is Stripe's to chase, not the coach's.
+  if (!already && member?.tier !== 'program') {
     const who = await prisma.user.findUnique({
       where: { id: sub.clientId },
       include: { profile: true },
@@ -491,9 +506,21 @@ export async function handleInvoicePaymentFailed(invoice: {
 async function pauseForBilling(clientId: string, reason: string) {
   const client = await prisma.client.findUnique({
     where: { userId: clientId },
-    select: { status: true },
+    select: { status: true, tier: true },
   });
   if (!client || !['onboarding', 'active', 'ending_soon'].includes(client.status)) return false;
+
+  /*
+    A Follow My Split member whose subscription has ended is simply no longer
+    a member — they cancelled, or their card gave out. `cancelled` rather than
+    `paused`, because paused means "coaching is on hold, message your coach",
+    and a member has no coach thread to message. The coach is not told: at
+    this price there could be dozens a week, and none of them need him.
+  */
+  if (client.tier === 'program') {
+    await prisma.client.update({ where: { userId: clientId }, data: { status: 'cancelled' } });
+    return true;
+  }
 
   await prisma.client.update({ where: { userId: clientId }, data: { status: 'paused' } });
   await notifyCoach(clientId, reason);

@@ -6,6 +6,7 @@ import { SystemWindow, SystemWindowContent, Count } from '@/components/ui/system
 import { Button } from '@/components/ui/button';
 import { CHECK_IN_QUESTIONS, weekOfFor, formatWeek, readAnswers } from '@/lib/check-in';
 import { submitCheckIn } from './actions';
+import { requireFeature } from '@/lib/features';
 
 export default async function CheckInPage({
   searchParams,
@@ -13,6 +14,7 @@ export default async function CheckInPage({
   searchParams: { saved?: string };
 }) {
   const user = await requireEntitledClient();
+  await requireFeature('checkIn');
   const week = weekOfFor(user);
 
   const [current, previous] = await Promise.all([

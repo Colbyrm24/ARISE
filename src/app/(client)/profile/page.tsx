@@ -15,6 +15,7 @@ import { avatarSrc } from '@/lib/avatars';
 import { zoneOf } from '@/lib/day';
 import { AvatarUpload } from '@/components/client/avatar-upload';
 import { CoachingPlanCard } from '@/components/client/coaching-plan-card';
+import { MemberPlanCard } from '@/components/client/member-plan-card';
 
 const statusLabels: Record<string, string> = {
   lead: 'Lead',
@@ -51,7 +52,12 @@ export default async function ProfilePage() {
         Above the toggles on purpose. What somebody bought and how far
         through it they are outranks a notification switch.
       */}
-      {user && <CoachingPlanCard clientId={user.id} timeZone={zoneOf(user.profile)} />}
+      {user &&
+        (user.clientRecord?.tier === 'program' ? (
+          <MemberPlanCard clientId={user.id} timeZone={zoneOf(user.profile)} />
+        ) : (
+          <CoachingPlanCard clientId={user.id} timeZone={zoneOf(user.profile)} />
+        ))}
 
       {/* Hides itself once ARISE is on the home screen, and on desktop. */}
       <InstallGuide variant="card" />

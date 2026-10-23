@@ -267,7 +267,8 @@ export async function eraseClientData(userId: string): Promise<DeletionReport> {
     */
     await tx.client.updateMany({
       where: { userId },
-      data: { status: 'cancelled', endDate: new Date() },
+      // birthDate goes too: it is personal data, and the stub keeps none.
+      data: { status: 'cancelled', endDate: new Date(), birthDate: null },
     });
     await tx.user.update({
       where: { id: userId },

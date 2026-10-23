@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sun, Dumbbell, Apple, MessageCircle, CircleUser } from 'lucide-react';
+import { Sun, Dumbbell, Apple, MessageCircle, CircleUser, CalendarDays, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const items = [
@@ -13,17 +13,33 @@ const items = [
   { href: '/profile', label: 'Profile', icon: CircleUser },
 ] as const;
 
+/*
+  Filled in for whatever a member's app leaves out. A Follow My Split member
+  has no nutrition and no coach thread, so those two slots become the calendar
+  and their progress — still five, still the five they'd reach for.
+*/
+const fillers = [
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/progress', label: 'Progress', icon: TrendingUp },
+] as const;
+
 /**
  * The entire client navigation. Five items, nothing more — the brief
  * was explicit: don't add tabs just because a feature exists.
  */
-export function BottomNav() {
+export function BottomNav({ hidden = [] }: { hidden?: string[] }) {
   const pathname = usePathname();
+  const kept = items.filter((i) => !hidden.includes(i.href));
+  const shown = [
+    ...kept.slice(0, -1),
+    ...fillers.slice(0, items.length - kept.length),
+    ...kept.slice(-1),
+  ];
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-accent/25 bg-background/95 shadow-[0_-1px_0_hsl(var(--accent)/0.35),0_-14px_46px_-10px_hsl(var(--system)/0.7)] backdrop-blur">
       <ul className="mx-auto flex max-w-md items-stretch justify-between px-2 pb-[env(safe-area-inset-bottom)]">
-        {items.map(({ href, label, icon: Icon }) => {
+        {shown.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <li key={href} className="flex-1">

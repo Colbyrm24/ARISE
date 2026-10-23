@@ -12,6 +12,7 @@ import {
   voiceNotePath,
 } from '@/lib/voice-notes';
 import type { VoiceNoteResult } from '@/lib/voice-notes';
+import { requireFeature } from '@/lib/features';
 
 /*
   Who this client's coach is lives in @/lib/notifications now.
@@ -30,6 +31,7 @@ import type { VoiceNoteResult } from '@/lib/voice-notes';
 
 export async function sendMessageToCoach(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('messages');
   const body = (formData.get('body') as string | null)?.trim();
   if (!body) return;
 
@@ -71,6 +73,7 @@ export async function sendMessageToCoach(formData: FormData) {
  */
 export async function sendVoiceNoteToCoach(formData: FormData): Promise<VoiceNoteResult> {
   const user = await requireClient();
+  await requireFeature('messages');
 
   const audio = formData.get('audio');
   if (!(audio instanceof File)) return { error: 'That recording came through empty.' };

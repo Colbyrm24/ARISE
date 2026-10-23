@@ -6,6 +6,7 @@ import { requireClient } from '@/lib/auth';
 import { coachForClient, openSlotsFor, timeZoneOf } from '@/lib/booking';
 import { formatSlotFull } from '@/lib/schedule';
 import { notify } from '@/lib/notifications';
+import { requireFeature } from '@/lib/features';
 
 export type BookResult = { ok: true } | { ok: false; error: string };
 
@@ -26,6 +27,7 @@ function refresh() {
  */
 export async function bookSlot(formData: FormData): Promise<BookResult> {
   const user = await requireClient();
+  await requireFeature('booking');
 
   const startsAtRaw = (formData.get('startsAt') as string | null) ?? '';
   const startsAt = new Date(startsAtRaw);

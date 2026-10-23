@@ -105,7 +105,10 @@ type Candidate = { clientId: string; coachId: string; trigger: Trigger };
  */
 async function candidates(today: Date): Promise<Candidate[]> {
   const active = await prisma.client.findMany({
-    where: { status: 'active', coachId: { not: null } },
+    // 1-on-1 clients only. Follow My Split members have no message thread —
+    // an automatic "how we doin" to hundreds of $16.99 members is a coach
+    // DMing strangers, many of them teenagers.
+    where: { status: 'active', coachId: { not: null }, tier: 'coaching' },
     select: { userId: true, coachId: true },
   });
   if (active.length === 0) return [];

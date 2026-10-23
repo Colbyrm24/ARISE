@@ -5,11 +5,13 @@ import { BookSlots } from '@/components/book-slots';
 import { coachForClient, openSlotsFor, upcomingForClient, timeZoneOf, BOOK_AHEAD_DAYS } from '@/lib/booking';
 import { cancelBooking } from './actions';
 import { LocalTime } from '@/components/local-time';
+import { requireFeature } from '@/lib/features';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BookPage() {
   const user = await requireEntitledClient();
+  await requireFeature('booking');
   const coach = await coachForClient(user.id);
 
   const [days, upcoming] = await Promise.all([

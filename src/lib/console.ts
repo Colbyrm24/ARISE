@@ -79,7 +79,8 @@ export async function getSegments(coachId: string): Promise<Segment[]> {
       // Scoped to this coach. It took a coachId and then listed every client
       // in the database — harmless with one coach, wrong the moment there
       // are two, and the kind of wrong nobody notices until it matters.
-      where: { coachId, status: { notIn: ['cancelled', 'completed'] } },
+      // 1-on-1 clients only; members live on /coach/split.
+      where: { coachId, tier: 'coaching', status: { notIn: ['cancelled', 'completed'] } },
       include: { user: { include: { profile: true } } },
     }),
 

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireClient } from '@/lib/auth';
 import { todayFor } from '@/lib/day';
+import { requireFeature } from '@/lib/features';
 
 
 const MEASUREMENT_TYPES = ['waist', 'chest', 'arms', 'thighs', 'hips'] as const;
@@ -15,6 +16,7 @@ const MEASUREMENT_TYPES = ['waist', 'chest', 'arms', 'thighs', 'hips'] as const;
  */
 export async function logWeight(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('weight');
   const raw = formData.get('weight') as string | null;
   const weight = raw ? Number(raw) : NaN;
   if (!Number.isFinite(weight) || weight <= 0 || weight > 1500) return;
@@ -44,6 +46,7 @@ export async function logWeight(formData: FormData) {
 
 export async function logMeasurement(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('weight');
   const type = formData.get('type') as string | null;
   const raw = formData.get('value') as string | null;
   const value = raw ? Number(raw) : NaN;

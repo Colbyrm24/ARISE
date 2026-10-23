@@ -13,11 +13,12 @@ import { PhotoCompare } from '@/components/progress/photo-compare';
 import { comparePairs } from '@/lib/photo-compare';
 import { AchievementBoard } from '@/components/progress/achievement-board';
 import { achievementStatsFor } from '@/lib/achievement-stats';
-import { achievementsFor, earnedCount, ACHIEVEMENTS } from '@/lib/achievements';
+import { achievementsFor, earnedCount } from '@/lib/achievements';
 import { PHOTO_ANGLES, signPhotoUrls } from '@/lib/progress-photos';
 import { weekOfFor, formatWeek } from '@/lib/check-in';
 import { logWeight, logMeasurement, removeWeightLog } from './actions';
 import { uploadProgressPhoto, deleteProgressPhoto } from './photo-actions';
+import { featuresFor } from '@/lib/membership';
 
 const MEASUREMENTS = [
   { type: 'waist', label: 'Waist' },
@@ -30,6 +31,8 @@ const MEASUREMENTS = [
 
 export default async function ProgressPage() {
   const user = await requireEntitledClient();
+  // Under-18 members don't weigh in or upload photos; members have no check-in.
+  const features = featuresFor(user.clientRecord, todayFor(user));
   const since = daysAgoIn(90, zoneOf(user.profile));
   // Their week, not the server's — a Sunday-evening check-in on the west
   // coast is already Monday in UTC.
@@ -40,7 +43,20 @@ export default async function ProgressPage() {
     has been training for months opens this holding everything they earned
     before the feature existed.
   */
-  const badges = achievementsFor(await achievementStatsFor(user.id, todayFor(user), zoneOf(user.profile)));
+  /*
+    Only badges this person can actually earn. A member under 18 never weighs
+    in or uploads a photo, and nobody on Follow My Split logs protein, so
+    those would sit locked forever — and "Ten pounds down" is not a goal to
+    hand a 14-year-old.
+  */
+  const unearnable = new Set<string>([
+    ...(features.weight ? [] : ['down-10', 'down-20']),
+    ...(features.photos ? [] : ['first-photo']),
+    ...(features.nutrition ? [] : ['protein-week']),
+  ]);
+  const badges = achievementsFor(
+    await achievementStatsFor(user.id, todayFor(user), zoneOf(user.profile))
+  ).filter((b) => !unearnable.has(b.id));
 
   const [logs, measurements, photos, earliestPhotos, thisWeeksCheckIn] = await Promise.all([
     prisma.weightLog.findMany({
@@ -131,6 +147,7 @@ export default async function ProgressPage() {
         </p>
       </header>
 
+      {features.weight && (
       <Card>
         <CardContent className="flex flex-col gap-4 pt-6">
           <div className="flex items-baseline gap-3">
@@ -161,6 +178,7 @@ export default async function ProgressPage() {
           </form>
         </CardContent>
       </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -168,12 +186,13 @@ export default async function ProgressPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="readout text-[11px] uppercase tracking-wider text-muted-foreground">
-            {earnedCount(badges)} of {ACHIEVEMENTS.length} earned
+            {earnedCount(badges)} of {badges.length} earned
           </p>
           <AchievementBoard states={badges} />
         </CardContent>
       </Card>
 
+      {features.weight && (
       <Card>
         <CardHeader>
           <CardTitle>Last 90 days</CardTitle>
@@ -182,7 +201,9 @@ export default async function ProgressPage() {
           <WeightChart points={points} />
         </CardContent>
       </Card>
+      )}
 
+      {features.weight && (
       <Card>
         <CardHeader>
           <CardTitle>Measurements</CardTitle>
@@ -228,7 +249,9 @@ export default async function ProgressPage() {
           </form>
         </CardContent>
       </Card>
+      )}
 
+      {features.photos && (
       <Card>
         <CardHeader>
           <CardTitle>Photos</CardTitle>
@@ -273,7 +296,9 @@ export default async function ProgressPage() {
           <PhotoGrid photos={photoTiles} action={deleteProgressPhoto} />
         </CardContent>
       </Card>
+      )}
 
+      {features.checkIn && (
       <Link href="/check-in">
         <Card className="transition-colors hover:bg-secondary/40">
           <CardContent className="flex items-center justify-between pt-6">
@@ -290,8 +315,9 @@ export default async function ProgressPage() {
           </CardContent>
         </Card>
       </Link>
+      )}
 
-      {points.length > 0 && (
+      {features.weight && points.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Recent weigh-ins</CardTitle>

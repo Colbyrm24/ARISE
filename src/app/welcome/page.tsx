@@ -62,6 +62,20 @@ export default async function WelcomePage() {
   // Somebody who is entitled has no business here — send them to the app.
   if (isEntitled(status)) redirect('/today');
 
+  /*
+    A Follow My Split member who isn't active — they cancelled, their card
+    gave out, or they closed Stripe before paying. Everything on this page is
+    about a coach and an agreement they don't have; their way back in is the
+    offer page, which knows them and shows a single subscribe button.
+  */
+  if (user.clientRecord?.tier === 'program' && user.clientRecord.offerId) {
+    const offer = await prisma.programOffer.findUnique({
+      where: { id: user.clientRecord.offerId },
+      select: { slug: true },
+    });
+    if (offer) redirect(`/follow/${offer.slug}`);
+  }
+
   const firstName = user.profile?.fullName?.split(' ')[0] ?? 'there';
   const waiting = STATUS_WAITING[status] ?? STATUS_WAITING.lead!;
   const done = reached(status);

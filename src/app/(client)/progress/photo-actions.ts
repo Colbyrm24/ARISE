@@ -13,10 +13,12 @@ import {
   removePhoto,
 } from '@/lib/progress-photos';
 import { notifyCoach, displayName } from '@/lib/notifications';
+import { requireFeature } from '@/lib/features';
 
 
 export async function uploadProgressPhoto(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('photos');
 
   const angle = formData.get('angle') as string | null;
   if (!angle || !PHOTO_ANGLES.includes(angle as PhotoAngle)) return;

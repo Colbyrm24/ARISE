@@ -35,7 +35,7 @@ export const GOVERNING_STATE: string | null = null;
  * It is the one thing on the page a person uses to tell whether they are
  * reading what they agreed to.
  */
-export const LEGAL_EFFECTIVE = 'September 30, 2026';
+export const LEGAL_EFFECTIVE = 'October 23, 2026';
 
 /** Formatted for the line under each title. */
 export const effectiveLine = `Effective ${LEGAL_EFFECTIVE}`;

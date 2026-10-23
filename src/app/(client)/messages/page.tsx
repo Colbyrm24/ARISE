@@ -7,9 +7,11 @@ import { signVoiceNoteUrls } from '@/lib/voice-notes';
 import { avatarSrc } from '@/lib/avatars';
 import { initialsOf } from '@/lib/console';
 import { sendMessageToCoach, sendVoiceNoteToCoach } from './actions';
+import { requireFeature } from '@/lib/features';
 
 export default async function MessagesPage() {
   const user = await requireEntitledClient();
+  await requireFeature('messages');
 
   const rel = await prisma.coachClientRelationship.findFirst({
     where: { clientId: user.id, status: 'active' },

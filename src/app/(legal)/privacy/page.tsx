@@ -52,7 +52,9 @@ export default function PrivacyPage() {
         Your email address, and a password you set. The password is handled by our
         sign-in provider and is never stored by ARISE in a form anyone can read —
         not by your coach either. You can also add a name, a photo, a phone number
-        and your time zone, and none of those are required.
+        and your time zone, and none of those are required. If you subscribe to
+        Follow My Split we also ask for your date of birth, only to check you are
+        old enough and to decide which version of the app you get.
       </p>
 
       <h3>What you log</h3>
@@ -228,8 +230,20 @@ export default function PrivacyPage() {
 
       <h2>Age</h2>
       <p>
-        ARISE is for adults. Do not create an account if you are under 18. If we
-        learn an account belongs to someone under 18, it will be deleted.
+        One-on-one coaching is for adults. The Follow My Split subscription is
+        open to people 13 and older, and members under 18 need a parent or
+        guardian&rsquo;s permission. We ask for your date of birth when you
+        subscribe so we can check this. ARISE does not knowingly collect
+        information from anyone under 13 — if we learn an account belongs to
+        someone under 13, it will be deleted.
+      </p>
+      <p>
+        For members under 18 we collect less: ARISE does not ask them for body
+        weight, measurements or progress photos, and they have no messaging with
+        the coach. Their first name may appear on the members&rsquo;
+        consistency leaderboard, alongside a rank — never their weight, photos or
+        anything else. A parent or guardian can ask us to delete a minor&rsquo;s
+        account by emailing the address below.
       </p>
 
       <h2>Changes</h2>
