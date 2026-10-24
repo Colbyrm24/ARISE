@@ -46,7 +46,7 @@ const ITEMS = [
   { href: '/profile', label: 'Profile', icon: CircleUser },
 ] as const;
 
-export function SideNav() {
+export function SideNav({ hidden = [] }: { hidden?: string[] }) {
   const pathname = usePathname();
 
   return (
@@ -59,7 +59,7 @@ export function SideNav() {
       </span>
 
       <ul className="flex flex-col gap-0.5">
-        {ITEMS.map(({ href, label, icon: Icon }) => {
+        {ITEMS.filter((i) => !hidden.includes(i.href)).map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <li key={href}>

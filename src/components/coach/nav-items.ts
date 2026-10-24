@@ -9,6 +9,7 @@ import {
   UtensilsCrossed,
   CreditCard,
   Settings,
+  Megaphone,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -45,6 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/coach/meals', label: 'Meals', icon: Camera, badge: 'pendingMeals' },
   { href: '/coach/schedule', label: 'Schedule', icon: CalendarDays },
   { href: '/coach/programs', label: 'Programs', icon: ClipboardList },
+  { href: '/coach/split', label: 'Follow My Split', icon: Megaphone },
   { href: '/coach/exercises', label: 'Exercises', icon: Dumbbell },
   { href: '/coach/recipes', label: 'Recipes', icon: UtensilsCrossed },
   { href: '/coach/payments', label: 'Payments', icon: CreditCard },

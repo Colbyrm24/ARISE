@@ -105,7 +105,14 @@ export function DeleteAccount({ email }: { email: string }) {
         </ul>
       )}
 
-      {preview?.hasActiveSubscription && (
+      {preview?.hasActiveSubscription && preview.isMember && (
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Deleting your account also cancels your subscription straight away — you won&apos;t be
+          charged again.
+        </p>
+      )}
+
+      {preview?.hasActiveSubscription && !preview.isMember && (
         <p className="text-sm leading-relaxed text-destructive">
           You have an active payment plan.{' '}
           <strong className="font-semibold">

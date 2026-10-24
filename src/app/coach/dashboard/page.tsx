@@ -19,10 +19,11 @@ import { markAllNotificationsRead } from './notification-actions';
   below, read every row in the database.
 */
 async function getDashboardCounts(coachId: string) {
-  const mine = { client: { coachId } };
+  // 1-on-1 clients only. Members are counted on /coach/split.
+  const mine = { client: { coachId, tier: 'coaching' } };
   const [unreadMessages, newLeads, unsignedAgreements, failedPayments] = await Promise.all([
     prisma.message.count({ where: { recipientId: coachId, readAt: null } }),
-    prisma.client.count({ where: { coachId, status: { in: ['lead', 'payment_pending'] } } }),
+    prisma.client.count({ where: { coachId, tier: 'coaching', status: { in: ['lead', 'payment_pending'] } } }),
     prisma.agreement.count({ where: { signature: null, ...mine } }),
     prisma.payment.count({ where: { status: 'failed', ...mine } }),
   ]);
@@ -86,7 +87,7 @@ export default async function CoachDashboardPage() {
     // now 404 against the ownership guard on that page.
     user
       ? prisma.client.findMany({
-          where: { coachId: user.id },
+          where: { coachId: user.id, tier: 'coaching' },
           include: { user: { include: { profile: true } } },
           orderBy: { createdAt: 'desc' },
           take: 5,

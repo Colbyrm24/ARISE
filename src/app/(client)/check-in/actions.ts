@@ -6,9 +6,11 @@ import { prisma } from '@/lib/prisma';
 import { requireEntitledClient } from '@/lib/auth';
 import { CHECK_IN_QUESTIONS, weekOfFor, formatWeek, type CheckInAnswers } from '@/lib/check-in';
 import { notifyCoach, displayName } from '@/lib/notifications';
+import { requireFeature } from '@/lib/features';
 
 export async function submitCheckIn(formData: FormData) {
   const user = await requireEntitledClient();
+  await requireFeature('checkIn');
   const answers: CheckInAnswers = {};
 
   for (const q of CHECK_IN_QUESTIONS) {

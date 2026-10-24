@@ -61,6 +61,7 @@ const KEPT: Record<string, string> = {
   AutoMessage: 'coach-owned automation',
   Recipe: 'coach-owned recipe library',
   CoachAvailability: "the coach's own working hours",
+  ProgramOffer: "the coach's Follow My Split page",
   ClientInvite: "coach's record of an invite; the client's name is nulled",
   AuditLog: 'kept as a record of the action, with the actor detached',
 };

@@ -24,6 +24,7 @@ import {
   type PlanItem,
 } from '@/lib/nutrition-day';
 import { logMeal, logFood, logPlanItem, quickAddFood, removeMealLog } from './actions';
+import { requireFeature } from '@/lib/features';
 
 /*
   The client's nutrition screen.
@@ -188,6 +189,7 @@ export default async function NutritionPage({
   searchParams: { q?: string; cat?: string };
 }) {
   const user = await requireEntitledClient();
+  await requireFeature('nutrition');
   const recipeScope = await recipesVisibleToClient(user.id);
   const today = todayFor(user);
 

@@ -6,6 +6,7 @@ import { checkoutRefs } from '@/lib/billing';
 import { recordSubscriptionFromCheckout } from '@/lib/subscription-sync';
 import { isEntitled } from '@/lib/auth';
 import { notifyCoach } from '@/lib/notifications';
+import { finalizeProgramSession, programMetaOf } from '@/lib/program-offer';
 import type { PaymentLink, Plan, AgreementTemplate } from '@prisma/client';
 
 type PaymentLinkWithRelations = PaymentLink & { plan: Plan; template: AgreementTemplate };
@@ -236,7 +237,18 @@ export async function finalizeStripeSession(sessionId: string) {
     });
   }
 
-  if (!paymentLink) return null;
+  if (!paymentLink) {
+    /*
+      Not a coaching payment link — it may be a Follow My Split checkout,
+      which has no PaymentLink at all and is identified by its metadata.
+      `session` is always loaded by this point: the first lookup only skips
+      the retrieve when it FINDS a link.
+    */
+    if (session && programMetaOf(session)) {
+      await finalizeProgramSession(session);
+    }
+    return null;
+  }
 
   if (paymentLink.status === 'paid') {
     return prisma.agreement.findUnique({ where: { paymentLinkId: paymentLink.id } });

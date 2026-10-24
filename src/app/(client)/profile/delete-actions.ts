@@ -5,6 +5,7 @@ import { requireClient } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { eraseClientData, deleteAuthIdentity } from '@/lib/delete-account';
 import { notifyCoach, displayName } from '@/lib/notifications';
+import { stripe } from '@/lib/stripe';
 
 /*
   The client-facing half of account deletion.
@@ -53,7 +54,16 @@ export async function deletionPreview() {
     }),
   ]);
 
-  return { meals, workouts, photos, weights, hasActiveSubscription: Boolean(activeSub) };
+  return {
+    meals,
+    workouts,
+    photos,
+    weights,
+    hasActiveSubscription: Boolean(activeSub),
+    // A Follow My Split member's subscription is cancelled by deleting — see
+    // deleteMyAccount — so the warning about charges carrying on is not theirs.
+    isMember: user.clientRecord?.tier === 'program',
+  };
 }
 
 /**
@@ -72,6 +82,40 @@ export async function deleteMyAccount(typedEmail: string): Promise<DeleteResult>
   }
 
   // Written now, while there is still a name to write.
+  /*
+    A Follow My Split member deleting their account means they are done — and
+    unlike a coaching client there is nobody to "message to end coaching
+    first". Leaving a $16.99 charge running against an account that no longer
+    exists would bill somebody, possibly a teenager, for nothing. So it is
+    cancelled at Stripe here, BEFORE the data goes: afterwards the subscription
+    rows still exist but nothing is left to show them to. If Stripe refuses,
+    nothing is deleted and they are told why.
+  */
+  if (user.clientRecord?.tier === 'program') {
+    const subs = await prisma.subscription.findMany({
+      where: {
+        clientId: user.id,
+        deletedAt: null,
+        provider: 'stripe',
+        providerSubscriptionId: { not: null },
+        status: { notIn: ['canceled', 'completed'] },
+      },
+      select: { providerSubscriptionId: true },
+    });
+    try {
+      for (const sub of subs) {
+        await stripe.subscriptions.cancel(sub.providerSubscriptionId as string);
+      }
+    } catch (e) {
+      console.error('[delete-account] could not cancel member subscription', e);
+      return {
+        ok: false,
+        error:
+          'Nothing was deleted — we could not cancel your subscription first. Try again in a minute, or cancel it from "Manage or cancel" above.',
+      };
+    }
+  }
+
   const who = await displayName(user.id);
   try {
     await notifyCoach(

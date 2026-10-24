@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { runAutoMessages } from '@/lib/auto-message';
+import { topUpMemberCalendars } from '@/lib/program-offer';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,5 +78,18 @@ export async function GET(request: Request) {
   }
 
   const result = await runAutoMessages();
-  return NextResponse.json({ ok: true, ...result });
+
+  /*
+    Follow My Split members are written twelve weeks ahead, so the same daily
+    run keeps them topped up. Its own try: a failure here must not take the
+    messages' result with it, and the next day's run picks up where it left.
+  */
+  let members: { checked: number; extended: number } | { error: string };
+  try {
+    members = await topUpMemberCalendars();
+  } catch (err) {
+    members = { error: err instanceof Error ? err.message : String(err) };
+  }
+
+  return NextResponse.json({ ok: true, ...result, members });
 }

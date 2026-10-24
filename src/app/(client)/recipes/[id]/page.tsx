@@ -5,6 +5,7 @@ import { requireEntitledClient } from '@/lib/auth';
 import { recipesVisibleToClient } from '@/lib/recipe-scope';
 import { prisma } from '@/lib/prisma';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
+import { requireFeature } from '@/lib/features';
 
 /*
   How to actually make the meal.
@@ -49,6 +50,7 @@ function readIngredients(json: unknown): string[] {
 
 export default async function RecipePage({ params }: { params: { id: string } }) {
   const user = await requireEntitledClient();
+  await requireFeature('nutrition');
 
   /*
     Scoped, so the id in the URL is not the whole authorisation.

@@ -14,6 +14,7 @@ import {
 } from '@/lib/meal-photos';
 import { estimateMealFromPhoto } from '@/lib/meal-estimate';
 import { recordProteinGoal } from '@/lib/protein-goal';
+import { requireFeature } from '@/lib/features';
 
 /** What the photo logger tells the client, so the screen can say something real. */
 export type PhotoLogResult =
@@ -86,6 +87,7 @@ function quantityOf(formData: FormData) {
 
 export async function logMeal(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('nutrition');
   const recipeId = formData.get('recipeId') as string | null;
   const quantity = quantityOf(formData);
   if (!recipeId || quantity === null) return;
@@ -120,6 +122,7 @@ export async function logMeal(formData: FormData) {
 /** Logs a food from the library (or a previously saved custom food). */
 export async function logFood(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('nutrition');
   const foodId = formData.get('foodId') as string | null;
   const quantity = quantityOf(formData);
   if (!foodId || quantity === null) return;
@@ -172,6 +175,7 @@ export async function logFood(formData: FormData) {
  */
 export async function quickAddFood(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('nutrition');
 
   const name = ((formData.get('name') as string | null) ?? '').trim();
   const calories = Number(formData.get('calories'));
@@ -277,6 +281,7 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
     (role client, status lead, nothing paid) could drive the coach's API bill.
   */
   const user = await requireEntitledClient();
+  await requireFeature('nutrition');
 
   const photo = formData.get('photo');
   if (!(photo instanceof File) || photo.size === 0) {
@@ -420,6 +425,7 @@ export async function logMealFromPhoto(formData: FormData): Promise<PhotoLogResu
  */
 export async function logPlanItem(formData: FormData) {
   const user = await requireClient();
+  await requireFeature('nutrition');
   const itemId = formData.get('itemId') as string | null;
   if (!itemId) return;
 

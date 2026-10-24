@@ -85,3 +85,13 @@ test('no client-facing route creates a portal session of its own', () => {
       'configuration cannot be skipped.'
   );
 });
+
+test('cancelling is only ever offered to Follow My Split members', () => {
+  const body = code(route);
+  assert.match(
+    body,
+    /client\.tier === 'program'\s*\?\s*await memberPortalConfigurationId\(/,
+    'billing-portal/route.ts may open the cancel-enabled member portal only for tier "program" — ' +
+      'a 1-on-1 client on a signed plan must never get a cancel button.'
+  );
+});

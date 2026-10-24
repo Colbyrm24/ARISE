@@ -1,4 +1,4 @@
-import { requireClient } from '@/lib/auth';
+import { clientFeatures } from '@/lib/features';
 import { BottomNav } from '@/components/client/bottom-nav';
 import { SideNav } from '@/components/client/side-nav';
 import { backgroundOf } from '@/lib/backgrounds';
@@ -8,7 +8,7 @@ import { InstallGuide } from '@/components/client/install-guide';
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   // Server-side check — a coach account can never render this layout,
   // no matter what URL they type in.
-  const user = await requireClient();
+  const { user, hidden } = await clientFeatures();
 
   /*
     The client's chosen background.
@@ -41,7 +41,7 @@ export default async function ClientLayout({ children }: { children: React.React
       <div aria-hidden className="viewport-frame" />
       {/* From lg the named rail replaces the five-item bar; below it, nothing
           moves. See components/client/side-nav.tsx. */}
-      <SideNav />
+      <SideNav hidden={hidden} />
       {/*
         Renders nothing. Corrects Profile.timezone from the browser on first
         load, because until this existed nothing ever set it for a client and
@@ -53,7 +53,7 @@ export default async function ClientLayout({ children }: { children: React.React
         {children}
       </main>
       <div className="lg:hidden">
-        <BottomNav />
+        <BottomNav hidden={hidden} />
       </div>
       {/*
         Slides up on a phone that hasn't added ARISE to its home screen yet.

@@ -38,8 +38,11 @@ export default function TermsPage() {
 
       <h2>Who can use it</h2>
       <p>
-        You must be at least 18 years old and able to enter into a contract. One
-        account per person, and the account is yours — don&rsquo;t share your
+        One-on-one coaching is for people 18 and over who can enter into a
+        contract. The Follow My Split subscription is open to anyone{' '}
+        <strong>13 or older</strong>; if you are under 18, you need a parent or
+        guardian&rsquo;s permission to subscribe and use it. Nobody under 13 may
+        create an account. One account per person, and the account is yours — don&rsquo;t share your
         sign-in with anyone else. You&rsquo;re responsible for what happens under
         your account, so tell us if you think somebody else has access to it.
       </p>
@@ -103,6 +106,24 @@ export default function TermsPage() {
           harassment ends the arrangement.
         </li>
       </ul>
+
+      <h2>Follow My Split subscriptions</h2>
+      <p>
+        Follow My Split gives you {OPERATOR}&rsquo;s training program in the
+        app for a monthly price shown before you pay. It renews every month until
+        you cancel. <strong>You can cancel anytime</strong> from your profile
+        (&ldquo;Manage or cancel&rdquo;); you keep access until the end of the month
+        you have already paid for, and you are not charged again. There is no
+        contract and no minimum term. Payments already made are not refunded for a
+        partly used month. Deleting your account cancels the subscription
+        immediately.
+      </p>
+      <p>
+        A subscription includes the program, workout logging and progress
+        tracking. It does not include messaging, calls, check-ins or nutrition
+        coaching — those are part of one-on-one coaching. Members under 18 are not
+        asked for their body weight or progress photos.
+      </p>
 
       <h2>Payment</h2>
       <p>
