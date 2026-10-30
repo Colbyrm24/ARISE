@@ -19,6 +19,7 @@ import {
   type PatternEntry,
 } from '@/lib/program-calendar';
 import { readPhases } from '@/lib/program-phases';
+import { resyncTemplate } from '@/lib/program-subscribers';
 
 /*
   The program calendar's edits, as server actions.
@@ -48,7 +49,14 @@ async function guard(templateId: string): Promise<Guarded | null> {
 
 const DENIED: CalendarResult = { ok: false, message: 'That program is not yours.' };
 
-function refresh(templateId: string) {
+/*
+  Every edit here changes what lands on a calendar, so every successful one
+  ends here: subscribers' future days follow the master, then the page
+  re-renders. Awaited rather than fired off, so a coach who opens a client's
+  calendar right after an edit already sees it.
+*/
+async function refresh(templateId: string) {
+  await resyncTemplate(templateId);
   revalidatePath(`/coach/programs/${templateId}`);
 }
 
@@ -130,7 +138,7 @@ export async function addCalendarItems(
     await prisma.programCalendarItem.createMany({
       data: days.map((d) => ({ ...clean.fields, templateId, dayIndex: d, position: countOn.get(d) ?? 0 })),
     });
-    refresh(templateId);
+    await refresh(templateId);
     return { ok: true, message: days.length === 1 ? 'Added.' : `Added to ${days.length} days.` };
   });
 }
@@ -157,7 +165,7 @@ export async function updateCalendarItem(
       data: { ...clean.fields, dayIndex },
     });
     if (updated.count === 0) return { ok: false, message: 'That item is no longer on the calendar.' };
-    refresh(templateId);
+    await refresh(templateId);
     return { ok: true, message: 'Saved.' };
   });
 }
@@ -167,7 +175,7 @@ export async function deleteCalendarItem(templateId: string, itemId: string): Pr
     const g = await guard(templateId);
     if (!g) return DENIED;
     await prisma.programCalendarItem.deleteMany({ where: { id: itemId, templateId } });
-    refresh(templateId);
+    await refresh(templateId);
     return { ok: true, message: 'Removed.' };
   });
 }
@@ -186,7 +194,7 @@ export async function moveCalendarItem(templateId: string, itemId: string, dayIn
       data: { dayIndex },
     });
     if (moved.count === 0) return { ok: false, message: 'That item is no longer on the calendar.' };
-    refresh(templateId);
+    await refresh(templateId);
     return { ok: true };
   });
 }
@@ -221,7 +229,7 @@ export async function copyCalendarWeek(
         : []),
       prisma.programCalendarItem.createMany({ data: rows.map((r) => ({ ...r, templateId })) }),
     ]);
-    refresh(templateId);
+    await refresh(templateId);
     return {
       ok: true,
       message: `Week ${fromWeek} copied to ${targets.length} week${targets.length === 1 ? '' : 's'}.`,
@@ -277,7 +285,7 @@ export async function fillFromPattern(
         : []),
       prisma.programCalendarItem.createMany({ data: rows.map((r) => ({ ...r, templateId })) }),
     ]);
-    refresh(templateId);
+    await refresh(templateId);
     const weeks = programWeeks([{ id: range.id, weeks: (range.endDay - range.startDay + 1) / 7 }], []);
     return { ok: true, message: `Filled ${weeks} week${weeks === 1 ? '' : 's'} — ${rows.length} items.` };
   });

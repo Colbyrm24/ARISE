@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { requireCoach } from '@/lib/auth';
 import { DeleteProgramButton } from '@/components/coach/delete-program-button';
+import { programWeeks } from '@/lib/program-calendar';
 import { createTemplate, deleteTemplate, loadCoachProgram } from './actions';
 
 export default async function CoachProgramsPage() {
@@ -48,7 +49,7 @@ export default async function CoachProgramsPage() {
     rows; this is exact and it cannot fail to build.
   */
   const ids = templates.map((t) => t.id);
-  const [assignments, loggedTemplates] = await Promise.all([
+  const [assignments, loggedTemplates, phaseRows, lastDays] = await Promise.all([
     prisma.clientProgram.findMany({
       where: { templateId: { in: ids } },
       select: { templateId: true, active: true },
@@ -66,7 +67,40 @@ export default async function CoachProgramsPage() {
       select: { templateId: true },
       distinct: ['templateId'],
     }),
+    // For "N weeks · N phases", the way Trainerize's library reads.
+    prisma.programPhase.findMany({
+      where: { templateId: { in: ids } },
+      select: { templateId: true, weeks: true },
+    }),
+    // The last scheduled day on each calendar, so a program with no phase
+    // rows yet still reads as long as what is on it.
+    prisma.programCalendarItem.groupBy({
+      by: ['templateId'],
+      where: { templateId: { in: ids } },
+      _max: { dayIndex: true },
+    }),
   ]);
+
+  const phasesBy = new Map<string, { id: string; weeks: number }[]>();
+  phaseRows.forEach((p: { templateId: string; weeks: number }, i: number) => {
+    phasesBy.set(p.templateId, [...(phasesBy.get(p.templateId) ?? []), { id: String(i), weeks: p.weeks }]);
+  });
+  const lastDayBy = new Map<string, number>(
+    lastDays.map((r: { templateId: string; _max: { dayIndex: number | null } }) => [r.templateId, r._max.dayIndex ?? 0])
+  );
+  /*
+    Same arithmetic as the program page: the phases' weeks, or one implicit
+    phase of at least four weeks, stretched to cover anything scheduled past
+    them. A weekly-pattern program with neither reads as "Weekly", because
+    it repeats for as long as it is deployed for.
+  */
+  const shape = (id: string) => {
+    const phases = phasesBy.get(id) ?? [];
+    const last = lastDayBy.get(id) ?? 0;
+    if (phases.length === 0 && last === 0) return null;
+    const list = phases.length > 0 ? phases : [{ id: 'implicit', weeks: Math.max(4, Math.ceil(last / 7)) }];
+    return { weeks: programWeeks(list, last ? [{ dayIndex: last }] : []), phases: list.length };
+  };
 
   const liveCount = new Map<string, number>();
   const everAssigned = new Set<string>();
@@ -154,6 +188,7 @@ export default async function CoachProgramsPage() {
         <ul className="flex flex-col gap-3">
           {templates.map((t) => {
             const running = liveCount.get(t.id) ?? 0;
+            const size = shape(t.id);
             return (
               <li key={t.id}>
                 <Card interactive>
@@ -162,11 +197,23 @@ export default async function CoachProgramsPage() {
                       <p className="text-sm font-medium">{t.name}</p>
                       {t.description && <p className="text-xs text-muted-foreground">{t.description}</p>}
                       <div className="flex flex-wrap gap-1.5">
+                        {size ? (
+                          <>
+                            <Badge variant="outline">
+                              {size.weeks} week{size.weeks === 1 ? '' : 's'}
+                            </Badge>
+                            <Badge variant="outline">
+                              {size.phases} phase{size.phases === 1 ? '' : 's'}
+                            </Badge>
+                          </>
+                        ) : (
+                          <Badge variant="outline">Weekly</Badge>
+                        )}
                         <Badge variant="outline">
-                          {t._count.workouts} day{t._count.workouts === 1 ? '' : 's'}
+                          {t._count.workouts} workout{t._count.workouts === 1 ? '' : 's'}
                         </Badge>
                         <Badge variant={running > 0 ? 'accent' : 'outline'}>
-                          {running > 0 ? `Running with ${running}` : 'Not assigned'}
+                          {running} subscriber{running === 1 ? '' : 's'}
                         </Badge>
                       </div>
                     </Link>

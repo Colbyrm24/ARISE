@@ -365,7 +365,14 @@ export { dateOnly, addDays };
  * Deactivating everything first and reactivating exactly one still collapses
  * any duplicates an earlier deploy already left behind.
  */
-export async function setActiveProgram(clientId: string, templateId: string) {
+export async function setActiveProgram(clientId: string, templateId: string, startDate?: Date) {
+  /*
+    With a start date, this is a (re)subscription: the deploy just wrote Day 1
+    onto that date, so the subscription records it and is linked to the
+    master again. Without one — a Follow My Split top-up re-asserting the
+    program — the start date and the linked choice the coach made are kept.
+  */
+  const start = startDate ? { startDate: dateOnly(startDate), linked: true } : {};
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.clientProgram.updateMany({
       where: { clientId, active: true },
@@ -374,8 +381,8 @@ export async function setActiveProgram(clientId: string, templateId: string) {
 
     await tx.clientProgram.upsert({
       where: { clientId_templateId: { clientId, templateId } },
-      create: { clientId, templateId, active: true },
-      update: { active: true },
+      create: { clientId, templateId, active: true, ...start },
+      update: { active: true, ...start },
     });
   });
 }

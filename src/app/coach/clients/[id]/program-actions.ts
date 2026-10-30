@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { coachOwnsClient, coachOwnsTemplate } from '@/lib/coach-guard';
-import { deployProgram, setActiveProgram, DEFAULT_WEEKS, MAX_WEEKS } from '@/lib/program-deploy';
+import { DEFAULT_WEEKS, MAX_WEEKS } from '@/lib/program-deploy';
+import { subscribeClient } from '@/lib/program-subscribers';
 import { isDayKey, keyToDate } from '@/lib/schedule-move';
 
 export type StartProgramState = { ok: boolean; message: string };
@@ -48,15 +49,15 @@ export async function startProgram(
   const weeksRaw = Number(formData.get('weeks'));
   const weeks = Number.isInteger(weeksRaw) && weeksRaw >= 1 && weeksRaw <= MAX_WEEKS ? weeksRaw : DEFAULT_WEEKS;
 
-  const result = await deployProgram({ clientId, templateId, startDate: keyToDate(raw), weeks });
+  // The same path as the program's Add subscribers, so a client started from
+  // here shows up on its subscriber list with this start date, linked.
+  const result = await subscribeClient(clientId, templateId, keyToDate(raw), weeks);
   if (result.created === 0) {
     return {
       ok: false,
       message: "That program's week is empty. Open it and set what each day is first.",
     };
   }
-
-  await setActiveProgram(clientId, templateId);
 
   revalidatePath(`/coach/clients/${clientId}`);
   revalidatePath(`/coach/clients/${clientId}/calendar`);

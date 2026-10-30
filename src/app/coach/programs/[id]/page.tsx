@@ -19,7 +19,9 @@ import {
   phaseRanges,
   programWeeks,
 } from '@/lib/program-calendar';
-import { ProgramWeek, ProgramDeploy } from '@/components/coach/program-week';
+import { ProgramWeek } from '@/components/coach/program-week';
+import { ProgramSubscribers, type SubscriberRow } from '@/components/coach/program-subscribers';
+import { subscriptionProgress } from '@/lib/program-sync';
 import { ProgramCalendar, type CalItem } from '@/components/coach/program-calendar';
 import {
   newWorkout,
@@ -27,7 +29,6 @@ import {
   deleteWorkout,
   setProgramDay,
   setWeekSteps,
-  deployToClient,
   addPhase,
   updatePhase,
   deletePhase,
@@ -41,6 +42,7 @@ import {
   copyCalendarWeek,
   fillFromPattern,
 } from './calendar-actions';
+import { addSubscribers, removeSubscriber, unlinkSubscriber, relinkSubscriber } from './subscriber-actions';
 
 const inputClass =
   'flex h-10 w-full border border-input bg-secondary/40 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -105,8 +107,8 @@ export default async function ProgramBuilderPage({
 
   if (!template) notFound();
 
-  // Everything the week editor, the calendar and the deploy form need.
-  const [programDays, cardioTypes, clientRows, phaseRows, calendarRows] = await Promise.all([
+  // Everything the week editor, the calendar and the subscriber list need.
+  const [programDays, cardioTypes, clientRows, phaseRows, calendarRows, subRows] = await Promise.all([
     prisma.programDay.findMany({ where: { templateId: template.id }, orderBy: { weekday: 'asc' } }),
     prisma.cardioType.findMany({
       where: { coachId: coach.id, active: true },
@@ -114,7 +116,7 @@ export default async function ProgramBuilderPage({
       select: { id: true, name: true },
     }),
     /*
-      Who this program can be deployed to.
+      Who can be added as a subscriber.
 
       Every client on the roster was in this menu, cancelled and completed
       ones included — sorted alphabetically, so a former client sat between
@@ -147,6 +149,21 @@ export default async function ProgramBuilderPage({
       include: {
         workout: { select: { name: true } },
         cardioType: { select: { name: true } },
+      },
+    }),
+    // Its subscribers: every client this program is the active one for.
+    prisma.clientProgram.findMany({
+      where: { templateId: template.id, active: true },
+      select: {
+        id: true,
+        clientId: true,
+        startDate: true,
+        linked: true,
+        client: {
+          select: {
+            user: { select: { email: true, profile: { select: { fullName: true, timezone: true } } } },
+          },
+        },
       },
     }),
   ]);
@@ -182,6 +199,55 @@ export default async function ProgramBuilderPage({
   const ranges = phaseRanges(phases);
   const totalWeeks = programWeeks(phases, calendarRows);
   const onCalendar = calendarRows.length > 0;
+
+  /*
+    Whose calendar actually came from the program calendar. Sync only
+    follows those (planSync's weekly-pattern rule), so a subscriber deployed
+    from the old week says so instead of claiming to be in sync.
+  */
+  const fromCalendar = new Set(
+    onCalendar && subRows.length > 0
+      ? (
+          await prisma.scheduledItem.findMany({
+            where: { templateId: template.id, clientId: { in: subRows.map((s) => s.clientId) }, sourceKey: { not: null } },
+            select: { clientId: true },
+            distinct: ['clientId'],
+          })
+        ).map((r) => r.clientId)
+      : []
+  );
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  const subscribers: SubscriberRow[] = subRows
+    .map((s) => {
+      // Their today, from their own timezone — "week 3" flips at their midnight.
+      const progress = subscriptionProgress(s.startDate, todayIn(zoneOf(s.client.user.profile)), ranges, totalWeeks * 7);
+      let where = '—';
+      if (progress.state === 'upcoming') where = `Starts in ${progress.startsInDays} day${progress.startsInDays === 1 ? '' : 's'}`;
+      else if (progress.state === 'finished') where = 'Finished';
+      else if (progress.state === 'running') {
+        const phase = phases.find((p) => p.id === progress.phaseId);
+        where = phase
+          ? `${phase.name} · week ${progress.phaseWeek} (W${progress.week})`
+          : `Week ${progress.week}`;
+      }
+      let syncNote: string | null = null;
+      if (s.linked && onCalendar) {
+        if (!s.startDate) syncNote = 'Put on this program before start dates were kept — add them again to sync.';
+        else if (!fromCalendar.has(s.clientId))
+          syncNote = 'On the weekly-pattern version — add them again to move them onto the calendar and sync.';
+      }
+      return {
+        id: s.id,
+        clientId: s.clientId,
+        name: s.client.user.profile?.fullName || s.client.user.email,
+        start: s.startDate ? fmt(s.startDate) : null,
+        where,
+        linked: s.linked,
+        syncNote,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   /*
     Which phase each workout is listed under. A null phase — every workout
@@ -247,14 +313,20 @@ export default async function ProgramBuilderPage({
         <h1 className="text-2xl font-semibold">{template.name}</h1>
         <p className="readout mt-1 text-[11px] uppercase text-muted-foreground">
           {totalWeeks} week{totalWeeks === 1 ? '' : 's'} · {phases.length} phase{phases.length === 1 ? '' : 's'} ·{' '}
-          {template.workouts.length} workout{template.workouts.length === 1 ? '' : 's'}
+          {template.workouts.length} workout{template.workouts.length === 1 ? '' : 's'} · {subscribers.length}{' '}
+          subscriber{subscribers.length === 1 ? '' : 's'}
         </p>
       </header>
 
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
         <nav aria-label="Program" className="flex flex-col gap-3 lg:sticky lg:top-4">
           <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-0">
-            {railLink('summary', `${base}?view=summary`, 'Summary')}
+            {railLink(
+              'summary',
+              `${base}?view=summary`,
+              'Summary & Subscribers',
+              `${subscribers.length} subscriber${subscribers.length === 1 ? '' : 's'}`
+            )}
             {railLink('calendar', `${base}?view=calendar`, 'Calendar', onCalendar ? `${calItems.length} items` : 'empty')}
           </div>
           <span className={cn(labelClass, 'lg:mt-3 lg:px-3')}>Training phases</span>
@@ -320,13 +392,17 @@ export default async function ProgramBuilderPage({
                 </SystemWindowContent>
               </SystemWindow>
 
-              {/* Stays here until subscribers replace it: one client, one start date. */}
-              <ProgramDeploy
+              <ProgramSubscribers
                 templateId={template.id}
+                subscribers={subscribers}
                 clients={clients}
-                deployToClient={deployToClient}
                 defaultStart={defaultStart}
-                calendarWeeks={onCalendar ? totalWeeks : null}
+                programWeeks={totalWeeks}
+                onCalendar={onCalendar}
+                addSubscribers={addSubscribers}
+                removeSubscriber={removeSubscriber}
+                unlinkSubscriber={unlinkSubscriber}
+                relinkSubscriber={relinkSubscriber}
               />
 
               <ProgramWeek

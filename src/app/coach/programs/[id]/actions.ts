@@ -5,12 +5,8 @@ import { redirect } from 'next/navigation';
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
-import {
-  coachOwnsClient,
-  coachOwnsTemplate,
-  ownedWorkout,
-} from '@/lib/coach-guard';
-import { deployProgram, setActiveProgram, DEFAULT_WEEKS } from '@/lib/program-deploy';
+import { coachOwnsTemplate, ownedWorkout } from '@/lib/coach-guard';
+import { resyncTemplate } from '@/lib/program-subscribers';
 import {
   clampWeeks,
   defaultPhaseName,
@@ -27,9 +23,12 @@ import { ensurePhases, resolvePhase } from '@/lib/program-phases';
 
   Every one of these took a templateId (or a workoutId) off the form and
   wrote, with only `requireCoach()` in front of it — which answers "is this
-  person a coach", not "is this their program". `deployToClient`, at the
-  bottom of this same file, has always checked `template.coachId`. The
-  builders never did.
+  person a coach", not "is this their program". The deploy always checked
+  `template.coachId`; the builders never did. Putting clients on the program
+  lives in ./subscriber-actions.ts.
+
+  Any edit that changes what lands on a calendar ends with resyncTemplate,
+  which rewrites linked subscribers' future days (program-subscribers.ts).
 
   Where a row id and a templateId arrive together, the template is derived
   from the row and the submitted one is only used to revalidate a path.
@@ -179,6 +178,8 @@ export async function deleteWorkout(formData: FormData) {
     // foreign keys and both are right, so it stays.
   }
 
+  // Its calendar items went with it, so subscribers' future days do too.
+  if (workout.templateId) await resyncTemplate(workout.templateId);
   revalidatePath(`/coach/programs/${workout.templateId}`);
 }
 
@@ -246,66 +247,6 @@ export async function setWeekSteps(formData: FormData) {
   revalidatePath(`/coach/programs/${templateId}`);
 }
 
-export type DeployState = { ok: boolean; message: string };
-
-/**
- * Writes the week across a client's calendar for as many weeks as asked.
- *
- * This is the three-minute part: pick a client, pick a start date, press the
- * button, and six months of dated sessions exist. Guarded so a coach can only
- * deploy onto a client who is actually theirs.
- */
-export async function deployToClient(
-  _prev: DeployState,
-  formData: FormData
-): Promise<DeployState> {
-  const coach = await requireCoach();
-
-  const templateId = formData.get('templateId') as string | null;
-  const clientId = formData.get('clientId') as string | null;
-  if (!templateId || !clientId) return { ok: false, message: 'Pick a client first.' };
-
-  if (!(await coachOwnsClient(coach.id, clientId))) {
-    return { ok: false, message: 'That client is not yours.' };
-  }
-
-  const template = await prisma.workoutTemplate.findUnique({ where: { id: templateId } });
-  if (!template || (template.coachId !== coach.id && coach.role !== 'admin')) {
-    return { ok: false, message: 'That program is not yours.' };
-  }
-
-  const weeks = Number(formData.get('weeks')) || DEFAULT_WEEKS;
-
-  // A date input gives "2026-08-24" with no timezone. Parsed as UTC on
-  // purpose — treating it as local would shift the whole program by a day for
-  // anyone west of Greenwich.
-  const raw = (formData.get('startDate') as string | null) ?? '';
-  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00Z`) : new Date();
-  if (Number.isNaN(parsed.getTime())) return { ok: false, message: "That start date didn't read." };
-
-  const result = await deployProgram({ clientId, templateId, startDate: parsed, weeks });
-
-  if (result.created === 0) {
-    return {
-      ok: false,
-      message: 'Nothing to deploy — the calendar and the weekly pattern are both empty. Schedule something first.',
-    };
-  }
-
-  // Keep the assignment record in step, so anything still reading
-  // ClientProgram sees the same truth as the calendar just written.
-  await setActiveProgram(clientId, templateId);
-
-  revalidatePath(`/coach/programs/${templateId}`);
-  revalidatePath(`/coach/clients/${clientId}`);
-
-  const to = result.to.toISOString().slice(0, 10);
-  return {
-    ok: true,
-    message: `${result.created} days written through ${to} — ${result.workoutDays} sessions, ${result.restDays} rest days.${result.removed > 0 ? ` Replaced ${result.removed} from the previous deploy.` : ''}`,
-  };
-}
-
 /* ------------------------------------------------------------------------ */
 /* Training phases                                                           */
 /* ------------------------------------------------------------------------ */
@@ -338,6 +279,9 @@ export async function addPhase(formData: FormData) {
     },
   });
 
+  // The program just got longer; an empty phase adds nothing to a calendar
+  // today, but the sync is what keeps "where the program ends" in step.
+  await resyncTemplate(templateId);
   revalidatePath(`/coach/programs/${templateId}`);
   redirect(phasePath(templateId, created.id));
 }
@@ -382,6 +326,9 @@ export async function updatePhase(formData: FormData) {
       }),
       prisma.programPhase.update({ where: { id: phase.id }, data: { name, summary, weeks } }),
     ]);
+    // Everything after the phase moved, so every subscriber's future does.
+    // A rename or a new summary changes nothing on a calendar and skips this.
+    await resyncTemplate(templateId);
   } else {
     await prisma.programPhase.update({ where: { id: phase.id }, data: { name, summary } });
   }
@@ -427,6 +374,7 @@ export async function deletePhase(formData: FormData) {
     prisma.programPhase.delete({ where: { id: phase.id } }),
   ]);
 
+  await resyncTemplate(templateId);
   revalidatePath(`/coach/programs/${templateId}`);
   redirect(phasePath(templateId, heir.id));
 }

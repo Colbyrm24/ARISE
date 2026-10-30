@@ -7,6 +7,7 @@ import { requireCoach } from '@/lib/auth';
 import { ownedWorkout } from '@/lib/coach-guard';
 import { parseVideoUrl } from '@/lib/exercise-video';
 import { loadBuilderRows } from '@/lib/workout-rows';
+import { resyncTemplate } from '@/lib/program-subscribers';
 import {
   DEFAULT_PRESCRIPTION,
   buildSets,
@@ -121,6 +122,9 @@ export async function saveWorkoutDetails(
     if (typed !== null) data.estMinutes = typed;
   }
   await prisma.workout.update({ where: { id: workout.id }, data });
+  // The name is copied onto calendar rows as their label, so a rename
+  // reaches subscribers. Nothing else here does — rows point at the workout.
+  if (data.name !== undefined && workout.templateId) await resyncTemplate(workout.templateId);
   return settle(workout);
 }
 

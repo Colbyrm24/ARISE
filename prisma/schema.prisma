@@ -750,6 +750,7 @@ model ScheduledItem {
   @@index([clientId, date])
   @@index([batchId])
   @@index([clientId, sourceKey])
+  @@index([clientId, templateId])
   @@map("scheduled_items")
 }
 
@@ -896,6 +897,13 @@ model ClientProgram {
   templateId  String   @map("workout_template_id")
   assignedAt  DateTime @default(now()) @map("assigned_at")
   active      Boolean  @default(true)
+  // Day 1 of the program on this client's calendar. Null on rows written
+  // before subscribers existed; those show no current week and never resync.
+  startDate   DateTime? @db.Date @map("start_date")
+  // Linked to the master program: an edit to the template's calendar or
+  // phases rewrites this client's future, unfinished, unpinned days.
+  // Unlinked keeps the rows they have and stops following the master.
+  linked      Boolean  @default(true)
 
   client   Client          @relation(fields: [clientId], references: [userId])
   template WorkoutTemplate @relation(fields: [templateId], references: [id])
@@ -908,6 +916,7 @@ model ClientProgram {
   // client's Today screen picked one arbitrarily.
   // Applied by hand: prisma/one-row-per-period-migration.sql.
   @@unique([clientId, templateId])
+  @@index([templateId, active])
   @@map("client_programs")
 }
 

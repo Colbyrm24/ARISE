@@ -128,7 +128,7 @@ export async function setDay(
     const sessionWhere = { clientId, date, completedAt: null, kind: { in: SESSION_KINDS } };
     const existing = await tx.scheduledItem.findMany({
       where: sessionWhere,
-      select: { id: true, stepTarget: true, batchId: true, templateId: true, kind: true },
+      select: { id: true, stepTarget: true, batchId: true, templateId: true, kind: true, sourceKey: true },
     });
 
     // Steps are the target on every day, rest days included, so the day keeps
@@ -147,6 +147,12 @@ export async function setDay(
         batchId: keep?.batchId ?? null,
         // Owned by the program, so a re-deploy replaces it like any other day.
         templateId: keep?.templateId ?? program?.templateId ?? null,
+        /*
+          The replaced session's sourceKey rides along on the pinned row, so a
+          resync from the master sees that occurrence as hand-placed and
+          doesn't write the original session back onto the same day.
+        */
+        sourceKey: keep?.sourceKey ?? null,
         pinned: true,
       },
     });
