@@ -1,20 +1,21 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import {
   coachOwnsClient,
   coachOwnsTemplate,
   ownedWorkout,
-  ownedWorkoutExercise,
 } from '@/lib/coach-guard';
 import { deployProgram, setActiveProgram, DEFAULT_WEEKS } from '@/lib/program-deploy';
-import { parseLoggedWeight, parseSetCount } from '@/lib/set-prescription';
 
 /*
-  Server Actions for the single-program builder: add/remove days, and
-  add/remove exercises (with their sets) within a day.
+  Server Actions for the program page: create, duplicate and delete the
+  workouts in a program. Editing what is IN a workout lives with the workout
+  builder, in ./workouts/[workoutId]/actions.ts.
 
   Every one of these took a templateId (or a workoutId) off the form and
   wrote, with only `requireCoach()` in front of it — which answers "is this
@@ -26,27 +27,115 @@ import { parseLoggedWeight, parseSetCount } from '@/lib/set-prescription';
   from the row and the submitted one is only used to revalidate a path.
 */
 
-export async function addWorkout(formData: FormData) {
+/**
+ * "New workout": makes one and opens it in the builder.
+ *
+ * Created with a placeholder name rather than asking first, the way
+ * Trainerize does — the name box is the first thing on the builder, and a
+ * form in front of the form is one more screen on a phone. The minutes start
+ * automatic, so the builder's estimate fills them in as movements go in.
+ */
+export async function newWorkout(formData: FormData) {
   const coach = await requireCoach();
 
   const templateId = formData.get('templateId') as string | null;
-  const name = (formData.get('name') as string | null)?.trim();
-  if (!templateId || !name) return;
+  if (!templateId) return;
   if (!(await coachOwnsTemplate(coach.id, templateId))) return;
 
+  const last = await prisma.workout.findFirst({
+    where: { templateId },
+    orderBy: { dayOrder: 'desc' },
+    select: { dayOrder: true },
+  });
   const count = await prisma.workout.count({ where: { templateId } });
 
-  await prisma.workout.create({
-    data: { templateId, name, dayOrder: count + 1 },
+  const workout = await prisma.workout.create({
+    data: {
+      templateId,
+      name: `Workout ${count + 1}`,
+      dayOrder: (last?.dayOrder ?? 0) + 1,
+      estMinutesManual: false,
+    },
   });
 
   revalidatePath(`/coach/programs/${templateId}`);
+  redirect(`/coach/programs/${templateId}/workouts/${workout.id}`);
+}
+
+/**
+ * A full copy of a workout — header, every movement, every set, supersets and
+ * rest blocks — placed at the end of the program as "<name> (copy)".
+ *
+ * Superset ids are remapped rather than copied, so the copy's supersets can
+ * never be mistaken for the original's if the two ever share a list.
+ */
+export async function duplicateWorkout(formData: FormData) {
+  const coach = await requireCoach();
+
+  const owned = await ownedWorkout(coach.id, (formData.get('workoutId') ?? formData.get('id')) as string | null);
+  if (!owned || !owned.templateId) return;
+
+  const source = await prisma.workout.findUnique({
+    where: { id: owned.id },
+    include: {
+      workoutExercises: { orderBy: { order: 'asc' }, include: { sets: { orderBy: { setNumber: 'asc' } } } },
+    },
+  });
+  if (!source) return;
+
+  const last = await prisma.workout.findFirst({
+    where: { templateId: owned.templateId },
+    orderBy: { dayOrder: 'desc' },
+    select: { dayOrder: true },
+  });
+
+  const groups = new Map<string, string>();
+  const groupFor = (g: string | null) => {
+    if (!g) return null;
+    if (!groups.has(g)) groups.set(g, randomUUID());
+    return groups.get(g)!;
+  };
+
+  await prisma.workout.create({
+    data: {
+      templateId: owned.templateId,
+      name: `${source.name} (copy)`.slice(0, 120),
+      dayOrder: (last?.dayOrder ?? 0) + 1,
+      estMinutes: source.estMinutes,
+      estMinutesManual: source.estMinutesManual,
+      equipment: source.equipment,
+      instructions: source.instructions,
+      workoutExercises: {
+        create: source.workoutExercises.map((we) => ({
+          exerciseId: we.exerciseId,
+          order: we.order,
+          supersetGroup: groupFor(we.supersetGroup),
+          notes: we.notes,
+          restAfterSeconds: we.restAfterSeconds,
+          sets: {
+            create: we.sets.map((s) => ({
+              setNumber: s.setNumber,
+              type: s.type,
+              targetReps: s.targetReps,
+              targetWeight: s.targetWeight,
+              targetRir: s.targetRir,
+              tempo: s.tempo,
+              restSeconds: s.restSeconds,
+            })),
+          },
+        })),
+      },
+    },
+  });
+
+  revalidatePath(`/coach/programs/${owned.templateId}`);
 }
 
 export async function deleteWorkout(formData: FormData) {
   const coach = await requireCoach();
 
-  const workout = await ownedWorkout(coach.id, formData.get('workoutId') as string | null);
+  // `id` is what the shared confirm-to-delete button posts.
+  const workout = await ownedWorkout(coach.id, (formData.get('workoutId') ?? formData.get('id')) as string | null);
   if (!workout) return;
 
   try {
@@ -70,67 +159,6 @@ export async function deleteWorkout(formData: FormData) {
   }
 
   revalidatePath(`/coach/programs/${workout.templateId}`);
-}
-
-export async function addWorkoutExercise(formData: FormData) {
-  const coach = await requireCoach();
-
-  const exerciseId = formData.get('exerciseId') as string | null;
-  const owned = await ownedWorkout(coach.id, formData.get('workoutId') as string | null);
-  if (!owned || !exerciseId) return;
-  const workoutId = owned.id;
-  const templateId = owned.templateId;
-
-  // Capped. See parseSetCount: this had a floor of 1 and no ceiling, so a
-  // typed 30 wrote thirty set rows onto the client's daily screen and 1e9
-  // was an out-of-memory crash.
-  const numSets = parseSetCount(formData.get('numSets') as string | null);
-  const targetReps = (formData.get('targetReps') as string | null)?.trim() || null;
-  const restSecondsRaw = formData.get('restSeconds') as string | null;
-  // Same Decimal(6,2) column as a logged weight, so the same bounds.
-  const targetWeight = parseLoggedWeight(formData.get('targetWeight') as string | null) ?? null;
-  const restSecondsParsed = restSecondsRaw ? Number(restSecondsRaw) : null;
-  // Rest is an Int column; an hour is already absurd for a rest period.
-  const restSeconds =
-    restSecondsParsed !== null && Number.isFinite(restSecondsParsed)
-      ? Math.min(Math.max(0, Math.round(restSecondsParsed)), 3600)
-      : null;
-
-  const order = await prisma.workoutExercise.count({ where: { workoutId } });
-
-  const workoutExercise = await prisma.workoutExercise.create({
-    data: { workoutId, exerciseId, order: order + 1 },
-  });
-
-  await prisma.workoutSet.createMany({
-    data: Array.from({ length: numSets }, (_, i) => ({
-      workoutExerciseId: workoutExercise.id,
-      setNumber: i + 1,
-      targetReps,
-      targetWeight: targetWeight ?? undefined,
-      restSeconds: restSeconds ?? undefined,
-    })),
-  });
-
-  revalidatePath(`/coach/programs/${templateId}`);
-}
-
-export async function deleteWorkoutExercise(formData: FormData) {
-  const coach = await requireCoach();
-
-  const owned = await ownedWorkoutExercise(
-    coach.id,
-    formData.get('workoutExerciseId') as string | null
-  );
-  if (!owned) return;
-
-  try {
-    await prisma.workoutExercise.delete({ where: { id: owned.id } });
-  } catch {
-    // Has logged sets against it — leave it in place.
-  }
-
-  revalidatePath(`/coach/programs/${owned.templateId}`);
 }
 
 /* ------------------------------------------------------------------------ */

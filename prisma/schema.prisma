@@ -585,6 +585,13 @@ model Workout {
   // aside, what they need around them, and what the coach wants out of the
   // session. Without these the screen is a bare list of movements.
   estMinutes   Int?     @map("est_minutes")
+  // False when est_minutes is the builder's own estimate, which it rewrites
+  // after every change; true once the coach has typed a number, which is then
+  // left alone. Defaults true so every existing workout keeps the minutes it
+  // was given. The estimate is stored rather than computed on read so Today,
+  // the calendar and the Follow page — which only select est_minutes — all
+  // show it without loading every set.
+  estMinutesManual Boolean @default(true) @map("est_minutes_manual")
   equipment    String[]
   instructions String?
 
@@ -755,8 +762,18 @@ model WorkoutExercise {
   workoutId      String  @map("workout_id")
   exerciseId     String  @map("exercise_id")
   order          Int
+  // Adjacent rows sharing an id are one superset, done back to back. Kept
+  // honest (adjacent, never a group of one) by normalizeGroups in
+  // src/lib/workout-builder.ts.
   supersetGroup  String? @map("superset_group")
   notes          String?
+  // A rest block AFTER this movement (or after the superset it ends), in
+  // seconds — "Rest 3 min" between exercises, as opposed to the rest between
+  // sets that lives on each WorkoutSet. A column rather than a row type of
+  // its own because a rest row would need exercise_id to be nullable, and
+  // every reader of this table assumes a movement. Applied by hand:
+  // prisma/workout-builder-migration.sql.
+  restAfterSeconds Int? @map("rest_after_seconds")
 
   workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   exercise Exercise @relation(fields: [exerciseId], references: [id])

@@ -1,28 +1,24 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Trash2, GripVertical } from 'lucide-react';
+import { ArrowLeft, Copy, Dumbbell, Pencil, Plus } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
+import { DeleteProgramButton } from '@/components/coach/delete-program-button';
 import { requireCoach, isEntitled } from '@/lib/auth';
 import { todayIn, zoneOf } from '@/lib/day';
 import { dayKey } from '@/lib/month-grid';
 import { STATUS_LABELS } from '@/lib/client-status';
-import { MAX_SETS_PER_EXERCISE, MAX_LOGGED_WEIGHT } from '@/lib/set-prescription';
+import { estimateMinutes, thumbnailFor } from '@/lib/workout-builder';
 import { ProgramWeek } from '@/components/coach/program-week';
 import {
-  addWorkout,
+  newWorkout,
+  duplicateWorkout,
   deleteWorkout,
-  addWorkoutExercise,
-  deleteWorkoutExercise,
   setProgramDay,
   setWeekSteps,
   deployToClient,
 } from './actions';
-
-const selectClass =
-  'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
 export default async function ProgramBuilderPage({ params }: { params: { id: string } }) {
   const coach = await requireCoach();
@@ -50,7 +46,10 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
         include: {
           workoutExercises: {
             orderBy: { order: 'asc' },
-            include: { exercise: true, sets: { orderBy: { setNumber: 'asc' } } },
+            include: {
+              exercise: { select: { videoUrl: true, video: { select: { thumbnailUrl: true } } } },
+              sets: { orderBy: { setNumber: 'asc' } },
+            },
           },
         },
       },
@@ -58,10 +57,6 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
   });
 
   if (!template) notFound();
-
-  const exercises = await prisma.exercise.findMany({
-    orderBy: [{ musclePrimary: 'asc' }, { name: 'asc' }],
-  });
 
   // Everything the week editor and the deploy form need to fill their menus.
   const [programDays, cardioTypes, clientRows] = await Promise.all([
@@ -123,15 +118,6 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
   */
   const defaultStart = dayKey(todayIn(zoneOf(coach.profile)));
 
-  // A few hundred exercises in one flat dropdown is unusable, so they're
-  // grouped by muscle — the browser renders these as labelled sections.
-  const grouped = new Map<string, typeof exercises>();
-  for (const ex of exercises) {
-    if (!grouped.has(ex.musclePrimary)) grouped.set(ex.musclePrimary, []);
-    grouped.get(ex.musclePrimary)!.push(ex);
-  }
-  const exercisesByMuscle = [...grouped.entries()];
-
   return (
     <div className="flex flex-col gap-8">
       <Link
@@ -167,145 +153,108 @@ export default async function ProgramBuilderPage({ params }: { params: { id: str
         defaultStart={defaultStart}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Add Day</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form action={addWorkout} className="flex gap-3">
+      {/*
+        The program's workouts, laid out the way Trainerize's phase list is:
+        a picture, the name, "est. 41 min | 7 exercises", the first line of
+        the coach's instructions, and Edit / Duplicate / Delete. Everything
+        about what is IN a workout is edited in the builder — the list only
+        says what each one is.
+      */}
+      <SystemWindow
+        title="Workouts"
+        meta={`[${template.workouts.length}]`}
+      >
+        <SystemWindowContent className="flex flex-col gap-4">
+          <form action={newWorkout} className="flex justify-end">
             <input type="hidden" name="templateId" value={template.id} />
-            <Input name="name" placeholder="Day name (e.g. Push Day, Leg Day)" required className="flex-1" />
-            <Button type="submit" size="sm" className="w-fit shrink-0">
-              Add Day
+            <Button type="submit" size="sm">
+              <Plus size={14} />
+              New workout
             </Button>
           </form>
-        </CardContent>
-      </Card>
 
-      {template.workouts.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-            <GripVertical size={22} className="text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Add a day above to start building this program.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-5">
-          {template.workouts.map((workout) => (
-            <Card key={workout.id}>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base text-foreground">
-                    Day {workout.dayOrder} · {workout.name}
-                  </CardTitle>
-                  <form action={deleteWorkout}>
-                    <input type="hidden" name="workoutId" value={workout.id} />
-                    <input type="hidden" name="templateId" value={template.id} />
-                    <button
-                      type="submit"
-                      title="Delete day"
-                      className="text-muted-foreground transition-colors hover:text-destructive"
+          {template.workouts.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 border border-dashed border-border py-10 text-center">
+              <Dumbbell size={22} className="text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                No workouts yet. Press New workout to build the first one.
+              </p>
+            </div>
+          ) : (
+            <ul className="flex flex-col divide-y divide-border/60 border-y border-border/60">
+              {template.workouts.map((workout) => {
+                const first = workout.workoutExercises[0];
+                const thumb = first ? thumbnailFor(first.exercise) : null;
+                /*
+                  The stored minutes when there are some; otherwise worked out
+                  here, so a workout built before the builder existed still
+                  reads with a length instead of a gap.
+                */
+                const minutes =
+                  workout.estMinutes ??
+                  (estimateMinutes(
+                    workout.workoutExercises.map((we) => ({
+                      id: we.id,
+                      supersetGroup: we.supersetGroup,
+                      restAfterSeconds: we.restAfterSeconds,
+                      sets: we.sets,
+                    }))
+                  ) ||
+                    null);
+                const count = workout.workoutExercises.length;
+                const firstLine = workout.instructions?.split('\n').find((l) => l.trim())?.trim();
+                const href = `/coach/programs/${template.id}/workouts/${workout.id}`;
+                return (
+                  <li key={workout.id} className="flex items-start gap-3 py-3">
+                    <Link
+                      href={href}
+                      className="flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden border border-border bg-secondary/40"
                     >
-                      <Trash2 size={15} />
-                    </button>
-                  </form>
-                </div>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                {workout.workoutExercises.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No exercises yet.</p>
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {workout.workoutExercises.map((we) => (
-                      <li
-                        key={we.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/20 px-4 py-3"
-                      >
-                        <div>
-                          <p className="text-sm font-medium">{we.exercise.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {we.sets.length} set{we.sets.length === 1 ? '' : 's'}
-                            {we.sets[0]?.targetReps ? ` × ${we.sets[0].targetReps} reps` : ''}
-                            {we.sets[0]?.targetWeight ? ` @ ${Number(we.sets[0].targetWeight)} lb` : ''}
-                            {we.sets[0]?.restSeconds ? ` · ${we.sets[0].restSeconds}s rest` : ''}
-                          </p>
-                        </div>
-                        <form action={deleteWorkoutExercise}>
-                          <input type="hidden" name="workoutExerciseId" value={we.id} />
-                          <input type="hidden" name="templateId" value={template.id} />
+                      {thumb ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <Dumbbell size={18} className="text-muted-foreground" />
+                      )}
+                    </Link>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <Link href={href} className="truncate text-sm font-semibold hover:text-accent">
+                        {workout.name}
+                      </Link>
+                      <p className="readout text-[11px] uppercase text-muted-foreground">
+                        {minutes ? `est. ${minutes} min` : 'est. — min'} | {count} exercise{count === 1 ? '' : 's'}
+                      </p>
+                      {firstLine && <p className="line-clamp-1 text-xs text-muted-foreground">{firstLine}</p>}
+                      <div className="mt-1 flex flex-wrap items-center gap-4">
+                        <Link
+                          href={href}
+                          className="readout inline-flex items-center gap-1 text-[11px] uppercase text-accent hover:underline"
+                        >
+                          <Pencil size={12} />
+                          Edit
+                        </Link>
+                        <form action={duplicateWorkout}>
+                          <input type="hidden" name="workoutId" value={workout.id} />
                           <button
                             type="submit"
-                            title="Remove exercise"
-                            className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                            className="readout inline-flex items-center gap-1 text-[11px] uppercase text-muted-foreground hover:text-foreground"
                           >
-                            <Trash2 size={14} />
+                            <Copy size={12} />
+                            Duplicate
                           </button>
                         </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {exercises.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Add exercises to your{' '}
-                    <Link href="/coach/exercises" className="text-accent hover:underline">
-                      exercise library
-                    </Link>{' '}
-                    first.
-                  </p>
-                ) : (
-                  <form action={addWorkoutExercise} className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                    <input type="hidden" name="workoutId" value={workout.id} />
-                    <input type="hidden" name="templateId" value={template.id} />
-                    <select name="exerciseId" className={`${selectClass} col-span-2 sm:col-span-1`} required defaultValue="">
-                      <option value="" disabled>
-                        Exercise…
-                      </option>
-                      {exercisesByMuscle.map(([muscleGroup, list]) => (
-                        <optgroup key={muscleGroup} label={muscleGroup}>
-                          {list.map((ex) => (
-                            <option key={ex.id} value={ex.id}>
-                              {ex.name} · {ex.equipment}
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    {/*
-                      max, not just min. Typing 30 instead of 3 used to write
-                      thirty set rows onto the client's daily screen, with no
-                      way to take them back once one had been logged. The
-                      action caps it too — this is so the box says so.
-                    */}
-                    <Input
-                      name="numSets"
-                      type="number"
-                      min="1"
-                      max={MAX_SETS_PER_EXERCISE}
-                      placeholder="Sets"
-                      defaultValue={3}
-                    />
-                    <Input name="targetReps" placeholder="Reps (e.g. 8-10)" />
-                    <Input
-                      name="targetWeight"
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      max={MAX_LOGGED_WEIGHT}
-                      placeholder="Weight (lb)"
-                    />
-                    <Input name="restSeconds" type="number" min="0" max="3600" placeholder="Rest (sec)" />
-                    <Button type="submit" size="sm" variant="secondary" className="col-span-2 w-fit sm:col-span-5">
-                      Add Exercise
-                    </Button>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                        {/* Two taps, the second naming the workout — a
+                            delete takes every movement and set with it. */}
+                        <DeleteProgramButton action={deleteWorkout} id={workout.id} name={workout.name} />
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </SystemWindowContent>
+      </SystemWindow>
     </div>
   );
 }
