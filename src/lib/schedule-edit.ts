@@ -74,12 +74,36 @@ export async function moveItem(clientId: string, itemId: string, to: string): Pr
   });
 }
 
+/**
+ * Remembers that the coach took these program occurrences off this client's
+ * calendar, on the client's subscription to the program that wrote them, so
+ * a resync from the master (planSync) never writes them back. Rows with no
+ * sourceKey — the old weekly deploy, hand-placed days — are never resynced
+ * and need nothing.
+ */
+async function skipSourceKeys(tx: Tx, clientId: string, rows: { templateId: string | null; sourceKey: string | null }[]) {
+  for (const r of rows) {
+    if (!r.templateId || !r.sourceKey) continue;
+    await tx.clientProgram.updateMany({
+      where: { clientId, templateId: r.templateId, NOT: { skippedKeys: { has: r.sourceKey } } },
+      data: { skippedKeys: { push: r.sourceKey } },
+    });
+  }
+}
+
 /** Take a session off the calendar. Finished ones are a record and stay. */
 export async function removeItem(clientId: string, itemId: string): Promise<EditResult> {
-  const removed = await prisma.scheduledItem.deleteMany({
-    where: { id: itemId, clientId, completedAt: null },
+  const removed = await prisma.$transaction(async (tx: Tx) => {
+    const row = await tx.scheduledItem.findFirst({
+      where: { id: itemId, clientId, completedAt: null },
+      select: { id: true, templateId: true, sourceKey: true },
+    });
+    if (!row) return 0;
+    const gone = await tx.scheduledItem.deleteMany({ where: { id: row.id, clientId, completedAt: null } });
+    if (gone.count > 0) await skipSourceKeys(tx, clientId, [row]);
+    return gone.count;
   });
-  return removed.count > 0
+  return removed > 0
     ? { ok: true, message: 'Removed.' }
     : { ok: false, message: "That one is already done or gone — it can't be removed." };
 }
@@ -135,6 +159,10 @@ export async function setDay(
     // whatever step goal it already had rather than losing it to the edit.
     const keep = existing[0];
     await tx.scheduledItem.deleteMany({ where: sessionWhere });
+    // Every replaced occurrence is skipped, not just the one whose key rides
+    // on the new row: a day with two sessions would otherwise get the second
+    // back, and removing the replacement later would restore the original.
+    await skipSourceKeys(tx, clientId, existing);
 
     await tx.scheduledItem.create({
       data: {

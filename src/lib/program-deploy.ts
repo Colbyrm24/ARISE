@@ -240,6 +240,13 @@ async function deployCalendar({ clientId, templateId, startDate }: DeployOptions
   */
   const skipKinds = client?.tier === 'coaching' ? [] : ['message'];
   const material = materialize(items, from, span * 7, { skipKinds });
+  // Nothing this client can receive (a calendar of only message items, for a
+  // member with no thread): stop before the clear, the way the week deploy
+  // does with an empty week. Callers read created 0 as "nothing deployed",
+  // so clearing first would wipe their calendar behind that message.
+  if (material.length === 0) {
+    return { created: 0, removed: 0, from, to, batchId: '', restDays: 0, workoutDays: 0 };
+  }
 
   const removed = await prisma.scheduledItem.deleteMany({
     where: {
@@ -372,7 +379,10 @@ export async function setActiveProgram(clientId: string, templateId: string, sta
     master again. Without one — a Follow My Split top-up re-asserting the
     program — the start date and the linked choice the coach made are kept.
   */
-  const start = startDate ? { startDate: dateOnly(startDate), linked: true } : {};
+  // A fresh deploy just restamped every occurrence, so the keys the coach had
+  // removed by hand belong to the old run; kept, the next resync would delete
+  // the freshly written rows that reuse them.
+  const start = startDate ? { startDate: dateOnly(startDate), linked: true, skippedKeys: [] as string[] } : {};
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.clientProgram.updateMany({
       where: { clientId, active: true },

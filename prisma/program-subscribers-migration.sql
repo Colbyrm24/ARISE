@@ -11,9 +11,19 @@
 --   whose rows came from the program calendar (they carry a source_key), so
 --   a client deployed from the old repeating week is left exactly as it was
 --   until the coach re-adds them.
+-- - skipped_keys is empty on every existing row.
+--
+-- Run order: workout-builder-migration.sql, then program-phases-migration.sql,
+-- then this file — and all three BEFORE the code from this branch is
+-- deployed. Prisma selects every column of a model by default, so until a
+-- column here exists every screen that reads client_programs (Today, the
+-- client page, Follow My Split) errors.
 
 alter table client_programs add column if not exists start_date date;
 alter table client_programs add column if not exists linked boolean not null default true;
+-- Program rows the coach removed or replaced on one client's calendar, by
+-- source_key, so a resync from the master never writes them back.
+alter table client_programs add column if not exists skipped_keys text[] not null default '{}';
 
 -- The subscriber list and every resync read "active subscriptions of this
 -- template".

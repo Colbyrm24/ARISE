@@ -68,6 +68,11 @@ export type SyncInput = {
   repeats?: boolean;
   /** Cover up to this date instead — how a top-up extends a calendar. */
   through?: Date;
+  /**
+   * sourceKeys the coach removed or replaced on this client's own calendar
+   * (ClientProgram.skippedKeys). Never written again by a sync.
+   */
+  skippedKeys?: string[];
 };
 
 export type SyncPlan = {
@@ -144,7 +149,22 @@ export function planSync(input: SyncInput): SyncPlan {
   const protectedKeys = new Set(
     input.existing.filter((r) => (r.pinned || r.completed) && r.sourceKey).map((r) => r.sourceKey as string)
   );
-  const deletable = input.existing.filter((r) => dayMs(r.date) >= today && !r.completed && !r.pinned);
+  // A row the coach took off this client's calendar stays off: without this
+  // the very next master edit would see the occurrence missing and write it
+  // straight back.
+  for (const k of input.skippedKeys ?? []) protectedKeys.add(k);
+  /*
+    Only rows from this subscription's own run can go. Rows of this template
+    dated before its start date are what an earlier deploy left — the old
+    weekly pattern, or the previous run when the coach re-added the client
+    with a later Day 1 — and the deploy deliberately kept them. A sync starts
+    from startDate, so it would otherwise find them "unwanted" and delete the
+    days between today and the new start on the next unrelated master edit.
+  */
+  const start = dayMs(input.startDate);
+  const deletable = input.existing.filter(
+    (r) => dayMs(r.date) >= today && dayMs(r.date) >= start && !r.completed && !r.pinned
+  );
 
   const firstRunEnd = dayMs(dateForDay(input.startDate, input.totalDays));
   const lastExisting = input.existing.reduce((m, r) => Math.max(m, dayMs(r.date)), 0);

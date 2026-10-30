@@ -904,6 +904,11 @@ model ClientProgram {
   // phases rewrites this client's future, unfinished, unpinned days.
   // Unlinked keeps the rows they have and stops following the master.
   linked      Boolean  @default(true)
+  // sourceKeys of program rows the coach took off (or replaced on) this
+  // client's calendar. Without this the next master edit's resync sees the
+  // occurrence missing and writes it straight back. Cleared by a fresh
+  // (re)subscribe, which restamps the whole program.
+  skippedKeys String[] @default([]) @map("skipped_keys")
 
   client   Client          @relation(fields: [clientId], references: [userId])
   template WorkoutTemplate @relation(fields: [templateId], references: [id])

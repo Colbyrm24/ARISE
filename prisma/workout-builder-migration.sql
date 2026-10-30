@@ -8,6 +8,11 @@
 --
 -- Supersets need no change: workout_exercises.superset_group has been in the
 -- table since the start and the builder is the first thing to write it.
+--
+-- Run order: this file first, then program-phases-migration.sql, then
+-- program-subscribers-migration.sql — all three before this branch's code is
+-- deployed (Prisma selects every column by default, so the client workout
+-- screen and the program pages error until these columns exist).
 
 alter table workout_exercises add column if not exists rest_after_seconds integer;
 alter table workouts add column if not exists est_minutes_manual boolean not null default true;

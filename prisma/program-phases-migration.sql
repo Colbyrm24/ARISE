@@ -12,6 +12,12 @@
 -- - The four new scheduled_items columns are null / false on every existing
 --   row, which is what a row from the old deploy is: no note, no written
 --   cardio target, no calendar item behind it, never hand-pinned.
+--
+-- Run order: after workout-builder-migration.sql, before
+-- program-subscribers-migration.sql — all three before this branch's code
+-- is deployed. Prisma selects every column by default, so a missing
+-- scheduled_items or workouts column breaks Today, both calendars and every
+-- program screen.
 
 create table if not exists program_phases (
   id          text primary key default gen_random_uuid()::text,

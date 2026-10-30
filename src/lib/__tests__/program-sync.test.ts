@@ -176,6 +176,72 @@ describe('planSync', () => {
     assert.deepEqual(plan.create, []);
   });
 
+  test('a row the coach removed from this client is not written back by the next edit', () => {
+    const items = [item('b', 8), item('c', 10)];
+    // The coach deleted c's Day 10 row from this one client's calendar.
+    const existing = deployed(items, START, 14).filter((r) => r.sourceKey !== 'ci:c:0');
+    const plan = planSync({
+      startDate: START,
+      today: TODAY,
+      items: [item('b', 8, { note: 'master edit' }), item('c', 10)],
+      totalDays: 14,
+      existing,
+      skippedKeys: ['ci:c:0'],
+    });
+    assert.ok(!plan.create.some((r) => r.sourceKey === 'ci:c:0'));
+    // The rest of the edit still lands.
+    assert.deepEqual(plan.create.map((r) => r.sourceKey), ['ci:b:0']);
+
+    // Without the skip it would have come straight back — the gap being fixed.
+    const unskipped = planSync({ startDate: START, today: TODAY, items, totalDays: 14, existing });
+    assert.ok(unskipped.create.some((r) => r.sourceKey === 'ci:c:0'));
+  });
+
+  test('a skipped key only skips that occurrence, not later cycles of the same item', () => {
+    const items = [item('a', 1), item('b', 8)];
+    const existing = deployed(items, START, 14);
+    const plan = planSync({
+      startDate: START,
+      today: TODAY,
+      items,
+      totalDays: 14,
+      existing,
+      through: d('2026-11-29'),
+      skippedKeys: ['ci:a:1'],
+    });
+    assert.deepEqual(plan.create.map((r) => r.sourceKey), ['ci:b:1']);
+  });
+
+  test('a replaced day stays off even after its pinned replacement is removed too', () => {
+    const items = [item('b', 8), item('c', 10)];
+    // c was replaced with a rest day (pinned, carrying c's key), then the coach
+    // removed that rest day as well: no row carries the key any more, but it
+    // is still skipped, so c does not reappear.
+    const existing = deployed(items, START, 14).filter((r) => r.sourceKey !== 'ci:c:0');
+    const plan = planSync({ startDate: START, today: TODAY, items, totalDays: 14, existing, skippedKeys: ['ci:c:0'] });
+    assert.deepEqual(plan.create, []);
+    assert.deepEqual(plan.deleteIds, []);
+  });
+
+  test('rows of this template from before the start date are not deleted', () => {
+    // Re-added with Day 1 on Nov 16: the deploy kept the old run's rows
+    // between today and then, and a sync must not take them on the next edit.
+    const NEW_START = d('2026-11-16');
+    const items = [item('a', 1), item('b', 3)];
+    const oldRun = deployed(items, START, 14).map((r) => ({ ...r, date: d('2026-11-10'), id: `old-${r.id}` }));
+    const newRun = deployed(items, NEW_START, 14);
+    const plan = planSync({
+      startDate: NEW_START,
+      today: TODAY,
+      items,
+      totalDays: 14,
+      existing: [...oldRun, ...newRun],
+    });
+    assert.deepEqual(plan.deleteIds, []);
+    assert.deepEqual(plan.create, []);
+    assert.equal(plan.kept, 2);
+  });
+
   test('message items are skipped for clients who cannot receive them', () => {
     const items = [item('m', 9, { kind: 'message', workoutId: null, workout: null, note: 'Deload' })];
     const plan = planSync({ startDate: START, today: TODAY, items, totalDays: 14, existing: [], skipKinds: ['message'] });

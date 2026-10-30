@@ -92,6 +92,7 @@ async function loadMaster(templateId: string) {
 type Subscription = {
   clientId: string;
   startDate: Date | null;
+  skippedKeys: string[];
   client: { tier: string; user: { profile: { timezone: string | null } | null } };
 };
 
@@ -142,6 +143,7 @@ function planFor(
     repeats: sub.client.tier === 'program',
     existing: rows.map(toExisting),
     through,
+    skippedKeys: sub.skippedKeys,
   });
 }
 
@@ -163,6 +165,7 @@ export async function resyncTemplate(templateId: string): Promise<ResyncResult> 
       select: {
         clientId: true,
         startDate: true,
+        skippedKeys: true,
         client: { select: { tier: true, user: { select: { profile: { select: { timezone: true } } } } } },
       },
     });
@@ -217,6 +220,7 @@ export async function extendSubscription(clientId: string, templateId: string, t
     select: {
       clientId: true,
       startDate: true,
+      skippedKeys: true,
       client: { select: { tier: true, user: { select: { profile: { select: { timezone: true } } } } } },
     },
   });
