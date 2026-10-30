@@ -11,6 +11,14 @@ import {
   ownedWorkout,
 } from '@/lib/coach-guard';
 import { deployProgram, setActiveProgram, DEFAULT_WEEKS } from '@/lib/program-deploy';
+import {
+  clampWeeks,
+  defaultPhaseName,
+  IMPLICIT_PHASE_ID,
+  phaseRanges,
+  resizePhase,
+} from '@/lib/program-calendar';
+import { ensurePhases, resolvePhase } from '@/lib/program-phases';
 
 /*
   Server Actions for the program page: create, duplicate and delete the
@@ -49,12 +57,21 @@ export async function newWorkout(formData: FormData) {
   });
   const count = await prisma.workout.count({ where: { templateId } });
 
+  // Made inside the phase it was created from. The implicit first phase is
+  // left as null, which already reads as the first phase — no row needed.
+  const rawPhase = (formData.get('phaseId') as string | null) || null;
+  const phaseId =
+    rawPhase && rawPhase !== IMPLICIT_PHASE_ID
+      ? (await prisma.programPhase.findFirst({ where: { id: rawPhase, templateId }, select: { id: true } }))?.id ?? null
+      : null;
+
   const workout = await prisma.workout.create({
     data: {
       templateId,
       name: `Workout ${count + 1}`,
       dayOrder: (last?.dayOrder ?? 0) + 1,
       estMinutesManual: false,
+      phaseId,
     },
   });
 
@@ -105,6 +122,7 @@ export async function duplicateWorkout(formData: FormData) {
       estMinutesManual: source.estMinutesManual,
       equipment: source.equipment,
       instructions: source.instructions,
+      phaseId: source.phaseId,
       workoutExercises: {
         create: source.workoutExercises.map((we) => ({
           exerciseId: we.exerciseId,
@@ -149,8 +167,11 @@ export async function deleteWorkout(formData: FormData) {
       a program_days row with kind='workout' and no workout is the state the
       client's Today screen renders as a dead Start button.
     */
+    // Off the program calendar too, for the same reason: an item pointing at
+    // a deleted workout would deploy a Start button that opens nothing.
     await prisma.$transaction([
       prisma.programDay.deleteMany({ where: { workoutId: workout.id } }),
+      prisma.programCalendarItem.deleteMany({ where: { workoutId: workout.id } }),
       prisma.workout.delete({ where: { id: workout.id } }),
     ]);
   } catch {
@@ -265,7 +286,10 @@ export async function deployToClient(
   const result = await deployProgram({ clientId, templateId, startDate: parsed, weeks });
 
   if (result.created === 0) {
-    return { ok: false, message: 'Nothing to deploy — the week is empty. Fill in some days first.' };
+    return {
+      ok: false,
+      message: 'Nothing to deploy — the calendar and the weekly pattern are both empty. Schedule something first.',
+    };
   }
 
   // Keep the assignment record in step, so anything still reading
@@ -280,4 +304,142 @@ export async function deployToClient(
     ok: true,
     message: `${result.created} days written through ${to} — ${result.workoutDays} sessions, ${result.restDays} rest days.${result.removed > 0 ? ` Replaced ${result.removed} from the previous deploy.` : ''}`,
   };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Training phases                                                           */
+/* ------------------------------------------------------------------------ */
+
+function phasePath(templateId: string, phaseId?: string) {
+  return phaseId ? `/coach/programs/${templateId}?view=${phaseId}` : `/coach/programs/${templateId}`;
+}
+
+/**
+ * "+ Add next phase": four weeks after the last one, named the way
+ * Trainerize names them ("Week 5 - 8"), and opened straight away.
+ */
+export async function addPhase(formData: FormData) {
+  const coach = await requireCoach();
+  const templateId = formData.get('templateId') as string | null;
+  if (!templateId || !(await coachOwnsTemplate(coach.id, templateId))) return;
+
+  const phases = await ensurePhases(templateId);
+  const ranges = phaseRanges(phases);
+  const nextWeek = (ranges[ranges.length - 1]?.endWeek ?? 0) + 1;
+  if (nextWeek > 52) return;
+  const weeks = Math.min(4, 52 - nextWeek + 1);
+
+  const created = await prisma.programPhase.create({
+    data: {
+      templateId,
+      name: defaultPhaseName(nextWeek, weeks),
+      weeks,
+      position: (phases[phases.length - 1]?.position ?? 0) + 1,
+    },
+  });
+
+  revalidatePath(`/coach/programs/${templateId}`);
+  redirect(phasePath(templateId, created.id));
+}
+
+/**
+ * Name, length and summary of one phase, in one submit.
+ *
+ * A length change moves the calendar with it: growing a phase pushes every
+ * later item back so the next phase still starts right after it; shrinking
+ * drops the items in the cut weeks and pulls the rest forward. The rule is
+ * resizePhase in program-calendar.ts; here it is one delete and one
+ * increment, both scoped to the template.
+ */
+export async function updatePhase(formData: FormData) {
+  const coach = await requireCoach();
+  const templateId = formData.get('templateId') as string | null;
+  if (!templateId || !(await coachOwnsTemplate(coach.id, templateId))) return;
+
+  const resolved = await resolvePhase(templateId, formData.get('phaseId') as string | null);
+  if (!resolved) return;
+  const { phase, phases } = resolved;
+
+  const name = ((formData.get('name') as string | null) ?? '').trim().slice(0, 80) || phase.name;
+  const summary = ((formData.get('summary') as string | null) ?? '').trim().slice(0, 2000) || null;
+  const rawWeeks = clampWeeks(formData.get('weeks') ?? phase.weeks);
+  // The whole program still has to fit in a year.
+  const others = phases.filter((p) => p.id !== phase.id).reduce((n, p) => n + p.weeks, 0);
+  const weeks = Math.max(1, Math.min(rawWeeks, 52 - others));
+
+  if (weeks !== phase.weeks) {
+    const range = phaseRanges(phases).find((r) => r.id === phase.id)!;
+    const items = await prisma.programCalendarItem.findMany({
+      where: { templateId, dayIndex: { gte: range.startDay } },
+      select: { id: true, dayIndex: true },
+    });
+    const plan = resizePhase(items, range, weeks);
+    await prisma.$transaction([
+      prisma.programCalendarItem.deleteMany({ where: { templateId, id: { in: plan.removeIds } } }),
+      prisma.programCalendarItem.updateMany({
+        where: { templateId, dayIndex: { gt: range.endDay } },
+        data: { dayIndex: { increment: plan.delta } },
+      }),
+      prisma.programPhase.update({ where: { id: phase.id }, data: { name, summary, weeks } }),
+    ]);
+  } else {
+    await prisma.programPhase.update({ where: { id: phase.id }, data: { name, summary } });
+  }
+
+  revalidatePath(`/coach/programs/${templateId}`);
+}
+
+/**
+ * Deletes a phase and its weeks of the calendar; later phases move up.
+ *
+ * Its workouts are never deleted with it — they may have sessions logged
+ * against them — and move to the phase before (or after, for the first).
+ * The last phase can't be deleted: a program always has at least one.
+ */
+export async function deletePhase(formData: FormData) {
+  const coach = await requireCoach();
+
+  // `id` is all the shared confirm-to-delete button posts, so the template is
+  // derived from the phase row — and never taken from the form anyway.
+  const phaseId = (formData.get('phaseId') ?? formData.get('id')) as string | null;
+  if (!phaseId) return;
+  const row = await prisma.programPhase.findUnique({ where: { id: phaseId }, select: { templateId: true } });
+  const templateId = row?.templateId;
+  if (!templateId || !(await coachOwnsTemplate(coach.id, templateId))) return;
+
+  const resolved = await resolvePhase(templateId, phaseId);
+  if (!resolved || resolved.phases.length < 2) return;
+  const { phase, phases } = resolved;
+
+  const index = phases.findIndex((p) => p.id === phase.id);
+  const heir = phases[index - 1] ?? phases[index + 1];
+  const range = phaseRanges(phases)[index];
+
+  await prisma.$transaction([
+    prisma.workout.updateMany({ where: { templateId, phaseId: phase.id }, data: { phaseId: heir.id } }),
+    prisma.programCalendarItem.deleteMany({
+      where: { templateId, dayIndex: { gte: range.startDay, lte: range.endDay } },
+    }),
+    prisma.programCalendarItem.updateMany({
+      where: { templateId, dayIndex: { gt: range.endDay } },
+      data: { dayIndex: { increment: -(range.endDay - range.startDay + 1) } },
+    }),
+    prisma.programPhase.delete({ where: { id: phase.id } }),
+  ]);
+
+  revalidatePath(`/coach/programs/${templateId}`);
+  redirect(phasePath(templateId, heir.id));
+}
+
+/** Lists a workout under another phase of the same program. */
+export async function moveWorkoutToPhase(formData: FormData) {
+  const coach = await requireCoach();
+  const workout = await ownedWorkout(coach.id, formData.get('workoutId') as string | null);
+  if (!workout?.templateId) return;
+
+  const resolved = await resolvePhase(workout.templateId, formData.get('phaseId') as string | null);
+  if (!resolved) return;
+
+  await prisma.workout.update({ where: { id: workout.id }, data: { phaseId: resolved.phase.id } });
+  revalidatePath(`/coach/programs/${workout.templateId}`);
 }

@@ -24,6 +24,28 @@ describe('planMove', () => {
     });
   });
 
+  test('cardio and reminders move onto a day without displacing its session', () => {
+    const swim: PlanItem = { id: 'swim', date: '2026-10-19', kind: 'cardio', completed: false };
+    const legs: PlanItem = { id: 'legs', date: '2026-10-21', kind: 'workout', completed: false };
+    assert.deepEqual(planMove(swim, '2026-10-21', [legs]), {
+      ok: true,
+      moves: [{ id: 'swim', date: '2026-10-21' }],
+    });
+  });
+
+  test('a lift swaps only with the session on the target day, not its cardio', () => {
+    const run: PlanItem = { id: 'run', date: '2026-10-21', kind: 'cardio', completed: false };
+    const pics: PlanItem = { id: 'pics', date: '2026-10-21', kind: 'photos', completed: false };
+    const r = planMove(chest, '2026-10-21', [restWed, run, pics]);
+    assert.deepEqual(r, {
+      ok: true,
+      moves: [
+        { id: 'chest', date: '2026-10-21' },
+        { id: 'rest-wed', date: '2026-10-19' },
+      ],
+    });
+  });
+
   test('a finished session on the target day stays where it was done', () => {
     const done: PlanItem = { id: 'legs', date: '2026-10-21', kind: 'workout', completed: true };
     const r = planMove(chest, '2026-10-21', [done]);

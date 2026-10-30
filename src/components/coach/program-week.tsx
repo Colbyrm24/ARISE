@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import type { DeployState } from '@/app/coach/programs/[id]/actions';
 
 /*
-  The week, and the button that turns it into months.
+  The weekly pattern, and the button that turns a program into months.
 
   This is the screen the whole programming side exists for. A coach lays out
   seven days once — a session here, cardio there, rest on Thursday and Sunday
@@ -70,35 +70,38 @@ export function ProgramWeek({
   days,
   workouts,
   cardioTypes,
-  clients,
   setProgramDay,
   setWeekSteps,
-  deployToClient,
-  defaultStart,
+  onCalendar,
 }: {
   templateId: string;
   days: WeekDay[];
   workouts: Named[];
   cardioTypes: Named[];
-  clients: { id: string; name: string }[];
   setProgramDay: (formData: FormData) => void;
   setWeekSteps: (formData: FormData) => void;
-  deployToClient: (prev: DeployState, formData: FormData) => Promise<DeployState>;
-  defaultStart: string;
+  /** The program has calendar items, so it deploys from those instead. */
+  onCalendar: boolean;
 }) {
-  const [state, action] = useFormState(deployToClient, { ok: false, message: '' });
-
   const byDay = new Map(days.map((d) => [d.weekday, d]));
   const restCount = days.filter((d) => d.kind === 'rest').length;
   const workCount = days.filter((d) => d.kind === 'workout').length;
 
   return (
     <div className="flex flex-col gap-6">
-      <SystemWindow title="The week" meta={`[${workCount} on / ${restCount} off]`}>
+      <SystemWindow title="Weekly pattern" meta={`[${workCount} on / ${restCount} off]`}>
         <SystemWindowContent className="flex flex-col gap-5">
+          {/*
+            The original way to describe a program, kept because Follow My
+            Split and every program built before the calendar deploy from it.
+            Once a program has anything on its calendar, the calendar is what
+            deploys — this box says so rather than letting a coach edit a week
+            that no longer does anything.
+          */}
           <p className="text-sm text-muted-foreground">
-            Describe one week. Every week of the program is a copy of it, so changing Thursday here
-            changes Thursday for the whole block.
+            {onCalendar
+              ? 'This program deploys from its calendar now, so this week is only used as a starting point: Calendar → Fill from a weekly pattern copies it into a phase.'
+              : 'Describe one week. Until the calendar has anything on it, every week of the program is a copy of this one, so changing Thursday here changes Thursday for the whole block.'}
           </p>
 
           {/* Steps are the one number that applies to every day including the
@@ -224,12 +227,35 @@ export function ProgramWeek({
         </SystemWindowContent>
       </SystemWindow>
 
+    </div>
+  );
+}
+
+export function ProgramDeploy({
+  templateId,
+  clients,
+  deployToClient,
+  defaultStart,
+  calendarWeeks,
+}: {
+  templateId: string;
+  clients: { id: string; name: string }[];
+  deployToClient: (prev: DeployState, formData: FormData) => Promise<DeployState>;
+  defaultStart: string;
+  /** Set when the program deploys from its calendar: it runs its own length. */
+  calendarWeeks: number | null;
+}) {
+  const [state, action] = useFormState(deployToClient, { ok: false, message: '' });
+
+  return (
       <SystemWindow title="Deploy" meta="[one client]">
         <SystemWindowContent className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            Writes the week across the client&apos;s calendar, one dated row per day. Re-deploying
-            replaces only what this program put there, and never touches a day that has already
-            passed.
+            {calendarWeeks
+              ? `Writes the program calendar onto the client's, Day 1 on the start date — all ${calendarWeeks} weeks.`
+              : "Writes the week across the client's calendar, one dated row per day."}{' '}
+            Re-deploying replaces only what a program put there, and never touches a day that has
+            already passed.
           </p>
 
           <form action={action} className="flex flex-col gap-3">
@@ -257,18 +283,31 @@ export function ProgramWeek({
                 <input name="startDate" type="date" defaultValue={defaultStart} className={inputClass} />
               </label>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Length
-                </span>
-                <select name="weeks" defaultValue="26" className={selectClass}>
-                  <option value="4">4 weeks</option>
-                  <option value="8">8 weeks</option>
-                  <option value="12">12 weeks — 3 months</option>
-                  <option value="26">26 weeks — 6 months</option>
-                  <option value="52">52 weeks — a year</option>
-                </select>
-              </label>
+              {/* A calendar program runs its own length; the week repeats
+                  for as long as it is asked to. */}
+              {calendarWeeks ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Length
+                  </span>
+                  <span className="flex h-10 items-center text-sm">
+                    {calendarWeeks} week{calendarWeeks === 1 ? '' : 's'} — the whole program
+                  </span>
+                </div>
+              ) : (
+                <label className="flex flex-col gap-1.5">
+                  <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Length
+                  </span>
+                  <select name="weeks" defaultValue="26" className={selectClass}>
+                    <option value="4">4 weeks</option>
+                    <option value="8">8 weeks</option>
+                    <option value="12">12 weeks — 3 months</option>
+                    <option value="26">26 weeks — 6 months</option>
+                    <option value="52">52 weeks — a year</option>
+                  </select>
+                </label>
+              )}
             </div>
 
             <DeployButton />
@@ -288,6 +327,5 @@ export function ProgramWeek({
           )}
         </SystemWindowContent>
       </SystemWindow>
-    </div>
   );
 }

@@ -203,8 +203,9 @@ export default async function ProgressPage() {
       </Card>
       )}
 
+      {/* Anchored so a body-stats reminder on Today lands right here. */}
       {features.weight && (
-      <Card>
+      <Card id="measurements" className="scroll-mt-4">
         <CardHeader>
           <CardTitle>Measurements</CardTitle>
         </CardHeader>
@@ -251,8 +252,9 @@ export default async function ProgressPage() {
       </Card>
       )}
 
+      {/* Anchored for the photo reminder on Today. */}
       {features.photos && (
-      <Card>
+      <Card id="photos" className="scroll-mt-4">
         <CardHeader>
           <CardTitle>Photos</CardTitle>
         </CardHeader>

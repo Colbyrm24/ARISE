@@ -16,6 +16,7 @@ import {
   shiftMonth,
 } from '@/lib/month-grid';
 import { featuresFor } from '@/lib/membership';
+import { orderDayItems } from '@/lib/program-calendar';
 
 /*
   The client's own month.
@@ -50,8 +51,11 @@ export default async function ClientCalendarPage({
   const { gridStart, gridEnd, days } = monthGrid(year, month);
 
   const [scheduled, nutrition, weights] = await Promise.all([
+    // Every item on each day — a lift, a swim and a photo reminder all show.
+    // Messages are the exception: they arrive in Messages on the day, and a
+    // chip announcing one in advance would spoil it.
     prisma.scheduledItem.findMany({
-      where: { clientId: user.id, date: { gte: gridStart, lte: gridEnd } },
+      where: { clientId: user.id, date: { gte: gridStart, lte: gridEnd }, kind: { not: 'message' } },
       orderBy: [{ date: 'asc' }, { kind: 'asc' }],
       select: { id: true, date: true, kind: true, label: true, completedAt: true },
     }),
@@ -77,6 +81,7 @@ export default async function ClientCalendarPage({
     list.push({ id: item.id, kind: item.kind, label: item.label, done: Boolean(item.completedAt) });
     sessionsByDay.set(k, list);
   }
+  for (const [k, list] of sessionsByDay) sessionsByDay.set(k, orderDayItems(list));
 
   const foodByDay = new Map<string, number>();
   for (const log of nutrition) {

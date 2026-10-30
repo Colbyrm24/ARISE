@@ -88,6 +88,8 @@ type Actions = {
 type Props = {
   programId: string;
   programName: string;
+  /** Where SAVE and the back link go — the phase this workout is listed in. */
+  backHref?: string;
   workout: {
     id: string;
     name: string;
@@ -116,7 +118,8 @@ const newId = () =>
 
 const orderOf = (rows: BuilderRow[]) => rows.map((r) => ({ id: r.id, supersetGroup: r.supersetGroup }));
 
-export function WorkoutBuilder({ programId, programName, workout, initialRows, library: initialLibrary, actions }: Props) {
+export function WorkoutBuilder({ programId, programName, backHref, workout, initialRows, library: initialLibrary, actions }: Props) {
+  const back = backHref ?? `/coach/programs/${programId}`;
   const router = useRouter();
 
   const [rows, setRows] = useState<BuilderRow[]>(initialRows);
@@ -364,7 +367,7 @@ export function WorkoutBuilder({ programId, programName, workout, initialRows, l
   async function done() {
     setLeaving(true);
     await queue.current;
-    router.push(`/coach/programs/${programId}`);
+    router.push(back);
     router.refresh();
   }
 
@@ -376,7 +379,7 @@ export function WorkoutBuilder({ programId, programName, workout, initialRows, l
       {/* Top bar: back, where you are, save state, done. */}
       <header className="flex items-center gap-3 border-b border-border px-4 py-3 sm:px-6">
         <Link
-          href={`/coach/programs/${programId}`}
+          href={back}
           onClick={(e) => {
             // A save still queued would be lost by navigating away mid-flight.
             if (inFlight.current > 0) {

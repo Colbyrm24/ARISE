@@ -6,6 +6,7 @@ import {
   keyToDate,
   planMove,
   planShift,
+  SESSION_KINDS,
   type PlanItem,
 } from '@/lib/schedule-move';
 
@@ -40,9 +41,11 @@ async function applyMoves(tx: Tx, clientId: string, moves: { id: string; date: s
   for (const m of moves) {
     // updateMany so the clientId filter rides along with the id — a row that
     // is not this client's matches nothing rather than being moved.
+    // Pinned: the coach put it here on purpose, so a later resync from the
+    // master program (Stage 3) leaves it where he dropped it.
     await tx.scheduledItem.updateMany({
       where: { id: m.id, clientId, completedAt: null },
-      data: { date: keyToDate(m.date) },
+      data: { date: keyToDate(m.date), pinned: true },
     });
   }
 }
@@ -85,8 +88,7 @@ export async function removeItem(clientId: string, itemId: string): Promise<Edit
  * Make a day a given workout, or a rest day.
  *
  * Replaces whatever unfinished session was on the day rather than adding a
- * second one, for the same reason a move swaps: the client is shown one
- * session per day. The workout has to belong to the client's active program —
+ * second one, for the same reason a move swaps: a day has one session. The workout has to belong to the client's active program —
  * the client's workout screen refuses to open anything else, so placing one
  * from another program would put a session on their day that 404s on tap.
  */
@@ -117,17 +119,22 @@ export async function setDay(
   }
 
   return prisma.$transaction(async (tx: Tx) => {
+    /*
+      Only the day's session is replaced — its unfinished lift or rest day.
+      Cardio, photo and check-in reminders and a scheduled message on the
+      same day are separate things the coach put there, and turning Tuesday
+      into a rest day is not a request to drop Tuesday's swim.
+    */
+    const sessionWhere = { clientId, date, completedAt: null, kind: { in: SESSION_KINDS } };
     const existing = await tx.scheduledItem.findMany({
-      where: { clientId, date, completedAt: null },
+      where: sessionWhere,
       select: { id: true, stepTarget: true, batchId: true, templateId: true, kind: true },
     });
 
     // Steps are the target on every day, rest days included, so the day keeps
     // whatever step goal it already had rather than losing it to the edit.
     const keep = existing[0];
-    await tx.scheduledItem.deleteMany({
-      where: { clientId, date, completedAt: null },
-    });
+    await tx.scheduledItem.deleteMany({ where: sessionWhere });
 
     await tx.scheduledItem.create({
       data: {
@@ -140,6 +147,7 @@ export async function setDay(
         batchId: keep?.batchId ?? null,
         // Owned by the program, so a re-deploy replaces it like any other day.
         templateId: keep?.templateId ?? program?.templateId ?? null,
+        pinned: true,
       },
     });
 
@@ -167,13 +175,17 @@ export async function shiftFrom(clientId: string, from: string, days: number): P
     `date + int` is calendar-day arithmetic on a Postgres date, so a DST
     change in the middle of the block cannot skip or repeat a day.
 
+    Pinned like a drag, so a later resync from the master program does not
+    pull the pushed-back days forward again.
+
     client_id is compared as text because the live database's id columns are
     TEXT while the Prisma schema has drifted from it in places; the cast makes
     this correct whichever one the column turns out to be.
   */
   const moved = await prisma.$executeRaw`
     UPDATE scheduled_items
-       SET date = date + ${days}::int
+       SET date = date + ${days}::int,
+           pinned = true
      WHERE client_id::text = ${clientId}
        AND date >= ${from}::date
        AND completed_at IS NULL

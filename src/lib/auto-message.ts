@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notifications';
 import { dateOnly } from '@/lib/program-deploy';
+import { restingClients, TRAINING_KINDS } from '@/lib/program-calendar';
 
 /*
   Messages that send themselves.
@@ -116,15 +117,19 @@ async function candidates(today: Date): Promise<Candidate[]> {
   const ids = active.map((c) => c.userId);
   const coachOf = new Map(active.map((c) => [c.userId, c.coachId as string]));
 
-  // Anyone with a rest day on the calendar today.
-  const resting = new Set(
-    (
-      await prisma.scheduledItem.findMany({
-        where: { clientId: { in: ids }, date: today, kind: 'rest' },
-        select: { clientId: true },
-        distinct: ['clientId'],
-      })
-    ).map((r) => r.clientId)
+  /*
+    Anyone whose day today is a rest day.
+
+    A day can hold several items now, so "has a rest row" is no longer the
+    same question: a coach can drop a lift onto a rest day, and a rest day
+    can carry a photo reminder. Rest with no lift or cardio beside it is the
+    rule (isRestDay in program-calendar.ts), decided over all of today's rows.
+  */
+  const resting = restingClients(
+    await prisma.scheduledItem.findMany({
+      where: { clientId: { in: ids }, date: today, kind: { in: ['rest', ...TRAINING_KINDS] } },
+      select: { clientId: true, kind: true },
+    })
   );
 
   /*

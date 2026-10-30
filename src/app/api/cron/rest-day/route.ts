@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { runAutoMessages } from '@/lib/auto-message';
 import { topUpMemberCalendars } from '@/lib/program-offer';
+import { deliverProgramMessages } from '@/lib/program-messages';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +78,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
+  /*
+    Messages the coach wrote into a program's calendar go first. A client who
+    hears from their coach that way this morning is then skipped by the
+    automatic sender, which never talks over a coach who has already spoken
+    today — so one message a day, and it is the one he wrote for that day.
+    Its own try: it must not stop the daily messages going out.
+  */
+  let programMessages: { considered: number; sent: number; skipped: number } | { error: string };
+  try {
+    programMessages = await deliverProgramMessages();
+  } catch (err) {
+    programMessages = { error: err instanceof Error ? err.message : String(err) };
+  }
+
   const result = await runAutoMessages();
 
   /*
@@ -91,5 +106,5 @@ export async function GET(request: Request) {
     members = { error: err instanceof Error ? err.message : String(err) };
   }
 
-  return NextResponse.json({ ok: true, ...result, members });
+  return NextResponse.json({ ok: true, ...result, programMessages, members });
 }

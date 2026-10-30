@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { IMPLICIT_PHASE_ID } from '@/lib/program-calendar';
 import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { loadBuilderRows } from '@/lib/workout-rows';
@@ -57,6 +58,22 @@ export default async function WorkoutBuilderPage({ params }: { params: { id: str
     }),
   ]);
 
+  /*
+    Back to the phase it is listed in. A workout with no phase is in the
+    first one — the real first row, or "implicit" when the program has none,
+    which is the id the program page gives that stand-in phase.
+  */
+  const backPhase =
+    workout.phaseId ??
+    (
+      await prisma.programPhase.findFirst({
+        where: { templateId: workout.template.id },
+        orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+        select: { id: true },
+      })
+    )?.id ??
+    IMPLICIT_PHASE_ID;
+
   const library: LibraryItem[] = exercises.map((e) => ({
     id: e.id,
     name: e.name,
@@ -69,6 +86,7 @@ export default async function WorkoutBuilderPage({ params }: { params: { id: str
     <WorkoutBuilder
       programId={workout.template.id}
       programName={workout.template.name}
+      backHref={`/coach/programs/${workout.template.id}?view=${backPhase}`}
       workout={{
         id: workout.id,
         name: workout.name,

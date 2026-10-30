@@ -93,12 +93,23 @@ export async function logSteps(formData: FormData) {
     could ever tick, so the coach's "Cardio 0" header stayed wrong for every
     client whose cardio is a step goal, which is most of them.
   */
-  const stepCardio = await prisma.scheduledItem.findFirst({
-    where: { clientId: user.id, date, kind: 'cardio', completedAt: null },
-    select: { stepTarget: true },
+  /*
+    Only the step-prescribed cardio, now that a day can also carry a swim
+    with minutes to log: hitting the step goal ticks the walk, not the swim.
+  */
+  const stepCardio = await prisma.scheduledItem.findMany({
+    where: { clientId: user.id, date, kind: 'cardio', completedAt: null, stepTarget: { not: null } },
+    select: { id: true, stepTarget: true },
   });
-  if (stepCardio?.stepTarget && value >= stepCardio.stepTarget) {
-    await markScheduledDone(user.id, 'cardio', { day: date });
+  const reached = stepCardio.filter((c) => c.stepTarget && value >= c.stepTarget).map((c) => c.id);
+  if (reached.length > 0) {
+    // Bookkeeping, like markScheduledDone: never an error on the steps form.
+    await prisma.scheduledItem
+      .updateMany({
+        where: { id: { in: reached }, clientId: user.id, completedAt: null },
+        data: { completedAt: new Date() },
+      })
+      .catch(() => undefined);
   }
 
   refresh();
@@ -159,7 +170,7 @@ export async function logCardio(formData: FormData) {
     update: { minutes },
   });
 
-  await markScheduledDone(user.id, 'cardio', { day: date });
+  await markScheduledDone(user.id, 'cardio', { day: date, cardioTypeId });
 
   if (!already) {
     const [name, type] = await Promise.all([
@@ -170,4 +181,38 @@ export async function logCardio(formData: FormData) {
   }
 
   refresh();
+}
+
+/**
+ * Ticks one of today's items off by hand: a photo, body-stats or check-in
+ * reminder, or cardio prescribed as written text ("swim, 1 km easy") that has
+ * no minutes to log.
+ *
+ * Scoped to the caller, to today, and to those kinds. A lift is finished by
+ * finishing the session, and minutes-based cardio by logging it — letting
+ * either be hand-ticked would put a done chip on the coach's calendar for a
+ * session with no record behind it.
+ */
+export async function markItemDone(formData: FormData) {
+  const user = await requireClient();
+  const itemId = formData.get('itemId') as string | null;
+  if (!itemId) return;
+
+  await prisma.scheduledItem.updateMany({
+    where: {
+      id: itemId,
+      clientId: user.id,
+      date: todayFor(user),
+      completedAt: null,
+      OR: [
+        { kind: { in: ['photos', 'bodystats', 'checkin'] } },
+        { kind: 'cardio', cardioMinutes: null },
+        { kind: 'cardio', cardioTypeId: null },
+      ],
+    },
+    data: { completedAt: new Date() },
+  });
+
+  refresh();
+  revalidatePath('/calendar');
 }
