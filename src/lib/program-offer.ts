@@ -4,6 +4,7 @@ import { stripe } from '@/lib/stripe';
 import { todayIn, zoneOf } from '@/lib/day';
 import { addDays, deployProgram, setActiveProgram } from '@/lib/program-deploy';
 import { notify } from '@/lib/notifications';
+import { extendSubscription } from '@/lib/program-subscribers';
 import { attachClientToCoach } from '@/lib/onboard-client';
 
 /*
@@ -161,6 +162,9 @@ export async function startMemberCalendar(clientId: string, templateId: string) 
 
   if (current?.templateId !== templateId || ahead === 0) {
     await deployProgram({ clientId, templateId, startDate: today, weeks: MEMBER_WEEKS });
+    // Day 1 is today, so the subscription says so.
+    await setActiveProgram(clientId, templateId, today);
+    return;
   }
   await setActiveProgram(clientId, templateId);
 }
@@ -414,6 +418,17 @@ export async function topUpMemberCalendars(limit = 200) {
     }
     if (lastDate.getTime() >= horizon.getTime()) continue;
 
+    /*
+      A program built on the calendar runs again from where its own cycle
+      says, so the extension carries the right cycle keys and later master
+      edits keep syncing it. A weekly-pattern program — every split today —
+      takes the original path unchanged.
+    */
+    if (await extendSubscription(m.userId, templateId, addDays(lastDate, TOP_UP_WEEKS * 7))) {
+      extended += 1;
+      continue;
+    }
+
     await deployProgram({
       clientId: m.userId,
       templateId,
@@ -445,13 +460,15 @@ export async function refreshMemberCalendars(offerId: string) {
   });
 
   for (const m of members) {
+    const today = todayIn(zoneOf(m.user.profile));
     await deployProgram({
       clientId: m.userId,
       templateId: offer.templateId,
-      startDate: todayIn(zoneOf(m.user.profile)),
+      startDate: today,
       weeks: MEMBER_WEEKS,
     });
-    await setActiveProgram(m.userId, offer.templateId);
+    // The program restarts from today, so that is their new Day 1.
+    await setActiveProgram(m.userId, offer.templateId, today);
   }
   return members.length;
 }

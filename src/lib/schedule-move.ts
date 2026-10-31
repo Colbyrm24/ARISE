@@ -1,12 +1,13 @@
 /*
   Moving sessions around a client's calendar, with no database in it.
 
-  The program deploy writes one dated row per day, and the rest of the app is
-  built on that being true: the client's Today screen shows ONE session for
-  the day, the rest-day automatic message looks for a rest row, and the coach's
-  month header counts one chip per square. So dragging Monday's chest day onto
-  Wednesday cannot just stack it on top of Wednesday's rest day — the client
-  would open the app on Wednesday and be told to rest.
+  A day holds at most one SESSION — a lift or a rest day — though it can carry
+  cardio, reminders and messages beside it (a program calendar can put a lift,
+  a swim and a photo reminder on one day). The rest-day automatic message
+  looks for a rest row with no training on the day, and the coach's month
+  header counts workouts. So dragging Monday's chest day onto Wednesday cannot
+  just stack it on top of Wednesday's rest day — the client would open the app
+  on Wednesday and see a lift and a rest day at once.
 
   The rule is the one a coach actually means: drop a session on a day and the
   two days trade places. Monday's lift goes to Wednesday, Wednesday's rest goes
@@ -30,7 +31,7 @@
 export type PlanItem = {
   id: string;
   date: string; // YYYY-MM-DD
-  kind: string; // workout | cardio | rest
+  kind: string; // workout | cardio | rest | photos | bodystats | checkin | message
   completed: boolean;
 };
 
@@ -75,14 +76,26 @@ export function planMove(item: PlanItem, to: string, targetDay: PlanItem[]): Pla
   if (item.date === to) return { ok: true, moves: [] };
 
   const moves = [{ id: item.id, date: to }];
+  /*
+    Only the day's session trades places. A day can now hold several things —
+    a lift, a swim, a photo reminder — and dragging the swim onto Tuesday
+    should add a swim to Tuesday, not send Tuesday's lift back the other way.
+    So a lift or a rest day swaps with the lift or rest day it lands on, and
+    everything else (cardio, reminders, messages) simply moves.
+  */
+  if (!SESSION_KINDS.includes(item.kind)) return { ok: true, moves };
   for (const other of targetDay) {
     // The item itself can't be on the target day (dates differ), but a stale
     // read could hand it back; never move one row twice.
     if (other.id === item.id || other.completed) continue;
+    if (!SESSION_KINDS.includes(other.kind)) continue;
     moves.push({ id: other.id, date: item.date });
   }
   return { ok: true, moves };
 }
+
+/** What a day is "about": one of these, and only one, per day. */
+export const SESSION_KINDS = ['workout', 'rest'];
 
 /** How far a "push everything back" may go in one go. A month is a holiday. */
 export const MAX_SHIFT_DAYS = 30;

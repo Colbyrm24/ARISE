@@ -62,7 +62,12 @@ export async function deleteTemplate(formData: FormData) {
         refuse, which is what they are there for.
       */
       prisma.programDay.deleteMany({ where: { templateId: id } }),
+      // The program calendar and phases go with it. Both cascade in the
+      // database, but cleared explicitly so the order never depends on how
+      // a constraint happened to be written when the table was made.
+      prisma.programCalendarItem.deleteMany({ where: { templateId: id } }),
       prisma.workout.deleteMany({ where: { templateId: id } }),
+      prisma.programPhase.deleteMany({ where: { templateId: id } }),
       prisma.workoutTemplate.delete({ where: { id } }),
     ]);
   } catch (err) {

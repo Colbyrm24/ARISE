@@ -129,6 +129,10 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
                     <span className="text-destructive">Nothing on their calendar yet — start it below</span>
                   )}{' '}
                   ·{' '}
+                  <Link href={`/coach/clients/${client.userId}/program`} className="text-accent hover:underline">
+                    Phases &amp; dates
+                  </Link>{' '}
+                  ·{' '}
                   <Link href={`/coach/programs/${activeProgram.templateId}`} className="text-accent hover:underline">
                     Edit program
                   </Link>

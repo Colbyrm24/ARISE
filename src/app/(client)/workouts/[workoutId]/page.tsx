@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Check, Play } from 'lucide-react';
+import { ArrowLeft, Check, Play, Timer } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { startOfDayInstantFor } from '@/lib/day';
 import { prisma } from '@/lib/prisma';
@@ -22,6 +22,7 @@ import {
   MAX_LOGGED_REPS,
   type SetType,
 } from '@/lib/set-prescription';
+import { groupBlocks, restBlockText, estimateMinutes } from '@/lib/workout-builder';
 import { LogSetButton, FinishButton, ReopenButton } from '@/components/client/log-set-button';
 import { logSet, completeWorkout, reopenWorkout } from './actions';
 
@@ -87,6 +88,10 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
     0
   );
 
+  // The coach's number, or the builder's estimate for a workout saved
+  // before it had one.
+  const estMinutes = workout.estMinutes ?? estimateMinutes(workout.workoutExercises);
+
   /*
     Bigger than it was, and it says what it wants.
 
@@ -117,9 +122,9 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             Session {String(workout.dayOrder).padStart(2, '0')}
           </p>
           <h1 className="display mt-1.5 text-2xl">{workout.name}</h1>
-          {workout.estMinutes && (
+          {estMinutes > 0 && (
             <p className="readout mt-1.5 text-[11px] uppercase text-muted-foreground">
-              est. {workout.estMinutes} minutes
+              est. {estMinutes} minutes
             </p>
           )}
         </div>
@@ -200,7 +205,30 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
       */}
       <form action={logSet} className="flex flex-col gap-4">
         <input type="hidden" name="workoutId" value={workout.id} />
-        {workout.workoutExercises.map((we) => {
+        {/*
+          Supersets as one block, rest blocks between movements.
+
+          The coach's builder groups movements into supersets and drops rest
+          blocks between them, and this screen used to render every movement
+          as its own window in a flat list — so a superset read as two
+          unrelated exercises with a full rest between, which is the opposite
+          of what was programmed. groupBlocks is the same function the
+          builder draws with, so what the coach builds is what is trained.
+        */}
+        {groupBlocks(workout.workoutExercises).map((block) => (
+          <div key={block.key} className="flex flex-col gap-4">
+            <div
+              className={cn(
+                'flex flex-col gap-4',
+                block.superset && 'border-l-2 border-accent/70 pl-3'
+              )}
+            >
+              {block.superset && (
+                <p className="readout text-[11px] uppercase tracking-wider text-accent">
+                  Superset {block.letter} · go straight from one to the next, then rest
+                </p>
+              )}
+        {block.rows.map(({ row: we, label }) => {
           const done = we.sets.filter((s) => loggedBySetId.has(s.id)).length;
           const demo = demoLinkFor(we.exercise);
           /*
@@ -220,7 +248,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             <SystemWindow
               key={we.id}
               plain
-              title={we.exercise.name}
+              title={label ? `${label} · ${we.exercise.name}` : we.exercise.name}
               meta={<Count value={done} total={we.sets.length} />}
             >
               <SystemWindowContent className="pt-4">
@@ -474,6 +502,20 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             </SystemWindow>
           );
         })}
+            </div>
+            {block.rows.map(({ row }) =>
+              row.restAfterSeconds ? (
+                <p
+                  key={`rest-${row.id}`}
+                  className="readout flex items-center justify-center gap-2 border border-dashed border-border bg-secondary/20 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground"
+                >
+                  <Timer size={13} className="text-accent" />
+                  {restBlockText(row.restAfterSeconds)}
+                </p>
+              ) : null
+            )}
+          </div>
+        ))}
 
         {!isComplete && (
           <>

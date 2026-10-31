@@ -35,7 +35,7 @@ import { sessionDay } from '@/lib/scheduled-day';
 export async function markScheduledDone(
   clientId: string,
   kind: 'workout' | 'cardio',
-  opts: { workoutId?: string | null; day?: Date; startedAt?: Date } = {}
+  opts: { workoutId?: string | null; cardioTypeId?: string | null; day?: Date; startedAt?: Date } = {}
 ) {
   // Which day the chip belongs to, and when it was actually finished, are two
   // different questions. The day comes from when the session started; the
@@ -62,6 +62,19 @@ export async function markScheduledDone(
         data: { completedAt },
       });
       if (exact.count > 0) return exact.count;
+    }
+
+    /*
+      Same for cardio, now that a day can carry a swim AND a run: logging the
+      swim ticks the swim. Without a type to match it falls through to the
+      old any-cardio match below, which is right for a day with one.
+    */
+    if (kind === 'cardio' && opts.cardioTypeId) {
+      const exact = await prisma.scheduledItem.updateMany({
+        where: { clientId, date: day, kind, cardioTypeId: opts.cardioTypeId, completedAt: null },
+        data: { completedAt },
+      });
+      return exact.count;
     }
 
     const any = await prisma.scheduledItem.updateMany({

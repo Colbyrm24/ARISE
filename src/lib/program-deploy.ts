@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { pickPrimary } from '@/lib/schedule-move';
+import { implicitPhase, isRestDay, materialize, orderDayItems, programWeeks } from '@/lib/program-calendar';
 
 /*
   Turning a week into months.
@@ -70,7 +71,22 @@ export type DeployResult = {
 export const DEFAULT_WEEKS = 26;
 export const MAX_WEEKS = 52;
 
-export async function deployProgram({
+export async function deployProgram(opts: DeployOptions): Promise<DeployResult> {
+  /*
+    A program built on the Day-N calendar deploys from that; one that only
+    has the old repeating week deploys exactly as it always did. Checked per
+    deploy rather than flagged on the template, so the moment a coach puts the
+    first item on a calendar that is the program — and Follow My Split, the
+    client page's Start program and every existing template, none of which
+    have calendar items, never notice this branch exists.
+  */
+  const calendarCount = await prisma.programCalendarItem.count({ where: { templateId: opts.templateId } });
+  if (calendarCount > 0) return deployCalendar(opts);
+  return deployWeek(opts);
+}
+
+/** The original deploy: one repeating Mon–Sun week stamped across N weeks. */
+async function deployWeek({
   clientId,
   templateId,
   startDate,
@@ -181,6 +197,105 @@ export async function deployProgram({
   };
 }
 
+/**
+ * Deploy from the program calendar: every item on Day N lands on
+ * startDate + N - 1, several to a day where the coach put several, each row
+ * carrying the sourceKey of the item that wrote it.
+ *
+ * The program runs its own length — the sum of its phases — rather than the
+ * `weeks` asked for: a 12-week program is 12 weeks, and stretching it to 26
+ * would mean inventing 14 weeks the coach never wrote. Callers that keep a
+ * calendar topped up (Follow My Split) deploy again from the day after the
+ * last row, which runs the program from Day 1 again.
+ *
+ * Clearing is identical to the week deploy, for the same reasons: anything a
+ * deploy wrote from the start date on, unless it is finished.
+ */
+async function deployCalendar({ clientId, templateId, startDate }: DeployOptions): Promise<DeployResult> {
+  const from = dateOnly(startDate);
+
+  const [items, phases, client] = await Promise.all([
+    prisma.programCalendarItem.findMany({
+      where: { templateId },
+      include: {
+        workout: { select: { name: true } },
+        cardioType: { select: { name: true } },
+      },
+    }),
+    prisma.programPhase.findMany({ where: { templateId }, orderBy: { position: 'asc' }, select: { id: true, weeks: true } }),
+    prisma.client.findUnique({ where: { userId: clientId }, select: { tier: true } }),
+  ]);
+
+  const span = Math.min(
+    MAX_WEEKS,
+    programWeeks(phases.length > 0 ? phases : [implicitPhase(items)], items)
+  );
+  const to = addDays(from, span * 7 - 1);
+
+  /*
+    Message items are coach messages delivered on their day. Only 1-on-1
+    clients have a message thread — a Follow My Split member has no coach
+    inbox, and the automatic messages skip them for the same reason — so for
+    anyone else those items are simply not written.
+  */
+  const skipKinds = client?.tier === 'coaching' ? [] : ['message'];
+  const material = materialize(items, from, span * 7, { skipKinds });
+  // Nothing this client can receive (a calendar of only message items, for a
+  // member with no thread): stop before the clear, the way the week deploy
+  // does with an empty week. Callers read created 0 as "nothing deployed",
+  // so clearing first would wipe their calendar behind that message.
+  if (material.length === 0) {
+    return { created: 0, removed: 0, from, to, batchId: '', restDays: 0, workoutDays: 0 };
+  }
+
+  const removed = await prisma.scheduledItem.deleteMany({
+    where: {
+      clientId,
+      templateId: { not: null },
+      completedAt: null,
+      date: { gte: from },
+    },
+  });
+
+  const batchId = randomUUID();
+  const rows = material.map((m) => ({
+    id: randomUUID(),
+    clientId,
+    date: m.date,
+    kind: m.kind,
+    label: m.label,
+    workoutId: m.workoutId,
+    cardioTypeId: m.cardioTypeId,
+    cardioMinutes: m.cardioMinutes,
+    cardioTarget: m.cardioTarget,
+    stepTarget: m.stepTarget,
+    note: m.note,
+    sourceKey: m.sourceKey,
+    batchId,
+    templateId,
+  }));
+
+  if (rows.length > 0) {
+    await prisma.scheduledItem.createMany({ data: rows, skipDuplicates: true });
+  }
+
+  // Counted in days, the way the week deploy's confirmation reads: a day
+  // with a lift and a swim is one session day, not two.
+  const dayKinds = new Map<string, string[]>();
+  for (const r of rows) {
+    const k = r.date.toISOString().slice(0, 10);
+    dayKinds.set(k, [...(dayKinds.get(k) ?? []), r.kind]);
+  }
+  let restDays = 0;
+  let workoutDays = 0;
+  for (const kinds of dayKinds.values()) {
+    if (kinds.includes('workout')) workoutDays += 1;
+    else if (isRestDay(kinds)) restDays += 1;
+  }
+
+  return { created: rows.length, removed: removed.count, from, to, batchId, restDays, workoutDays };
+}
+
 /** Everything on a client's calendar between two dates, in order. */
 export async function scheduleBetween(clientId: string, from: Date, to: Date) {
   return prisma.scheduledItem.findMany({
@@ -191,6 +306,22 @@ export async function scheduleBetween(clientId: string, from: Date, to: Date) {
       cardioType: { select: { id: true, name: true, unit: true } },
     },
   });
+}
+
+/**
+ * Everything on a client's day, in the order Today reads it: the lift, each
+ * cardio, reminders, then rest. `message` rows are left out — they arrive in
+ * the client's messages on the day, and showing one in advance would spoil it.
+ */
+export async function scheduledDay(clientId: string, day: Date) {
+  const items = await prisma.scheduledItem.findMany({
+    where: { clientId, date: day, kind: { not: 'message' } },
+    include: {
+      workout: { select: { id: true, name: true, estMinutes: true } },
+      cardioType: { select: { id: true, name: true, unit: true } },
+    },
+  });
+  return orderDayItems(items);
 }
 
 /** What a client is meant to do today. Null when the calendar is empty. */
@@ -241,7 +372,17 @@ export { dateOnly, addDays };
  * Deactivating everything first and reactivating exactly one still collapses
  * any duplicates an earlier deploy already left behind.
  */
-export async function setActiveProgram(clientId: string, templateId: string) {
+export async function setActiveProgram(clientId: string, templateId: string, startDate?: Date) {
+  /*
+    With a start date, this is a (re)subscription: the deploy just wrote Day 1
+    onto that date, so the subscription records it and is linked to the
+    master again. Without one — a Follow My Split top-up re-asserting the
+    program — the start date and the linked choice the coach made are kept.
+  */
+  // A fresh deploy just restamped every occurrence, so the keys the coach had
+  // removed by hand belong to the old run; kept, the next resync would delete
+  // the freshly written rows that reuse them.
+  const start = startDate ? { startDate: dateOnly(startDate), linked: true, skippedKeys: [] as string[] } : {};
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.clientProgram.updateMany({
       where: { clientId, active: true },
@@ -250,8 +391,8 @@ export async function setActiveProgram(clientId: string, templateId: string) {
 
     await tx.clientProgram.upsert({
       where: { clientId_templateId: { clientId, templateId } },
-      create: { clientId, templateId, active: true },
-      update: { active: true },
+      create: { clientId, templateId, active: true, ...start },
+      update: { active: true, ...start },
     });
   });
 }

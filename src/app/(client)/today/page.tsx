@@ -15,13 +15,15 @@ import {
 } from '@/components/ui/system-window';
 import { habitGoalText, habitLabel, isTracked, parseTarget } from '@/lib/habits';
 import { upcomingForClient } from '@/lib/booking';
-import { scheduledToday, scheduleBetween } from '@/lib/program-deploy';
+import { scheduledDay, scheduleBetween } from '@/lib/program-deploy';
+import { pickPrimary } from '@/lib/schedule-move';
+import { isRestDay, TRAINING_KINDS } from '@/lib/program-calendar';
 import { LocalTime } from '@/components/local-time';
 import { WeekStrip } from '@/components/client/week-strip';
 import { GoalBar } from '@/components/client/goal-bar';
 import { todayFor, hourIn, zoneOf, startOfDay, dayIn } from '@/lib/day';
 import { ProgressRing, ProgressBar } from '@/components/client/progress-ring';
-import { toggleHabit, logSteps, logCardio } from './actions';
+import { toggleHabit, logSteps, logCardio, markItemDone } from './actions';
 import { featuresFor } from '@/lib/membership';
 
 /*
@@ -75,6 +77,28 @@ function startOfWeek(d: Date) {
 }
 
 const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+/** Where a reminder on the day takes the client: the screens that already exist. */
+const REMINDER_LINKS: Record<string, string> = {
+  photos: '/progress#photos',
+  bodystats: '/progress#measurements',
+  checkin: '/check-in',
+};
+
+/** Ticks one of today's items off by hand — reminders, and cardio with no minutes to log. */
+function DoneButton({ itemId }: { itemId: string }) {
+  return (
+    <form action={markItemDone}>
+      <input type="hidden" name="itemId" value={itemId} />
+      <button
+        type="submit"
+        className="readout border border-border/70 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
+      >
+        Done
+      </button>
+    </form>
+  );
+}
 
 /*
   Time-aware greeting, on the client's clock.
@@ -134,7 +158,7 @@ export default async function TodayPage({
     log needs to know which workout is on.
   */
   const [
-    scheduled,
+    dayItems,
     weekItems,
     unreadUpdates,
     goals,
@@ -148,10 +172,11 @@ export default async function TodayPage({
     latestWeight,
     healthSync,
   ] = await Promise.all([
-    // What the program says this day is. Null when nobody has deployed one
-    // yet, in which case that whole block stays off the screen rather than
-    // showing an empty shell.
-    scheduledToday(user.id, viewDate),
+    // Everything the program put on this day — a lift, each cardio, photo /
+    // body-stats / check-in reminders, rest. Empty when nobody has deployed
+    // one yet, in which case that whole block stays off the screen rather
+    // than showing an empty shell.
+    scheduledDay(user.id, viewDate),
     scheduleBetween(user.id, weekStart, addLocalDays(weekStart, 6)),
     prisma.notification.count({ where: { userId: user.id, readAt: null } }),
     prisma.dailyGoal.findMany({ where: { clientId: user.id, active: true } }),
@@ -203,22 +228,28 @@ export default async function TodayPage({
     from an array that isn't a tuple, and the failure shows up as
     "Property 'kind' does not exist", three lines away from the cause.
   */
-  const scheduledByDay = new Map<string, { date: Date; kind: string }>(
-    weekItems.map(
-      (item) =>
-        [item.date.toISOString().slice(0, 10), item as { date: Date; kind: string }] as const
-    )
-  );
+  /*
+    A day can hold several rows now, so the strip asks of all of them: is
+    there training on it, and is it a rest day (rest with no training — a
+    photo reminder doesn't stop a rest day being one). Messages are left out;
+    they are not something to do.
+  */
+  const kindsByDay = new Map<string, string[]>();
+  for (const item of weekItems as { date: Date; kind: string }[]) {
+    if (item.kind === 'message') continue;
+    const k = item.date.toISOString().slice(0, 10);
+    kindsByDay.set(k, [...(kindsByDay.get(k) ?? []), item.kind]);
+  }
   const weekDays = WEEKDAY_LETTERS.map((letter, i) => {
     const day = addLocalDays(weekStart, i);
     const iso = dateKey(day);
-    const item = scheduledByDay.get(iso);
+    const kinds = kindsByDay.get(iso) ?? [];
     return {
       iso,
       letter,
       dayNumber: day.getDate(),
-      hasSession: Boolean(item && item.kind !== 'rest'),
-      isRest: item?.kind === 'rest',
+      hasSession: kinds.some((k) => TRAINING_KINDS.includes(k)),
+      isRest: isRestDay(kinds),
       isToday: day.getTime() === today.getTime(),
       isSelected: day.getTime() === viewDate.getTime(),
     };
@@ -270,15 +301,22 @@ export default async function TodayPage({
     needs to know which workout is on — but neither needs the other, so
     they go together.
   */
-  const [cardioLog, todaysLog] = await Promise.all([
-    // What they have already logged against a minutes-based cardio day, so
-    // the row can show "done" instead of offering the form again.
-    scheduled?.cardioTypeId && scheduled.kind === 'cardio'
-      ? prisma.cardioLog.findFirst({
-          where: { clientId: user.id, cardioTypeId: scheduled.cardioTypeId, date: viewDate },
-          select: { minutes: true },
+  // The day's lead item — the lift over cardio over rest. Still what the
+  // step goal and the "session today?" bar read; the window below shows all.
+  const scheduled = pickPrimary(dayItems);
+  const cardioTypeIds = dayItems
+    .filter((i) => i.kind === 'cardio' && i.cardioTypeId)
+    .map((i) => i.cardioTypeId as string);
+
+  const [cardioLogs, todaysLog] = await Promise.all([
+    // What they have already logged against each minutes-based cardio item,
+    // so its row can show "done" instead of offering the form again.
+    cardioTypeIds.length > 0
+      ? prisma.cardioLog.findMany({
+          where: { clientId: user.id, cardioTypeId: { in: cardioTypeIds }, date: viewDate },
+          select: { cardioTypeId: true, minutes: true },
         })
-      : null,
+      : Promise.resolve([] as { cardioTypeId: string; minutes: number | null }[]),
     todaysWorkout
       ? prisma.workoutLog.findFirst({
           where: {
@@ -301,6 +339,9 @@ export default async function TodayPage({
   ]);
 
   const workoutDone = Boolean(todaysLog?.completedAt);
+  const cardioMinutesFor = new Map<string, number | null>(
+    cardioLogs.map((l) => [l.cardioTypeId, l.minutes] as const)
+  );
 
   /*
     Each daily goal becomes a row in the goal window. Where the app already
@@ -310,6 +351,8 @@ export default async function TodayPage({
     logged complete OR when the tracked number has caught up to the target.
   */
   const loggedDone = new Set(goalLogs.filter((g) => g.completed).map((g) => g.dailyGoalId));
+  // The day's step target, from whichever of its items carries one.
+  const dayStepTarget = dayItems.find((i) => i.stepTarget)?.stepTarget ?? null;
 
   const rows = goals.map((goal) => {
     const label = habitLabel(goal.goalType, goal.targetValue);
@@ -321,7 +364,7 @@ export default async function TodayPage({
       value = stepLog?.steps ?? 0;
       // Falls back to the number the deployed week already carries, so the
       // two places steps appear on this screen can't disagree.
-      total = parseTarget(goal.targetValue) ?? scheduled?.stepTarget ?? undefined;
+      total = parseTarget(goal.targetValue) ?? dayStepTarget ?? undefined;
     } else if (goal.goalType === 'protein') {
       value = proteinEaten;
       total = target ? Math.round(Number(target.protein)) : parseTarget(goal.targetValue);
@@ -368,11 +411,14 @@ export default async function TodayPage({
     legitimately ask for more walking than a leg day. A standing steps habit is
     the fallback. Null when neither is set, which renders as a plain count.
   */
-  const stepGoal = scheduled?.stepTarget ?? parseTarget(stepsHabit?.targetValue) ?? null;
+  const stepGoal = dayStepTarget ?? parseTarget(stepsHabit?.targetValue) ?? null;
 
   // A rest day has no session to finish, so its bar says so rather than
   // sitting at 0/1 all day looking like something missed.
-  const hasSessionToday = scheduled ? scheduled.kind !== 'rest' : Boolean(todaysWorkout);
+  const hasSessionToday = scheduled
+    ? dayItems.some((i) => TRAINING_KINDS.includes(i.kind))
+    : Boolean(todaysWorkout);
+  const restOnly = isRestDay(dayItems.map((i) => i.kind));
 
   const completedCount = rows.filter((r) => r.done).length;
   const nextCall = upcomingCalls[0] ?? null;
@@ -463,94 +509,134 @@ export default async function TodayPage({
       {scheduled && (
         <SystemWindow
           className="lg:col-span-2"
-          title={scheduled.kind === 'rest' ? 'Rest day' : isToday ? "Today's session" : 'Session'}
-          meta={scheduled.workout?.estMinutes ? `[${scheduled.workout.estMinutes} min]` : undefined}
+          title={restOnly ? 'Rest day' : isToday ? 'Today' : 'Plan'}
+          meta={dayItems.length > 1 ? `[${dayItems.length}]` : scheduled.workout?.estMinutes ? `[${scheduled.workout.estMinutes} min]` : undefined}
         >
-          <SystemWindowContent className="flex flex-col gap-3 pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span
-                className={
-                  scheduled.kind === 'rest'
-                    ? 'text-sm text-muted-foreground'
-                    : 'glow-soft text-sm font-medium text-foreground'
-                }
-              >
-                {scheduled.kind === 'rest'
-                  ? 'Nothing in the gym today. Steps and food still count.'
-                  : scheduled.label}
-              </span>
-              {scheduled.workoutId && scheduled.kind !== 'rest' && (
-                <Link
-                  href={`/workouts/${scheduled.workoutId}`}
-                  className="readout shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
-                >
-                  Start
-                </Link>
-              )}
-            </div>
+          {/*
+            EVERY item on the day, in the order they are read: the lift, each
+            cardio with the coach's written target, photo / body-stats /
+            check-in reminders that open the screens they are about, then
+            rest. This used to show one row — pickPrimary's — so a day with
+            a lift and a swim showed the lift and the swim was invisible.
+          */}
+          <SystemWindowContent className="flex flex-col pt-2">
+            <ul className="flex flex-col divide-y divide-border/60">
+              {dayItems.map((item) => {
+                const done = Boolean(item.completedAt);
+                const logged = item.cardioTypeId ? cardioMinutesFor.get(item.cardioTypeId) : undefined;
+                return (
+                  <li key={item.id} className="flex flex-col gap-2 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-2">
+                        {done && <Check size={13} className="shrink-0 text-success" />}
+                        <span
+                          className={
+                            item.kind === 'rest'
+                              ? 'text-sm text-muted-foreground'
+                              : 'glow-soft text-sm font-medium text-foreground'
+                          }
+                        >
+                          {item.kind === 'rest'
+                            ? restOnly
+                              ? 'Nothing in the gym today. Steps and food still count.'
+                              : item.label
+                            : item.label}
+                        </span>
+                        {item.kind === 'workout' && item.workout?.estMinutes && dayItems.length > 1 && (
+                          <span className="readout text-[10px] uppercase text-muted-foreground">
+                            {item.workout.estMinutes} min
+                          </span>
+                        )}
+                      </span>
 
-            {scheduled.stepTarget && (
+                      {item.kind === 'workout' && item.workoutId && (
+                        <Link
+                          href={`/workouts/${item.workoutId}`}
+                          className="readout shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                        >
+                          {done ? 'View' : 'Start'}
+                        </Link>
+                      )}
+
+                      {/* Reminders open the screen they are about. */}
+                      {REMINDER_LINKS[item.kind] && (
+                        <span className="flex shrink-0 items-center gap-2">
+                          <Link
+                            href={REMINDER_LINKS[item.kind]}
+                            className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                          >
+                            Open
+                          </Link>
+                          {isToday && !done && <DoneButton itemId={item.id} />}
+                        </span>
+                      )}
+
+                      {/*
+                        Cardio with no minutes to log — "swim, 1 km easy" —
+                        is finished with a tap. Minutes-based cardio keeps its
+                        log form below, which ticks it.
+                      */}
+                      {item.kind === 'cardio' && !(item.cardioMinutes && item.cardioTypeId) && isToday && !done && !item.stepTarget && (
+                        <DoneButton itemId={item.id} />
+                      )}
+                    </div>
+
+                    {item.cardioTarget && (
+                      <p className="whitespace-pre-line text-sm text-foreground/85">{item.cardioTarget}</p>
+                    )}
+                    {item.note && (
+                      <p className="whitespace-pre-line text-xs italic text-muted-foreground">{item.note}</p>
+                    )}
+
+                    {/*
+                      A minutes-based cardio item. Not gated on the absence
+                      of a step target: steps live on every day, and a day can
+                      carry both.
+                    */}
+                    {item.kind === 'cardio' && item.cardioMinutes && item.cardioTypeId && (
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="readout text-[10px] uppercase text-muted-foreground">
+                          {item.cardioMinutes} min
+                        </span>
+                        {logged && !isToday ? (
+                          <span className="readout flex items-center gap-1 text-[10px] uppercase text-success">
+                            <Check size={12} /> {logged} min done
+                          </span>
+                        ) : isToday ? (
+                          <form action={logCardio} className="flex shrink-0 items-center gap-2">
+                            <input type="hidden" name="cardioTypeId" value={item.cardioTypeId} />
+                            <input
+                              type="number"
+                              name="minutes"
+                              min="1"
+                              max="600"
+                              inputMode="numeric"
+                              defaultValue={logged ?? item.cardioMinutes}
+                              aria-label="Minutes done"
+                              className="readout h-9 w-20 border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none"
+                            />
+                            <button
+                              type="submit"
+                              className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                            >
+                              {logged ? 'Update' : 'Log'}
+                            </button>
+                            {logged ? <Check size={12} className="shrink-0 text-success" /> : null}
+                          </form>
+                        ) : null}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            {dayStepTarget && (
               <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
                 <span className="text-sm text-muted-foreground">
-                  {scheduled.cardioType?.name ?? 'Steps'}
+                  {dayItems.find((i) => i.stepTarget)?.cardioType?.name ?? 'Steps'}
                 </span>
-                <Count
-                  value={stepLog?.steps ?? 0}
-                  total={scheduled.stepTarget}
-                  mode="reach"
-                />
-              </div>
-            )}
-
-            {/*
-              A minutes-based cardio day. The block above only ever rendered
-              when a step target was set, so somebody prescribed "Stairmaster,
-              20 minutes" saw the label and no number at all, and had nowhere
-              to say they had done it. cardioMinutes was written by the deploy
-              and read by nothing, and had no input on the coach's builder
-              either, so it was never even non-null.
-
-              Not gated on the absence of a step target: steps live on every
-              day, not just cardio days, and one "set week steps" click writes
-              the same target across all seven. A day can carry both.
-            */}
-            {scheduled.kind === 'cardio' && scheduled.cardioMinutes && (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
-                <span className="text-sm text-muted-foreground">
-                  {scheduled.cardioType?.name ?? 'Cardio'}{' '}
-                  <span className="readout text-[10px] uppercase">
-                    {scheduled.cardioMinutes} min
-                  </span>
-                </span>
-
-                {cardioLog?.minutes && !isToday ? (
-                  <span className="readout flex items-center gap-1 text-[10px] uppercase text-success">
-                    <Check size={12} /> {cardioLog.minutes} min done
-                  </span>
-                ) : isToday ? (
-                  <form action={logCardio} className="flex shrink-0 items-center gap-2">
-                    <input type="hidden" name="cardioTypeId" value={scheduled.cardioTypeId ?? ''} />
-                    <input
-                      type="number"
-                      name="minutes"
-                      min="1"
-                      max="600"
-                      inputMode="numeric"
-                      defaultValue={cardioLog?.minutes ?? scheduled.cardioMinutes}
-                      aria-label="Minutes done"
-                      className="readout h-9 w-20 border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none"
-                    />
-                    <button
-                      type="submit"
-                      className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
-                    >
-                      {cardioLog?.minutes ? 'Update' : 'Log'}
-                    </button>
-                    {cardioLog?.minutes ? (
-                      <Check size={12} className="shrink-0 text-success" />
-                    ) : null}
-                  </form>
-                ) : null}
+                <Count value={stepLog?.steps ?? 0} total={dayStepTarget} mode="reach" />
               </div>
             )}
           </SystemWindowContent>

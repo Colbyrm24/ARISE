@@ -7,14 +7,17 @@ import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { WEEKDAYS } from '@/lib/month-grid';
-import { planMove } from '@/lib/schedule-move';
+import { planMove, SESSION_KINDS } from '@/lib/schedule-move';
+import { orderDayItems } from '@/lib/program-calendar';
 
 /*
   A client's month you can rearrange, the way Trainerize does it.
 
   Drag a session onto another day and it moves there; if that day already had
-  something planned, the two days trade places, so a day never ends up with
-  two sessions and the client's Today screen never shows the wrong one. On a
+  a lift or a rest day, the two trade places, so a day never ends up with two
+  sessions. Cardio, reminders and messages simply move — a day can hold
+  several of those, and every one shows here and on the client's Today. A
+  moved row is pinned, so a later resync from the program leaves it. On a
   phone or tablet, where dragging inside a page fights the scroll, the same
   thing is two taps: tap the session, tap the day.
 
@@ -58,6 +61,10 @@ type Props = {
   pushBack: (clientId: string, from: string, days: number) => Promise<Result>;
 };
 
+// Reminders and scheduled messages: drawn lighter than training so the
+// month still reads as sessions at a glance.
+const REMINDER_KINDS = ['photos', 'bodystats', 'checkin', 'message'];
+
 const selectClass =
   'flex h-10 w-full border border-input bg-secondary/40 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -100,6 +107,8 @@ export function ScheduleBoard({
     list.push(it);
     byDay.set(it.date, list);
   }
+  // A day can hold several items; read them lift first, rest last.
+  for (const [k, list] of byDay) byDay.set(k, orderDayItems(list));
 
   const pickedItem = picked ? items.find((i) => i.id === picked) ?? null : null;
 
@@ -150,8 +159,8 @@ export function ScheduleBoard({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">
-        Drag a session to another day — or tap it, then tap the day. If that day already has
-        something on it, the two swap. Tap a day for more.
+        Drag a session to another day — or tap it, then tap the day. A lift or rest day swaps
+        with the one already there; cardio and reminders just move. Tap a day for more.
       </p>
 
       {pickedItem && (
@@ -288,7 +297,9 @@ export function ScheduleBoard({
                           !s.done && 'cursor-grab active:cursor-grabbing',
                           s.kind === 'rest'
                             ? 'border-border/50 text-muted-foreground'
-                            : s.done
+                            : REMINDER_KINDS.includes(s.kind) && !s.done
+                              ? 'border-dashed border-border/60 text-muted-foreground'
+                              : s.done
                               ? 'border-accent/60 bg-accent/15 text-foreground'
                               : 'border-border/60 text-foreground/85',
                           picked === s.id && 'border-accent bg-accent/25 text-foreground',
@@ -413,8 +424,10 @@ export function ScheduleBoard({
                     const label = workoutId
                       ? workouts.find((w) => w.id === workoutId)?.name ?? 'Workout'
                       : 'Rest day';
+                    // Only the day's session is replaced; its cardio and
+                    // reminders stay, the same as setDay on the server.
                     const next = [
-                      ...items.filter((i) => !(i.date === day && !i.done)),
+                      ...items.filter((i) => !(i.date === day && !i.done && SESSION_KINDS.includes(i.kind))),
                       {
                         id: `pending-${day}`,
                         date: day,
