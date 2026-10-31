@@ -17,6 +17,8 @@ export const NOTIFICATION_TYPES = [
     these had the whole delivery mechanism and no one to ring it.
   */
   'activity',
+  // Somebody applied for 1-on-1 coaching from the public /coaching page.
+  'application',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -40,6 +42,8 @@ export function notificationHref(
     if (type === 'account') return '/welcome';
     return '/progress';
   }
+  // An applicant has no account, so there is no client id to route on.
+  if (type === 'application') return '/coach/applications';
   if (!clientId) return '/coach/inbox';
 
   switch (type) {
@@ -76,6 +80,7 @@ const PUSH_TITLES: Record<NotificationType, string> = {
   habit: 'New habit',
   account: 'New signup',
   activity: 'Client activity',
+  application: 'New coaching application',
 };
 
 export async function notify(

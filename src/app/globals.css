@@ -797,3 +797,84 @@ body::before {
   --accent-foreground: 244 60% 4%;
   --destructive: 4 100% 62%;
 }
+
+/*
+  ---------------------------------------------------------------------------
+  The /coaching page
+  ---------------------------------------------------------------------------
+
+  One orchestrated entrance and nothing else moving: the system notice
+  arrives, its light line draws across, then the headline, the line under it
+  and the video rise in sequence (each element sets its own --d delay). Below
+  the hero nothing animates on scroll — a page selling to grown men should
+  read as sure of itself, not busy.
+*/
+@keyframes landing-scan {
+  from { transform: scaleX(0); opacity: 0; }
+  to { transform: scaleX(1); opacity: 1; }
+}
+@keyframes landing-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes landing-caret {
+  50% { opacity: 0; }
+}
+.landing-scan {
+  transform-origin: center;
+  animation: landing-scan 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.landing-rise {
+  animation: landing-rise 0.6s ease-out both;
+  animation-delay: var(--d, 0ms);
+}
+.landing-caret {
+  animation: landing-caret 1s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .landing-scan,
+  .landing-rise,
+  .landing-caret {
+    animation: none;
+  }
+}
+
+/*
+  The hero headline. Long by design (the formula is audience + result +
+  objection), so it runs at Archivo's normal width on a phone, where the
+  widest cut would stack it eight lines deep, and opens up from tablet up.
+  The h1 bloom is pulled back for the same reason: a full bloom on a hundred
+  characters smears into fog.
+*/
+.landing-headline {
+  /* font-weight too, so the fallback face is heavy while Archivo loads. */
+  font-weight: 900;
+  font-variation-settings: 'wdth' 100, 'wght' 900;
+  letter-spacing: -0.015em;
+  text-shadow:
+    0 0 2px hsl(var(--foreground) / 0.5),
+    0 0 26px hsl(var(--accent) / 0.35),
+    0 0 70px hsl(var(--system) / 0.35);
+}
+@media (min-width: 768px) {
+  .landing-headline {
+    font-variation-settings: 'wdth' 112, 'wght' 900;
+    letter-spacing: -0.025em;
+  }
+}
+
+/* A faint targeting grid behind the hero, fading out toward the edges. */
+.landing-grid {
+  background-image:
+    linear-gradient(hsl(var(--accent) / 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--accent) / 0.07) 1px, transparent 1px);
+  background-size: 44px 44px;
+  background-position: center top;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent 75%);
+}
+
+/* <details> without the browser's own triangle, in every engine. */
+.landing-faq summary::-webkit-details-marker {
+  display: none;
+}
