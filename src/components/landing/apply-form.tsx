@@ -98,7 +98,7 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...final, source: source ?? undefined, company: honeypot }),
       });
-  const data: { error?: string } = await res.json().catch(() => ({}));
+      const data: { error?: string } = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "That didn't go through. Try again in a minute.");
       setDone(true);
       window.scrollTo({ top: 0 });
