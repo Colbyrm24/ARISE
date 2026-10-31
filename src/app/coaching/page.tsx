@@ -289,9 +289,9 @@ function VideoPlaceholder() {
         <Play size={22} className="glow-ink translate-x-0.5 text-accent" />
       </span>
       <div className="relative px-6">
-        <p className="display font-black text-base sm:text-xl">Your video goes here</p>
+        <p className="display font-black text-base sm:text-xl">Video loading soon</p>
         <p className="readout mt-2 text-[10px] uppercase text-muted-foreground">
-          YouTube, Vimeo or .mp4 · set videoUrl in landing-content.ts
+          Apply below in the meantime
         </p>
       </div>
     </div>
