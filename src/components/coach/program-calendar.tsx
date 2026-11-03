@@ -137,6 +137,18 @@ export function ProgramCalendar(props: Props) {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
+  /*
+    Bumped by every successful save; the effect below does the refresh.
+    Calling router.refresh() inside the save's own transition was dropped on
+    production: the toast said "Added" but the grid and the rail count kept
+    the old data until a manual reload. Refreshing from an effect runs after
+    that transition has committed, which is the one that sticks.
+  */
+  const [saved, setSaved] = useState(0);
+  useEffect(() => {
+    if (saved > 0) router.refresh();
+  }, [saved, router]);
+
   // A refresh after a save hands down the server's truth; take it.
   useEffect(() => setItems(props.items), [props.items]);
 
@@ -168,7 +180,7 @@ export function ProgramCalendar(props: Props) {
       return false;
     }
     if (res.message) setNotice({ ok: true, text: res.message });
-    router.refresh();
+    setSaved((n) => n + 1);
     return true;
   }
 
