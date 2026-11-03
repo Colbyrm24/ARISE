@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Link2, Link2Off, UserMinus, UserPlus } from 'lucide-react';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
@@ -143,7 +144,22 @@ export function ProgramSubscribers({
   unlinkSubscriber: (formData: FormData) => Promise<void>;
   relinkSubscriber: (formData: FormData) => Promise<void>;
 }) {
+  const router = useRouter();
   const [state, action] = useFormState(addSubscribers, { ok: false, message: '' });
+
+  /*
+    Remove / Unlink / Relink: same stale-list problem as Add. Each wrapped
+    action bumps a counter once it has finished, and the refresh happens in an
+    effect after that, outside the form's own transition.
+  */
+  const [saved, setSaved] = useState(0);
+  useEffect(() => {
+    if (saved > 0) router.refresh();
+  }, [saved, router]);
+  const thenRefresh = (fn: (formData: FormData) => Promise<void>) => async (formData: FormData) => {
+    await fn(formData);
+    setSaved((n) => n + 1);
+  };
   const [open, setOpen] = useState(subscribers.length === 0);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const subscribed = new Set(subscribers.map((s) => s.clientId));
@@ -154,8 +170,11 @@ export function ProgramSubscribers({
     if (state.ok) {
       setPicked(new Set());
       setOpen(false);
+      // The action's revalidatePath alone left the list showing nobody until
+      // a reload; an explicit refresh once the form has settled fixes it.
+      router.refresh();
     }
-  }, [state]);
+  }, [state, router]);
 
   const toggle = (id: string) =>
     setPicked((prev) => {
@@ -274,14 +293,14 @@ export function ProgramSubscribers({
                 <div className="flex flex-wrap items-center gap-4">
                   {s.linked ? (
                     <ConfirmAction
-                      action={unlinkSubscriber}
+                      action={thenRefresh(unlinkSubscriber)}
                       id={s.id}
                       label="Unlink"
                       confirm={`Stop syncing ${s.name}`}
                       icon={<Link2Off size={12} />}
                     />
                   ) : (
-                    <form action={relinkSubscriber}>
+                    <form action={thenRefresh(relinkSubscriber)}>
                       <input type="hidden" name="subscriptionId" value={s.id} />
                       <button
                         type="submit"
@@ -293,7 +312,7 @@ export function ProgramSubscribers({
                     </form>
                   )}
                   <ConfirmAction
-                    action={removeSubscriber}
+                    action={thenRefresh(removeSubscriber)}
                     id={s.id}
                     label="Remove"
                     confirm={`Remove ${s.name} and their upcoming days`}
