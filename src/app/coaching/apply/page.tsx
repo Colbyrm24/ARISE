@@ -18,6 +18,7 @@ export const metadata: Metadata = {
 export default function ApplyPage({ searchParams }: { searchParams?: { ref?: string } }) {
   return (
     <div className="landing-clean relative min-h-screen">
+      <div aria-hidden className="viewport-frame" />
       <ApplyForm source={normalizeSource(searchParams?.ref)} instagramUrl={LANDING.instagramUrl} />
     </div>
   );

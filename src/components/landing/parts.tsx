@@ -9,7 +9,7 @@ import { safeImage } from '@/lib/landing';
 /** The small line above a section heading. Plain, one per section. */
 export function Eyebrow({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <p className={cn('text-xs font-semibold uppercase tracking-[0.2em] text-cta', className)}>{children}</p>
+    <p className={cn('text-xs font-semibold uppercase tracking-[0.2em] text-accent glow-soft', className)}>{children}</p>
   );
 }
 

@@ -205,7 +205,7 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
         </div>
 
         <div key={index} className="motion-safe:animate-fade-in">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cta">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent glow-soft">
             Question {index + 1}
             {'optional' in step && step.optional ? ' · optional' : ''}
           </p>

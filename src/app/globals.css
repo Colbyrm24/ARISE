@@ -915,12 +915,3 @@ body::before {
 .text-cta {
   color: hsl(var(--cta));
 }
-/* No glow on this page's headings: clean means the type carries itself. */
-.landing-clean h1,
-.landing-clean h2,
-.landing-clean h3 {
-  text-shadow: none;
-}
-.landing-clean h1 {
-  font-variation-settings: 'wdth' 100, 'wght' 800;
-}

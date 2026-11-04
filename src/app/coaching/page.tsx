@@ -14,7 +14,7 @@ import { ApplyLink, Eyebrow, PhotoSlot, Silhouette } from '@/components/landing/
   Every word and link on it comes from lib/landing-content.ts, and nothing
   here touches the database, so it renders fast and renders anywhere.
 
-  Clean on purpose: the app's ground and type, lots of space, soft cards, and
+  Clean layout, the app's own blue light and glow, soft cards, and
   one orange for every button that leads to the application. Nothing else on
   the page is orange, so the eye always knows where to go.
 */
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 const wrap = 'mx-auto w-full max-w-6xl px-5 sm:px-8';
 const section = 'py-20 sm:py-28';
 const h2 = 'mt-3 text-balance text-3xl font-extrabold tracking-tight sm:text-[2.75rem] sm:leading-[1.1]';
-const card = 'rounded-[20px] border border-border/50 bg-card/60';
+const card = 'surface-sheen lit-edge relative rounded-[20px] border border-border';
 
 export default function CoachingPage({ searchParams }: { searchParams?: { ref?: string } }) {
   // ?ref=ig on the bio link rides through to the application, so the coach
@@ -42,6 +42,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
 
   return (
     <div className="landing-clean relative min-h-screen pb-24 sm:pb-0">
+      <div aria-hidden className="viewport-frame" />
       <header className="sticky top-0 z-30 border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className={`${wrap} flex h-16 items-center justify-between`}>
           <span className="text-base font-extrabold tracking-tight">{LANDING.coachName}</span>
@@ -50,18 +51,19 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
       </header>
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
-      <section className="pb-20 pt-14 sm:pb-28 sm:pt-20">
-        <div className={`${wrap} flex flex-col items-center text-center`}>
-          <p className="landing-rise rounded-[999px] border border-border/60 px-4 py-1.5 text-xs font-medium text-muted-foreground">
+      <section className="relative overflow-hidden pb-20 pt-14 sm:pb-28 sm:pt-20">
+        <div aria-hidden className="landing-grid pointer-events-none absolute inset-0" />
+        <div className={`${wrap} relative flex flex-col items-center text-center`}>
+          <p className="landing-rise rounded-[999px] border border-accent/40 bg-accent/[0.06] px-4 py-1.5 text-xs font-medium text-accent glow-soft shadow-[0_0_24px_-6px_hsl(var(--accent)/0.6)]">
             Private 1-on-1 coaching for men 28–50
           </p>
 
           <h1
-            className="landing-rise mt-7 max-w-4xl text-balance text-[2rem] font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.5rem]"
+            className="landing-rise landing-headline mt-7 max-w-4xl text-balance text-[2rem] leading-[1.08] sm:text-5xl lg:text-[3.5rem]"
             style={{ ['--d' as string]: '100ms' }}
           >
-            {headline.before}
-            <span className="text-accent">{headline.highlight}</span>
+            {keepTogether(headline.before)}
+            <span className="whitespace-nowrap text-accent glow-soft">{headline.highlight}</span>
             {headline.after}
           </h1>
 
@@ -73,7 +75,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
           </p>
 
           <div className="landing-rise mt-12 w-full max-w-4xl" style={{ ['--d' as string]: '300ms' }}>
-            <div className="overflow-hidden rounded-[24px] border border-border/50 bg-card shadow-[0_40px_120px_-40px_hsl(var(--system)/0.45)]">
+            <div className="surface-sheen lit-edge relative overflow-hidden rounded-[24px] border border-border p-1.5 shadow-[0_40px_120px_-30px_hsl(var(--system)/0.7)] sm:p-2">
               {video.kind === 'none' ? (
                 <VideoPlaceholder />
               ) : (
@@ -92,7 +94,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
               {LANDING.proof.map((p) => (
                 <div key={p.label} className="flex flex-col items-center gap-1">
                   <dt className="sr-only">{p.label}</dt>
-                  <dd className="text-2xl font-extrabold tracking-tight sm:text-3xl">{p.value}</dd>
+                  <dd className="text-2xl font-extrabold tracking-tight text-accent glow-soft sm:text-3xl">{p.value}</dd>
                   <dd className="text-xs text-muted-foreground sm:text-sm">{p.label}</dd>
                 </div>
               ))}
@@ -153,7 +155,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
               <ul className="mt-6 flex flex-col gap-5">
                 {LANDING.forYou.map((line) => (
                   <li key={line} className="flex gap-3.5 text-[15px] leading-relaxed">
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[999px] bg-success/15 text-success">
+                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[999px] bg-success/15 text-success shadow-[0_0_12px_hsl(var(--success)/0.5)]">
                       <Check size={14} strokeWidth={3} aria-hidden />
                     </span>
                     {line}
@@ -161,7 +163,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
                 ))}
               </ul>
             </div>
-            <div className="rounded-[20px] border border-border/30 p-7 sm:p-9">
+            <div className="relative rounded-[20px] border border-border bg-card/40 p-7 sm:p-9">
               <h3 className="text-lg font-bold text-foreground/85">This isn&apos;t for you if</h3>
               <ul className="mt-6 flex flex-col gap-5">
                 {LANDING.notForYou.map((line) => (
@@ -188,7 +190,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
           <ol className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {LANDING.steps.map((step, i) => (
               <li key={step.title} className={`${card} p-7`}>
-                <span className="flex h-10 w-10 items-center justify-center rounded-[999px] bg-accent/15 text-sm font-bold text-accent">
+                <span className="flex h-10 w-10 items-center justify-center rounded-[999px] border border-accent/60 bg-background text-sm font-bold text-accent glow-soft shadow-[0_0_18px_-2px_hsl(var(--accent)/0.7)]">
                   {i + 1}
                 </span>
                 <h3 className="mt-5 text-lg font-bold">{step.title}</h3>
@@ -250,7 +252,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
       {/* ── Final call ───────────────────────────────────────────────── */}
       <section className="pb-24 sm:pb-32">
         <div className={wrap}>
-          <div className="mx-auto max-w-4xl rounded-[28px] border border-border/50 bg-[radial-gradient(ellipse_at_top,hsl(var(--system)/0.18),transparent_65%)] bg-card/60 px-6 py-16 text-center sm:px-14 sm:py-20">
+          <div className="surface-sheen lit-edge relative mx-auto max-w-4xl rounded-[28px] border border-border px-6 py-16 text-center sm:px-14 sm:py-20">
             <h2 className="text-balance text-3xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
               {LANDING.finalHeadline}
             </h2>
@@ -297,13 +299,27 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
   );
 }
 
+/** Keeps a range like "28–50" on one line, so a headline never breaks inside it. */
+function keepTogether(text: string) {
+  return text.split(/(\d+\s*[–-]\s*\d+)/).map((part, i) =>
+    i % 2 ? (
+      <span key={i} className="whitespace-nowrap">
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  );
+}
+
 function VideoPlaceholder() {
   return (
-    <div className="relative flex aspect-video w-full flex-col items-center justify-center gap-4 bg-[radial-gradient(ellipse_at_center,hsl(var(--system)/0.16),transparent_70%)]">
-      <span className="flex h-16 w-16 items-center justify-center rounded-[999px] bg-foreground/10 backdrop-blur-sm">
-        <Play size={24} className="translate-x-0.5 text-foreground" fill="currentColor" />
+    <div className="relative flex aspect-video w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-[18px] bg-[radial-gradient(ellipse_at_center,hsl(var(--system)/0.2),transparent_70%)]">
+      <div aria-hidden className="landing-grid absolute inset-0 opacity-60" />
+      <span className="relative flex h-16 w-16 items-center justify-center rounded-[999px] border border-accent/60 bg-background/70 shadow-[0_0_30px_-4px_hsl(var(--accent)/0.9)]">
+        <Play size={24} className="glow-ink translate-x-0.5 text-accent" fill="currentColor" />
       </span>
-      <div className="px-6">
+      <div className="relative px-6">
         <p className="text-lg font-bold sm:text-xl">Video coming soon</p>
         <p className="mt-1 text-sm text-muted-foreground">Apply below in the meantime</p>
       </div>
@@ -343,7 +359,7 @@ function ResultCard({ result }: { result?: ClientResult }) {
         ))}
       </div>
       <div className="px-3 pb-4 pt-5">
-        <p className={`text-2xl font-extrabold leading-tight tracking-tight ${example ? 'text-foreground/30' : 'text-accent'}`}>
+        <p className={`text-2xl font-extrabold leading-tight tracking-tight ${example ? 'text-foreground/30' : 'text-accent glow-soft'}`}>
           {example ? 'Result line' : result.result}
         </p>
         <p className={`mt-2 font-semibold ${example ? 'text-foreground/40' : ''}`}>{example ? 'First name' : result.name}</p>

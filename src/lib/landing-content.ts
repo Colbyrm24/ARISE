@@ -109,8 +109,7 @@ export const LANDING: LandingContent = {
 
   headline: {
     before: 'How successful men 28–50 get lean enough to ',
-    // The hyphen in six‑pack is a no-break hyphen, so the phrase never splits across lines.
-    highlight: 'see their six‑pack',
+    highlight: 'see their six-pack',
     after: ', and keep it for life, without giving up the food they love',
   },
   subheadline:
