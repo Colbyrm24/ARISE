@@ -878,3 +878,49 @@ body::before {
 .landing-faq summary::-webkit-details-marker {
   display: none;
 }
+
+/*
+  ---------------------------------------------------------------------------
+  The clean /coaching skin
+  ---------------------------------------------------------------------------
+
+  The landing page sells to men 28-50, so it drops the app's glow, corner
+  ticks and scan lines and runs on plain space and type. One new colour,
+  scoped to these pages only: an orange for the buttons that matter. Orange
+  sits opposite the app's blue on the wheel, so the action is the warmest
+  thing on a cool page and the eye goes straight to it.
+*/
+.landing-clean {
+  --cta: 22 100% 56%;
+  --cta-hover: 26 100% 62%;
+  --cta-foreground: 224 65% 4%;
+}
+.btn-cta {
+  background: hsl(var(--cta));
+  color: hsl(var(--cta-foreground));
+  box-shadow: 0 10px 30px -10px hsl(var(--cta) / 0.65);
+  transition: background-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.btn-cta:hover {
+  background: hsl(var(--cta-hover));
+  box-shadow: 0 14px 38px -10px hsl(var(--cta) / 0.8);
+}
+.btn-cta:active {
+  transform: scale(0.98);
+}
+.btn-cta:disabled {
+  opacity: 0.4;
+  box-shadow: none;
+}
+.text-cta {
+  color: hsl(var(--cta));
+}
+/* No glow on this page's headings: clean means the type carries itself. */
+.landing-clean h1,
+.landing-clean h2,
+.landing-clean h3 {
+  text-shadow: none;
+}
+.landing-clean h1 {
+  font-variation-settings: 'wdth' 100, 'wght' 800;
+}

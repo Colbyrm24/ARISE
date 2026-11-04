@@ -4,7 +4,7 @@
 */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { landingVideo, resultsView, safeImage, PLACEHOLDER_SLOTS } from '@/lib/landing';
+import { landingVideo, resultsView, safeImage, testimonialsView, PLACEHOLDER_SLOTS } from '@/lib/landing';
 import { isCoachPath } from '@/lib/public-paths';
 import type { ClientResult } from '@/lib/landing-content';
 
@@ -87,4 +87,15 @@ test('the public coaching page is not mistaken for the coach console', () => {
   assert.equal(isCoachPath('/coaching/apply'), false);
   assert.equal(isCoachPath('/coach'), true);
   assert.equal(isCoachPath('/coach/applications'), true);
+});
+
+test('testimonials: real ones win, half-empty ones drop, else example slots or nothing', () => {
+  const real = { quote: 'Still have a beer every Friday.', name: 'Mike', about: '41, two kids' };
+  const blank = { quote: '  ', name: 'Nobody', about: '' };
+  assert.deepEqual(testimonialsView({ testimonials: [real, blank], showResultPlaceholders: true }), {
+    mode: 'real',
+    items: [real],
+  });
+  assert.equal(testimonialsView({ testimonials: [blank], showResultPlaceholders: true }).mode, 'placeholder');
+  assert.equal(testimonialsView({ testimonials: [], showResultPlaceholders: false }).mode, 'hidden');
 });

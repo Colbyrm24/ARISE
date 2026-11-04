@@ -140,7 +140,7 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
 
   if (done) return <Received name={answers.firstName} instagramUrl={instagramUrl} />;
 
-  const counter = `${String(index + 1).padStart(2, '0')}/${String(total).padStart(2, '0')}`;
+  const counter = `${index + 1} of ${total}`;
 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-2xl flex-col px-5 pb-8 sm:px-8">
@@ -149,33 +149,33 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
           <button
             type="button"
             onClick={back}
-            className="readout -ml-2 flex h-10 items-center gap-1 px-2 text-xs uppercase text-muted-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="-ml-2 flex h-10 items-center gap-1 px-2 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ChevronLeft size={16} /> Back
           </button>
         ) : (
           <Link
             href="/coaching"
-            className="readout -ml-2 flex h-10 items-center gap-1 px-2 text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
+            className="-ml-2 flex h-10 items-center gap-1 px-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ChevronLeft size={16} /> Exit
           </Link>
         )}
-        <span className="readout text-xs text-accent glow-soft" aria-live="polite">
-          [{counter}]
+        <span className="text-sm text-muted-foreground" aria-live="polite">
+          {counter}
         </span>
       </header>
 
-      {/* Progress as a stat bar: one cell per question. */}
+      {/* Progress: one rounded cell per question, filled in the page's orange. */}
       <div className="flex gap-1" aria-hidden>
         {all.map((s, i) => (
           <span
             key={s.key}
             className={cn(
-              'h-1.5 flex-1 transition-all duration-300',
-              i < index && 'bg-accent shadow-[0_0_8px_hsl(var(--accent)/0.8)]',
-              i === index && 'bg-accent/50 shadow-[0_0_10px_hsl(var(--accent)/0.6)]',
-              i > index && 'bg-border'
+              'h-1 flex-1 rounded-[999px] transition-all duration-300',
+              i < index && 'bg-[hsl(var(--cta))]',
+              i === index && 'bg-[hsl(var(--cta)/0.5)]',
+              i > index && 'bg-border/60'
             )}
           />
         ))}
@@ -205,10 +205,9 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
         </div>
 
         <div key={index} className="motion-safe:animate-fade-in">
-          <p className="readout text-[11px] uppercase text-accent glow-soft">
-            <span className="text-accent/60">[</span>Question {String(index + 1).padStart(2, '0')}
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cta">
+            Question {index + 1}
             {'optional' in step && step.optional ? ' · optional' : ''}
-            <span className="text-accent/60">]</span>
           </p>
           <label htmlFor={`q-${step.key}`} className="mt-3 block text-balance text-2xl font-semibold leading-tight sm:text-[2rem]">
             {step.prompt}
@@ -229,15 +228,15 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
                       aria-checked={on}
                       onClick={() => choose(c.value)}
                       className={cn(
-                        'flex min-h-[56px] w-full items-center gap-4 border px-4 py-3 text-left text-[15px] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-base',
+                        'flex min-h-[56px] w-full items-center gap-4 rounded-[14px] border px-4 py-3 text-left text-[15px] transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-base',
                         on
-                          ? 'border-accent bg-accent/[0.12] text-foreground shadow-[inset_0_0_24px_hsl(var(--accent)/0.15),0_0_24px_-6px_hsl(var(--accent)/0.8)]'
-                          : 'border-border bg-card/50 text-foreground/90 hover:border-accent/50'
+                          ? 'border-accent bg-accent/[0.1] text-foreground'
+                          : 'border-border/60 bg-card/50 text-foreground/90 hover:border-accent/50'
                       )}
                     >
                       <span
                         className={cn(
-                          'readout flex h-6 w-6 shrink-0 items-center justify-center border text-[10px]',
+                          'flex h-6 w-6 shrink-0 items-center justify-center rounded-[999px] border text-[11px] font-semibold',
                           on ? 'border-accent bg-accent text-accent-foreground' : 'border-border text-muted-foreground'
                         )}
                       >
@@ -288,7 +287,7 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
             <button
               type="submit"
               disabled={sending || (isLast && !value)}
-              className="inline-flex h-14 w-full items-center justify-center bg-accent px-10 text-sm font-bold uppercase tracking-[0.18em] text-accent-foreground shadow-[0_0_22px_-2px_hsl(var(--accent)/0.9),0_0_60px_4px_hsl(var(--system)/0.5)] transition-all active:scale-[0.98] disabled:opacity-40 disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto"
+              className="btn-cta inline-flex h-14 w-full items-center justify-center rounded-[999px] px-10 text-base font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:w-auto"
             >
               {isLast
                 ? sending

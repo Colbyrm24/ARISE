@@ -1,5 +1,5 @@
 import { parseVideoUrl } from '@/lib/exercise-video';
-import type { ClientResult, LandingContent } from '@/lib/landing-content';
+import type { ClientResult, LandingContent, Testimonial } from '@/lib/landing-content';
 
 /*
   The bits of the /coaching page that are decisions rather than markup, kept
@@ -90,4 +90,18 @@ export function safeImage(src: string | null | undefined) {
   if (!v) return null;
   if (v.startsWith('/') && !v.startsWith('//')) return v;
   return /^https?:\/\//i.test(v) ? v : null;
+}
+
+export type TestimonialsView =
+  | { mode: 'real'; items: Testimonial[] }
+  | { mode: 'placeholder'; slots: number }
+  | { mode: 'hidden' };
+
+/** Same rule as results: real ones win, else example slots or nothing. */
+export function testimonialsView(
+  content: Pick<LandingContent, 'testimonials' | 'showResultPlaceholders'>
+): TestimonialsView {
+  const items = content.testimonials.filter((t) => t.quote.trim() && t.name.trim());
+  if (items.length > 0) return { mode: 'real', items };
+  return content.showResultPlaceholders ? { mode: 'placeholder', slots: 3 } : { mode: 'hidden' };
 }

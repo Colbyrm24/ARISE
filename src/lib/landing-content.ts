@@ -37,6 +37,20 @@ export type ClientResult = {
   timeframe?: string;
 };
 
+export type Testimonial = {
+  /** What they said, in their words. One to three sentences. */
+  quote: string;
+  /** First name only. */
+  name: string;
+  /** Age, job, life situation. One short line. */
+  about: string;
+  /** Optional: a YouTube, Vimeo or .mp4 link to them saying it on camera. */
+  videoUrl?: string;
+};
+
+/** A short proof line under the hero, e.g. { value: '800+', label: 'men coached' }. */
+export type ProofStat = { value: string; label: string };
+
 export type Step = { title: string; body: string };
 export type Faq = { question: string; answer: string };
 
@@ -56,8 +70,13 @@ export type LandingContent = {
   /** The small line under the Apply button. */
   applyNote: string;
 
+  /** Up to three short proof lines under the hero. Only true numbers. */
+  proof: ProofStat[];
+
   results: ClientResult[];
-  /** While `results` is empty: true shows example slots, false hides the section. */
+  /** In their own words. Real clients only, with their permission. */
+  testimonials: Testimonial[];
+  /** While `results` (and `testimonials`) is empty: true shows example slots, false hides the section. */
   showResultPlaceholders: boolean;
 
   forYou: string[];
@@ -90,7 +109,8 @@ export const LANDING: LandingContent = {
 
   headline: {
     before: 'How successful men 28–50 get lean enough to ',
-    highlight: 'see their six-pack',
+    // The hyphen in six‑pack is a no-break hyphen, so the phrase never splits across lines.
+    highlight: 'see their six‑pack',
     after: ', and keep it for life, without giving up the food they love',
   },
   subheadline:
@@ -109,7 +129,23 @@ export const LANDING: LandingContent = {
   //   afterPhoto: 'https://…/after.jpg',
   //   timeframe: '16 weeks',
   // },
+  // Straight from your Instagram bio. Change or remove if a number changes.
+  proof: [
+    { value: '800+', label: 'clients coached' },
+    { value: '1-on-1', label: 'with me, not an app' },
+    { value: '6 months', label: 'lean, then keep it' },
+  ],
+
   results: [],
+
+  // Real clients only. Example of one entry:
+  // {
+  //   quote: "I've had abs for a year now and I still have a beer with the guys every Friday.",
+  //   name: 'First name',
+  //   about: '38, sales director, two kids',
+  //   videoUrl: 'https://youtube.com/…',   // optional
+  // },
+  testimonials: [],
   showResultPlaceholders: true,
 
   forYou: [

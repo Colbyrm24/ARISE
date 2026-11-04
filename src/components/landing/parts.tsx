@@ -6,22 +6,14 @@ import { safeImage } from '@/lib/landing';
   Small server-only pieces of the /coaching page. No client JS in here.
 */
 
-/**
- * The system's voice: a bracketed mono line above a section heading. One per
- * section, never more — it's the anime "status window" cue, and stacking
- * them turns a cue into wallpaper.
- */
-export function SystemLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+/** The small line above a section heading. Plain, one per section. */
+export function Eyebrow({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <p className={cn('readout text-[11px] uppercase text-accent glow-soft', className)}>
-      <span aria-hidden className="text-accent/60">[</span>
-      {children}
-      <span aria-hidden className="text-accent/60">]</span>
-    </p>
+    <p className={cn('text-xs font-semibold uppercase tracking-[0.2em] text-cta', className)}>{children}</p>
   );
 }
 
-/** The one call to action, everywhere it appears. */
+/** The one call to action, everywhere it appears. Orange, so it's the first thing the eye finds. */
 export function ApplyLink({
   href,
   label,
@@ -37,19 +29,17 @@ export function ApplyLink({
     <Link
       href={href}
       className={cn(
-        'group relative inline-flex items-center justify-center gap-3 bg-accent font-bold uppercase text-accent-foreground transition-all duration-200',
-        'shadow-[0_0_22px_-2px_hsl(var(--accent)/0.9),0_0_60px_4px_hsl(var(--system)/0.55)] hover:shadow-[0_0_30px_0px_hsl(var(--accent)/1),0_0_90px_10px_hsl(var(--system)/0.75)] active:scale-[0.98]',
+        'btn-cta group inline-flex items-center justify-center gap-2.5 rounded-[999px] font-bold',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        size === 'lg' ? 'h-14 px-10 text-sm tracking-[0.18em]' : 'h-9 px-4 text-[11px] tracking-[0.16em]',
+        size === 'lg' ? 'h-14 px-9 text-base' : 'h-9 px-4 text-sm',
         className
       )}
     >
       {label}
       {size === 'lg' && (
-        <span
-          aria-hidden
-          className="h-2 w-2 rotate-45 border-r-2 border-t-2 border-accent-foreground transition-transform duration-200 group-hover:translate-x-1"
-        />
+        <span aria-hidden className="transition-transform duration-150 group-hover:translate-x-1">
+          →
+        </span>
       )}
     </Link>
   );
@@ -82,14 +72,14 @@ export function PhotoSlot({
 }) {
   const url = safeImage(src);
   return (
-    <div className={cn('relative overflow-hidden border border-border bg-secondary/40', className)}>
+    <div className={cn('relative overflow-hidden rounded-[14px] bg-secondary/50', className)}>
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- links can be any host; next/image would need each one whitelisted
         <img src={url} alt={alt} loading="lazy" className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full flex-col items-center justify-end bg-[linear-gradient(180deg,hsl(var(--system)/0.12),transparent_70%)]">
-          <Silhouette className="w-3/5 text-foreground/[0.09]" />
-          <span className="readout absolute inset-x-0 top-[18%] px-3 text-center text-[10px] uppercase text-muted-foreground">
+        <div className="flex h-full w-full flex-col items-center justify-end">
+          <Silhouette className="w-3/5 text-foreground/[0.07]" />
+          <span className="absolute inset-x-0 top-[18%] px-3 text-center text-xs text-muted-foreground">
             {placeholder}
           </span>
         </div>
