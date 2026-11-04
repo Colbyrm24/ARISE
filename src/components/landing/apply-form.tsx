@@ -43,7 +43,7 @@ function steps(name: string): StepDef[] {
     { key: 'phone', kind: 'tel', prompt: 'Best number to text you?', hint: "Optional. It's the fastest way I'll reach you.", placeholder: '(555) 123-4567', optional: true, autoComplete: 'tel' },
     { key: 'instagram', kind: 'text', prompt: 'Your Instagram?', hint: "Optional. So I know who's in my DMs.", placeholder: '@handle', optional: true },
     { key: 'ageRange', kind: 'choice', prompt: 'How old are you?', choices: AGE_RANGES },
-    { key: 'goal', kind: 'long', prompt: 'What do you want to change?', hint: 'Your body, and how you feel walking into a room. Be specific.', placeholder: 'Lose the gut, put on muscle, stop avoiding photos…' },
+    { key: 'goal', kind: 'long', prompt: 'What do you want to change?', hint: 'Your body, and how you feel walking into a room. Be specific.', placeholder: 'See my abs for the first time, lose the gut, keep it while still eating out…' },
     { key: 'obstacle', kind: 'long', prompt: "What's been stopping you?", hint: 'Be honest. This is the part I can actually help with.', placeholder: 'Time, consistency, no plan, food…' },
     { key: 'experience', kind: 'choice', prompt: 'Where are you with training right now?', choices: EXPERIENCE },
     { key: 'startWhen', kind: 'choice', prompt: 'How soon do you want to start?', choices: START_WHEN },

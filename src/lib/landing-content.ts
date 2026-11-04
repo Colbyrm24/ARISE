@@ -86,25 +86,25 @@ export const LANDING: LandingContent = {
   coachName: 'Colby Mullins',
   pageTitle: '1-on-1 Coaching · Colby Mullins',
   pageDescription:
-    'Private coaching for men 25–45 who want a physique that changes how they carry themselves.',
+    'Private 1-on-1 coaching for successful men 28–50. Get lean enough to see your abs, then keep them for life while still eating the food you love.',
 
   headline: {
-    before: 'How men 25–45 build ',
-    highlight: 'the physique of a main character',
-    after: ', and the confidence that comes with it, without living in the gym',
+    before: 'How successful men 28–50 get lean enough to ',
+    highlight: 'see their six-pack',
+    after: ', and keep it for life, without giving up the food they love',
   },
   subheadline:
-    'Private 1-on-1 coaching. A plan built around your actual life, run by me, adjusted every week.',
+    'Private 1-on-1 coaching with me. We get you in the best shape of your life, then I teach you how to stay there while you still have dessert, drinks and dinners out.',
   videoUrl: '',
   videoPoster: '',
   applyLabel: 'Apply now',
-  applyNote: 'Takes about 2 minutes. I read every one.',
+  applyNote: 'Takes about 2 minutes. I read every one myself.',
 
   // Real clients only. Example of one entry:
   // {
   //   result: 'Lost 32 lbs',
   //   name: 'First name',
-  //   about: '38, sales director, two kids',
+  //   about: '41, owns a roofing company, two kids',
   //   beforePhoto: 'https://…/before.jpg',
   //   afterPhoto: 'https://…/after.jpg',
   //   timeframe: '16 weeks',
@@ -113,13 +113,13 @@ export const LANDING: LandingContent = {
   showResultPlaceholders: true,
 
   forYou: [
-    "You're 25–45 and you don't like what you see in the mirror anymore.",
-    'You want to walk into a room and feel it shift, not shrink into it.',
-    "You've got a career, a schedule and money to invest in getting this right.",
-    'You will follow a plan when someone builds it for you and holds you to it.',
+    "You're 28–50, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
+    'You want to see your abs. Not someday. For real, and for good.',
+    "You don't want to live on chicken and rice. You want to get shredded and still have the steak dinner, the drinks and the dessert.",
+    "You have the money to invest in doing this right, and you'll do the work when someone builds the plan and holds you to it.",
   ],
   notForYou: [
-    'You want a 30-day shred and then back to normal.',
+    'You want a 12-week crash diet and then back to how you were.',
     "You're looking for the cheapest option, not the one that works.",
     "You won't send a check-in when nobody's forcing you.",
     "You want to be told it's easy. It isn't. It's simple.",
@@ -128,33 +128,38 @@ export const LANDING: LandingContent = {
   steps: [
     {
       title: 'Apply',
-      body: 'Ten quick questions. Tell me where you are and what you want to change.',
+      body: 'A few quick questions. Tell me where you are and what you want to change.',
     },
     {
       title: 'Strategy call',
       body: "We get on a call. If I can help you, I'll show you exactly how. If I can't, I'll tell you.",
     },
     {
-      title: 'Your plan, in the ARISE app',
-      body: 'Training, food and habits built for your body and your week. Every session, every target, on your phone.',
+      title: 'Get lean, in the ARISE app',
+      body: 'Training and nutrition built around your week, your travel and the food you actually eat. Every session and every target, right on your phone.',
     },
     {
-      title: 'Weekly check-ins',
-      body: 'You report in. I adjust. Every week, until the guy in the mirror is the one you pictured.',
+      title: 'Learn to keep it for life',
+      body: "Weekly check-ins with me. I adjust everything as you go, and I teach you how to eat out, drink and enjoy dessert without losing what you built. So you never have to start over again.",
     },
   ],
 
   about: {
     heading: "I'm Colby.",
     paragraphs: [
-      "I coach men who are good at everything except taking care of themselves. Successful at work, solid with their people, and quietly unhappy with how they look and feel.",
-      "I don't do cookie-cutter. Your training, your food and your habits get built around your real life, then adjusted every week based on what's actually happening.",
-      'A strong body changes how you stand, how you talk and how you walk into a room. That part is the real goal.',
+      "I coach men who are great at everything except taking care of themselves. Crushing it at work, solid with their people, and quietly sick of how they look with their shirt off.",
+      "Most coaches get you lean with a strict meal plan. It works for 12 weeks, then real life shows up and it all comes back. I do it differently. You get lean eating the foods you love, so by the time you see your abs you already know how to keep them.",
+      'The six-pack is the goal. Walking into any room, any restaurant and any vacation feeling like that guy, for the rest of your life, is the real win.',
     ],
     photo: '',
   },
 
   faq: [
+    {
+      question: 'Can I really still drink and eat out?',
+      answer:
+        "Yes. That's the whole point. Restaurants, drinks, dessert, even fast food. I teach you how to fit them in so you get lean and stay lean, instead of white-knuckling a meal plan until you quit.",
+    },
     {
       question: 'How much time does this take each week?',
       answer:
@@ -166,14 +171,9 @@ export const LANDING: LandingContent = {
         'A gym gets you there fastest, but it isn’t required. If you train at home or travel a lot, the plan is built around the equipment you have.',
     },
     {
-      question: 'Do I have to follow a strict diet?',
+      question: "I'm in my 40s. Is it too late to get abs?",
       answer:
-        'No meal plan you’ll quit in two weeks. You get targets and a way of eating that fits your life, with the foods you already like. Business dinners included.',
-    },
-    {
-      question: 'Is this for beginners?',
-      answer:
-        'Yes. Some clients have never trained consistently. Others have lifted for years and stopped seeing results. The plan meets you where you are.',
+        "No. Plenty of men get in the best shape of their life after 40. It takes a plan built for where your body is now, and someone adjusting it every week. That's my job.",
     },
     {
       question: 'How is this different from a program or an app?',
@@ -183,11 +183,11 @@ export const LANDING: LandingContent = {
     {
       question: 'How much does it cost?',
       answer:
-        'Coaching is a real investment, and the right plan depends on you. We go through it on the call, once I know what you need.',
+        "This is premium 1-on-1 coaching and it's a real investment. We go through it on the call, once I know exactly what you need.",
     },
   ],
 
-  finalHeadline: 'Stop waiting to feel like him.',
+  finalHeadline: 'See your abs. Keep them for life.',
   finalBody:
     "Apply now. If it's a fit, you'll hear from me within 24 hours. If it isn't, I'll tell you straight.",
 

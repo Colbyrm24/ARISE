@@ -10,10 +10,11 @@
 export type Choice = { value: string; label: string };
 
 export const AGE_RANGES: Choice[] = [
-  { value: 'under_25', label: 'Under 25' },
-  { value: '25_34', label: '25–34' },
+  { value: 'under_28', label: 'Under 28' },
+  { value: '28_34', label: '28–34' },
   { value: '35_44', label: '35–44' },
-  { value: '45_plus', label: '45+' },
+  { value: '45_50', label: '45–50' },
+  { value: 'over_50', label: 'Over 50' },
 ];
 
 export const EXPERIENCE: Choice[] = [
