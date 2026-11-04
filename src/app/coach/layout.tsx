@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/coach/sidebar';
 import { CoachMobileNav } from '@/components/coach/mobile-nav';
 import { countPendingMeals } from '@/lib/meal-review';
 import { countWaitingThreads } from '@/lib/waiting';
+import { countNewApplications } from '@/lib/coaching-applications';
 import type { BadgeCounts } from '@/components/coach/nav-items';
 
 export default async function CoachLayout({ children }: { children: React.ReactNode }) {
@@ -13,11 +14,13 @@ export default async function CoachLayout({ children }: { children: React.ReactN
   // Read here rather than in the pages so the badges are right on every
   // screen, not only the ones they link to. Each falls back to zero on its
   // own — a badge query failing must not take the console down with it.
-  const [pendingMeals, waitingThreads] = await Promise.all([
+  const [pendingMeals, waitingThreads, newApplications] = await Promise.all([
     countPendingMeals(coach.id).catch(() => 0),
     countWaitingThreads(coach.id).catch(() => 0),
+    // Zero, not an error, until coaching-application-migration.sql has run.
+    countNewApplications().catch(() => 0),
   ]);
-  const counts: BadgeCounts = { pendingMeals, waitingThreads };
+  const counts: BadgeCounts = { pendingMeals, waitingThreads, newApplications };
 
   return (
     <div className="min-h-screen">

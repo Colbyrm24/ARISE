@@ -10,6 +10,7 @@ import {
   CreditCard,
   Settings,
   Megaphone,
+  UserPlus,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -27,7 +28,7 @@ import {
  * badge showing a total rather than a backlog is one he learns to ignore
  * within a week, and once he ignores one he ignores all of them.
  */
-export type BadgeKey = 'pendingMeals' | 'waitingThreads';
+export type BadgeKey = 'pendingMeals' | 'waitingThreads' | 'newApplications';
 
 /** Read once in the layout so every screen shows the same numbers. */
 export type BadgeCounts = Partial<Record<BadgeKey, number>>;
@@ -42,6 +43,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/coach/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/coach/clients', label: 'Clients', icon: Users },
+  { href: '/coach/applications', label: 'Applications', icon: UserPlus, badge: 'newApplications' },
   { href: '/coach/inbox', label: 'Inbox', icon: Inbox, badge: 'waitingThreads' },
   { href: '/coach/meals', label: 'Meals', icon: Camera, badge: 'pendingMeals' },
   { href: '/coach/schedule', label: 'Schedule', icon: CalendarDays },

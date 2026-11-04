@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { sessionStateFrom } from '@/lib/session-cookie';
+import { isCoachPath } from '@/lib/public-paths';
 
 /**
  * Runs on every request.
@@ -81,7 +82,7 @@ function sessionCookieNames(request: NextRequest) {
  */
 function clearedSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const protectedPath = pathname.startsWith('/coach') || CLIENT_PREFIXES.some((p) => pathname.startsWith(p));
+  const protectedPath = isCoachPath(pathname) || CLIENT_PREFIXES.some((p) => pathname.startsWith(p));
 
   let cleared: NextResponse;
   if (protectedPath) {
@@ -254,7 +255,8 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/signup');
-  const isCoachRoute = pathname.startsWith('/coach');
+  // Not startsWith('/coach'): that would also catch the public /coaching page.
+  const isCoachRoute = isCoachPath(pathname);
   const isClientRoute = CLIENT_PREFIXES.some((p) => pathname.startsWith(p));
 
   // Not logged in, trying to reach a protected area -> send to login.

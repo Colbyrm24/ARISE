@@ -1518,3 +1518,32 @@ model OfferVisit {
   @@index([offerId, day])
   @@map("offer_visits")
 }
+
+// Somebody who applied for 1-on-1 coaching from the public /coaching page.
+//
+// Deliberately not a User or a Client: an applicant has no account, and most
+// never will. The coach reads these at /coach/applications and moves them
+// through `status` by hand: new, contacted, call_booked, joined, not_a_fit.
+// Hand-applied with prisma/coaching-application-migration.sql.
+model CoachingApplication {
+  id          String   @id @default(uuid())
+  firstName   String   @map("first_name")
+  email       String
+  phone       String?
+  instagram   String?
+  ageRange    String   @map("age_range")
+  goal        String
+  obstacle    String
+  experience  String
+  startWhen   String   @map("start_when")
+  investReady String   @map("invest_ready")
+  // Where they came from, off ?ref= on the apply link (ig, yt, ...).
+  source      String?
+  status      String   @default("new")
+  statusAt    DateTime? @map("status_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([email, createdAt])
+  @@index([status, createdAt])
+  @@map("coaching_applications")
+}
