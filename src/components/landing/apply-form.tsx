@@ -15,6 +15,7 @@ import {
 } from '@/lib/application-fields';
 import { cn } from '@/lib/utils';
 import { calendlyLink } from '@/lib/landing';
+import { trackApplication } from '@/lib/meta-pixel';
 
 /*
   The application, one question per screen.
@@ -110,6 +111,7 @@ export function ApplyForm({
       });
       const data: { error?: string } = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "That didn't go through. Try again in a minute.");
+      trackApplication(isCallReady(final));
       setDone(true);
       window.scrollTo({ top: 0 });
     } catch (err) {

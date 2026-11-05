@@ -115,9 +115,19 @@ export default function PrivacyPage() {
           payment paid — with a timestamp, so that changes can be traced.
         </li>
         <li>
-          Our host keeps ordinary server logs of requests. ARISE does not run
-          advertising or third-party analytics trackers, and there are no
-          advertising cookies.
+          Our host keeps ordinary server logs of requests. Inside the app, ARISE
+          does not run advertising or third-party analytics trackers, and there
+          are no advertising cookies.
+        </li>
+        <li>
+          The public coaching pages (/coaching and the application at
+          /coaching/apply) use the Meta Pixel, which sets Meta cookies and tells
+          Meta that someone viewed the page and whether they sent an
+          application, so I can measure and improve my ads. It never sends your
+          application answers, name, email or phone number. It does not run
+          anywhere else in ARISE, so nothing you log as a client reaches Meta.
+          You can limit this with your browser's cookie settings or in your
+          Meta ad preferences.
         </li>
       </ul>
 
