@@ -150,11 +150,11 @@ export default async function ApplicationsPage({
 
                   <div className="grid gap-5 md:grid-cols-2">
                     <Answer label="Wants in the next few months" text={a.goal} />
-                    <Answer label="Biggest obstacle" text={a.obstacle} />
+                    {a.obstacle && <Answer label="Biggest obstacle" text={a.obstacle} />}
                   </div>
 
                   <dl className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
-                    <Readout label="Training" value={labelFor(EXPERIENCE, a.experience)} />
+                    {a.experience && <Readout label="Training" value={labelFor(EXPERIENCE, a.experience)} />}
                     {a.monthlyIncome ? (
                       <Readout
                         label="Monthly income"

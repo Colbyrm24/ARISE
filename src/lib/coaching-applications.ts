@@ -63,8 +63,6 @@ export async function saveApplication(input: ApplicationInput, now = new Date())
       phone: input.phone,
       ageRange: input.ageRange,
       goal: input.goal,
-      obstacle: input.obstacle,
-      experience: input.experience,
       monthlyIncome: input.monthlyIncome,
       investReady: input.investReady,
       source: input.source,

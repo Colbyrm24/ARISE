@@ -17,6 +17,7 @@ export const AGE_RANGES: Choice[] = [
   { value: 'over_50', label: 'Over 50' },
 ];
 
+/** No longer asked. Kept so older applications still read properly in the console. */
 export const EXPERIENCE: Choice[] = [
   { value: 'none', label: "I've never trained consistently" },
   { value: 'on_off', label: 'On and off for years' },
@@ -154,8 +155,6 @@ export type ApplicationAnswers = {
   phone: string;
   ageRange: string;
   goal: string;
-  obstacle: string;
-  experience: string;
   monthlyIncome: string;
   investReady: string;
 };
@@ -166,8 +165,6 @@ export const EMPTY_ANSWERS: ApplicationAnswers = {
   phone: '',
   ageRange: '',
   goal: '',
-  obstacle: '',
-  experience: '',
   monthlyIncome: '',
   investReady: '',
 };
@@ -187,13 +184,10 @@ export function checkAnswer(key: keyof ApplicationAnswers, value: string): strin
     case 'phone':
       return normalizePhone(v) ? null : 'Enter a valid phone number.';
     case 'goal':
-    case 'obstacle':
       if (v.length < 3) return 'A sentence is enough.';
       return v.length > LIMITS.longText ? 'Keep it under 1,500 characters.' : null;
     case 'ageRange':
       return AGE_RANGES.some((c) => c.value === v) ? null : 'Pick one.';
-    case 'experience':
-      return EXPERIENCE.some((c) => c.value === v) ? null : 'Pick one.';
     case 'monthlyIncome':
       return MONTHLY_INCOME.some((c) => c.value === v) ? null : 'Pick one.';
     case 'investReady':

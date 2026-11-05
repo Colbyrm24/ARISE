@@ -73,8 +73,6 @@ const valid = {
   phone: '(555) 123-4567',
   ageRange: '35_44',
   goal: 'Lose 25 lbs and stop hiding in photos.',
-  obstacle: 'Travel for work.',
-  experience: 'on_off',
   monthlyIncome: '5k_10k',
   investReady: 'yes',
   source: 'IG',

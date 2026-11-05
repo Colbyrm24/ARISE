@@ -6,7 +6,6 @@ import { ChevronLeft } from 'lucide-react';
 import {
   AGE_RANGES,
   EMPTY_ANSWERS,
-  EXPERIENCE,
   INVEST_CHOICES,
   MONTHLY_INCOME,
   checkAnswer,
@@ -49,8 +48,6 @@ const STEPS: StepDef[] = [
     hint: '(Seeing my abs for the first time, learning how to eat what I want and lose weight at the same time, building muscle, etc.)',
     placeholder: 'Type your answer…',
   },
-  { key: 'obstacle', kind: 'long', prompt: "What's been stopping you from getting there?", placeholder: 'Type your answer…' },
-  { key: 'experience', kind: 'choice', prompt: "What's your training experience right now?", choices: EXPERIENCE },
   { key: 'monthlyIncome', kind: 'choice', prompt: "What's your current monthly income?", choices: MONTHLY_INCOME },
   {
     key: 'investReady',
