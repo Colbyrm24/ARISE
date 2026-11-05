@@ -1533,8 +1533,9 @@ model CoachingApplication {
   instagram   String?
   ageRange    String   @map("age_range")
   goal        String
-  obstacle    String
-  experience  String
+  // No longer asked; older applications have them.
+  obstacle    String?
+  experience  String?
   // No longer asked; older applications have it.
   startWhen   String?  @map("start_when")
   // under_3k | 3k_5k | 5k_10k | 10k_plus. Null on applications from before it was asked.

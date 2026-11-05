@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   AGE_RANGES,
-  EXPERIENCE,
   INVEST_CHOICES,
   LIMITS,
   MONTHLY_INCOME,
@@ -40,8 +39,6 @@ export const applicationSchema = z.object({
   }),
   ageRange: oneOf(AGE_RANGES),
   goal: longText,
-  obstacle: longText,
-  experience: oneOf(EXPERIENCE),
   monthlyIncome: oneOf(MONTHLY_INCOME),
   investReady: oneOf(INVEST_CHOICES),
   source: z
