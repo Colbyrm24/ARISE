@@ -99,3 +99,16 @@ test('testimonials: real ones win, half-empty ones drop, else example slots or n
   assert.equal(testimonialsView({ testimonials: [blank], showResultPlaceholders: true }).mode, 'placeholder');
   assert.equal(testimonialsView({ testimonials: [], showResultPlaceholders: false }).mode, 'hidden');
 });
+
+test('the Calendly link carries name and email, and only ever points at Calendly', async () => {
+  const { calendlyLink } = await import('@/lib/landing');
+  const plain = new URL(calendlyLink('https://calendly.com/colbymullins24/new-meeting', 'Mike', 'mike@x.com'));
+  assert.equal(plain.searchParams.get('name'), 'Mike');
+  assert.equal(plain.searchParams.get('email'), 'mike@x.com');
+  assert.equal(plain.searchParams.get('embed_type'), null);
+  const embed = new URL(calendlyLink('https://calendly.com/colbymullins24/new-meeting', 'Mike', '', { embed: true }));
+  assert.equal(embed.searchParams.get('embed_type'), 'Inline');
+  assert.equal(embed.searchParams.get('email'), null);
+  assert.equal(calendlyLink('https://evil.com/x', 'a', 'b'), '');
+  assert.equal(calendlyLink('not a url', 'a', 'b'), '');
+});

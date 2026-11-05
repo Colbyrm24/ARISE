@@ -19,7 +19,11 @@ export default function ApplyPage({ searchParams }: { searchParams?: { ref?: str
   return (
     <div className="landing-clean relative min-h-screen">
       <div aria-hidden className="viewport-frame" />
-      <ApplyForm source={normalizeSource(searchParams?.ref)} instagramUrl={LANDING.instagramUrl} />
+      <ApplyForm
+        source={normalizeSource(searchParams?.ref)}
+        instagramUrl={LANDING.instagramUrl}
+        calendlyUrl={LANDING.calendlyUrl}
+      />
     </div>
   );
 }

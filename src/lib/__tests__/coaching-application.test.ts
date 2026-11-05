@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  isCallReady,
   checkAnswer,
   formatPhone,
   isApplicationStatus,
@@ -54,24 +55,27 @@ test('each screen of the form checks its own answer', () => {
   assert.equal(checkAnswer('firstName', 'Colby'), null);
   assert.ok(checkAnswer('email', 'colby@'));
   assert.equal(checkAnswer('email', 'Colby@Example.com'), null);
-  // Optional means blank is fine, but a wrong value is not.
-  assert.equal(checkAnswer('phone', ''), null);
+  // Phone is required now: blank and wrong are both refused.
+  assert.ok(checkAnswer('phone', ''));
   assert.ok(checkAnswer('phone', '123'));
-  assert.equal(checkAnswer('instagram', ''), null);
+  assert.equal(checkAnswer('phone', '555 123 4567'), null);
   assert.ok(checkAnswer('ageRange', 'thirty'));
-  assert.equal(checkAnswer('investReady', 'more_info'), null);
+  assert.equal(checkAnswer('ageRange', '25_34'), null);
+  // The old "need to know more" answer is no longer offered.
+  assert.ok(checkAnswer('investReady', 'more_info'));
+  assert.equal(checkAnswer('monthlyIncome', '5k_10k'), null);
+  assert.ok(checkAnswer('monthlyIncome', 'lots'));
 });
 
 const valid = {
   firstName: '  Jordan ',
   email: ' Jordan@Example.COM ',
   phone: '(555) 123-4567',
-  instagram: '@Jordan.Lifts',
   ageRange: '35_44',
   goal: 'Lose 25 lbs and stop hiding in photos.',
   obstacle: 'Travel for work.',
   experience: 'on_off',
-  startWhen: 'now',
+  monthlyIncome: '5k_10k',
   investReady: 'yes',
   source: 'IG',
   company: '',
@@ -83,15 +87,22 @@ test('a valid application is normalized on the way in', () => {
   assert.equal(r.data.firstName, 'Jordan');
   assert.equal(r.data.email, 'jordan@example.com');
   assert.equal(r.data.phone, '+15551234567');
-  assert.equal(r.data.instagram, 'jordan.lifts');
   assert.equal(r.data.source, 'ig');
 });
 
-test('the optional fields store as null when left blank', () => {
-  const r = applicationSchema.safeParse({ ...valid, phone: '', instagram: undefined });
-  assert.ok(r.success);
-  assert.equal(r.data.phone, null);
-  assert.equal(r.data.instagram, null);
+test('every question is required, phone and income included', () => {
+  assert.equal(applicationSchema.safeParse({ ...valid, phone: '' }).success, false);
+  assert.equal(applicationSchema.safeParse({ ...valid, phone: undefined }).success, false);
+  assert.equal(applicationSchema.safeParse({ ...valid, monthlyIncome: undefined }).success, false);
+});
+
+test('only $3,000+ a month and a yes to investing goes straight to the calendar', () => {
+  assert.equal(isCallReady({ monthlyIncome: '3k_5k', investReady: 'yes' }), true);
+  assert.equal(isCallReady({ monthlyIncome: '10k_plus', investReady: 'yes' }), true);
+  assert.equal(isCallReady({ monthlyIncome: 'under_3k', investReady: 'yes' }), false);
+  assert.equal(isCallReady({ monthlyIncome: '10k_plus', investReady: 'no' }), false);
+  assert.equal(isCallReady({ monthlyIncome: null, investReady: 'yes' }), false);
+  assert.equal(isCallReady({ monthlyIncome: 'made_up', investReady: 'yes' }), false);
 });
 
 test('invalid answers are refused by the server even if the form was skipped', () => {

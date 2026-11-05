@@ -10,7 +10,9 @@ import {
   APPLICATION_STATUSES,
   EXPERIENCE,
   INVEST_READY,
+  MONTHLY_INCOME,
   START_WHEN,
+  isCallReady,
   formatPhone,
   isApplicationStatus,
   labelFor,
@@ -147,13 +149,21 @@ export default async function ApplicationsPage({
                   </div>
 
                   <div className="grid gap-5 md:grid-cols-2">
-                    <Answer label="Wants to change" text={a.goal} />
+                    <Answer label="Wants in the next few months" text={a.goal} />
                     <Answer label="Biggest obstacle" text={a.obstacle} />
                   </div>
 
                   <dl className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
                     <Readout label="Training" value={labelFor(EXPERIENCE, a.experience)} />
-                    <Readout label="Start" value={labelFor(START_WHEN, a.startWhen)} />
+                    {a.monthlyIncome ? (
+                      <Readout
+                        label="Monthly income"
+                        value={labelFor(MONTHLY_INCOME, a.monthlyIncome)}
+                        strong={isCallReady(a)}
+                      />
+                    ) : (
+                      <Readout label="Start" value={labelFor(START_WHEN, a.startWhen)} />
+                    )}
                     <Readout
                       label="Ready to invest"
                       value={labelFor(INVEST_READY, a.investReady)}
