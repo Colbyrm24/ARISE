@@ -98,6 +98,8 @@ export type LandingContent = {
 
   /** Full link to your Instagram, shown after someone applies. '' hides it. */
   instagramUrl: string;
+  /** Your Calendly link. Applicants who are a fit book a call here the moment they finish. */
+  calendlyUrl: string;
   contactEmail: string;
 };
 
@@ -226,6 +228,7 @@ export const LANDING: LandingContent = {
   finalBody:
     "Apply now. If it's a fit, you'll hear from me within 24 hours. If it isn't, I'll tell you straight.",
 
-  instagramUrl: '',
+  instagramUrl: 'https://www.instagram.com/colby.mullinss/',
+  calendlyUrl: 'https://calendly.com/colbymullins24/new-meeting',
   contactEmail: 'colbymullins24@gmail.com',
 };

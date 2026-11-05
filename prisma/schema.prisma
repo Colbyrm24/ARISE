@@ -1535,7 +1535,10 @@ model CoachingApplication {
   goal        String
   obstacle    String
   experience  String
-  startWhen   String   @map("start_when")
+  // No longer asked; older applications have it.
+  startWhen   String?  @map("start_when")
+  // under_3k | 3k_5k | 5k_10k | 10k_plus. Null on applications from before it was asked.
+  monthlyIncome String? @map("monthly_income")
   investReady String   @map("invest_ready")
   // Where they came from, off ?ref= on the apply link (ig, yt, ...).
   source      String?

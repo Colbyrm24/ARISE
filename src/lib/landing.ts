@@ -105,3 +105,26 @@ export function testimonialsView(
   if (items.length > 0) return { mode: 'real', items };
   return content.showResultPlaceholders ? { mode: 'placeholder', slots: 3 } : { mode: 'hidden' };
 }
+
+/**
+ * The coach's Calendly link with the applicant's name and email filled in,
+ * so they don't type them twice. `embed` adds what Calendly's inline embed
+ * expects. Returns '' for a link that isn't a real https Calendly URL.
+ */
+export function calendlyLink(base: string, name: string, email: string, opts: { embed?: boolean } = {}) {
+  let url: URL;
+  try {
+    url = new URL(base.trim());
+  } catch {
+    return '';
+  }
+  if (url.protocol !== 'https:' || !/(^|\.)calendly\.com$/i.test(url.hostname)) return '';
+  if (opts.embed) {
+    url.searchParams.set('embed_type', 'Inline');
+    url.searchParams.set('embed_domain', 'arise-eta-six.vercel.app');
+  }
+  url.searchParams.set('hide_gdpr_banner', '1');
+  if (name.trim()) url.searchParams.set('name', name.trim());
+  if (email.trim()) url.searchParams.set('email', email.trim());
+  return url.toString();
+}

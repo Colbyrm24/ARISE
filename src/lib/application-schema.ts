@@ -2,12 +2,11 @@ import { z } from 'zod';
 import {
   AGE_RANGES,
   EXPERIENCE,
-  INVEST_READY,
+  INVEST_CHOICES,
   LIMITS,
-  START_WHEN,
+  MONTHLY_INCOME,
   isEmail,
   normalizeEmail,
-  normalizeInstagram,
   normalizePhone,
   normalizeSource,
   type Choice,
@@ -30,36 +29,21 @@ export const applicationSchema = z.object({
     .string()
     .refine(isEmail, 'Invalid email.')
     .transform(normalizeEmail),
-  phone: z
-    .string()
-    .optional()
-    .default('')
-    .transform((v, ctx) => {
-      const n = normalizePhone(v);
-      if (n === null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid phone.' });
-        return z.NEVER;
-      }
-      return n || null;
-    }),
-  instagram: z
-    .string()
-    .optional()
-    .default('')
-    .transform((v, ctx) => {
-      const n = normalizeInstagram(v);
-      if (n === null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid Instagram handle.' });
-        return z.NEVER;
-      }
-      return n || null;
-    }),
+  // Required: the coach calls or texts every fit.
+  phone: z.string().transform((v, ctx) => {
+    const n = normalizePhone(v);
+    if (!n) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid phone.' });
+      return z.NEVER;
+    }
+    return n;
+  }),
   ageRange: oneOf(AGE_RANGES),
   goal: longText,
   obstacle: longText,
   experience: oneOf(EXPERIENCE),
-  startWhen: oneOf(START_WHEN),
-  investReady: oneOf(INVEST_READY),
+  monthlyIncome: oneOf(MONTHLY_INCOME),
+  investReady: oneOf(INVEST_CHOICES),
   source: z
     .string()
     .optional()

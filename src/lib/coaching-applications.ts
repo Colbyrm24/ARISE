@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notifications';
 import { primaryCoach } from '@/lib/onboard-client';
-import { INVEST_READY, START_WHEN, labelFor } from '@/lib/application-fields';
+import { MONTHLY_INCOME, isCallReady, labelFor } from '@/lib/application-fields';
 import { isBot, isRecentDuplicate, type ApplicationInput } from '@/lib/application-schema';
 
 /*
@@ -61,12 +61,11 @@ export async function saveApplication(input: ApplicationInput, now = new Date())
       firstName: input.firstName,
       email: input.email,
       phone: input.phone,
-      instagram: input.instagram,
       ageRange: input.ageRange,
       goal: input.goal,
       obstacle: input.obstacle,
       experience: input.experience,
-      startWhen: input.startWhen,
+      monthlyIncome: input.monthlyIncome,
       investReady: input.investReady,
       source: input.source,
     },
@@ -75,12 +74,12 @@ export async function saveApplication(input: ApplicationInput, now = new Date())
   // A side effect of a saved application, never a reason to fail one.
   const coachId = await applicationCoachId();
   if (coachId) {
-    const ready = labelFor(INVEST_READY, input.investReady).replace(/\.$/, '');
-    const when = labelFor(START_WHEN, input.startWhen).toLowerCase();
+    const income = labelFor(MONTHLY_INCOME, input.monthlyIncome);
+    const fit = isCallReady(input) ? 'Fit, sent to your calendar' : 'Not booking-ready';
     await notify(
       coachId,
       'application',
-      `${input.firstName} applied for coaching. Start: ${when}. Invest: ${ready}.`
+      `${input.firstName} applied for coaching. Income: ${income}/mo. Invest: ${input.investReady === 'yes' ? 'yes' : 'not now'}. ${fit}.`
     ).catch(() => null);
   }
 

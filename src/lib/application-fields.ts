@@ -10,8 +10,8 @@
 export type Choice = { value: string; label: string };
 
 export const AGE_RANGES: Choice[] = [
-  { value: 'under_28', label: 'Under 28' },
-  { value: '28_34', label: '28–34' },
+  { value: 'under_25', label: 'Under 25' },
+  { value: '25_34', label: '25–34' },
   { value: '35_44', label: '35–44' },
   { value: '45_50', label: '45–50' },
   { value: 'over_50', label: 'Over 50' },
@@ -24,6 +24,10 @@ export const EXPERIENCE: Choice[] = [
   { value: 'advanced', label: '3+ years in, and stuck' },
 ];
 
+/**
+ * No longer asked (applicants should want to start now). Kept so older
+ * applications that answered it still read properly in the console.
+ */
 export const START_WHEN: Choice[] = [
   { value: 'now', label: 'Right now' },
   { value: 'two_weeks', label: 'Within 2 weeks' },
@@ -31,11 +35,31 @@ export const START_WHEN: Choice[] = [
   { value: 'looking', label: 'Just looking for now' },
 ];
 
-export const INVEST_READY: Choice[] = [
-  { value: 'yes', label: "Yes. If it's the right fit, I'm in." },
-  { value: 'more_info', label: 'I need to know more first' },
-  { value: 'no', label: 'No, not right now' },
+export const MONTHLY_INCOME: Choice[] = [
+  { value: 'under_3k', label: 'Under $3,000' },
+  { value: '3k_5k', label: '$3,000–$5,000' },
+  { value: '5k_10k', label: '$5,000–$10,000' },
+  { value: '10k_plus', label: '$10,000+' },
 ];
+
+export const INVEST_READY: Choice[] = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'no', label: 'Not right now' },
+  // Older applications only.
+  { value: 'more_info', label: 'I need to know more first' },
+];
+
+/** What the application form offers today (the older answer is not offered). */
+export const INVEST_CHOICES: Choice[] = INVEST_READY.filter((c) => c.value !== 'more_info');
+
+/**
+ * A fit for a call straight away: earning $3,000+ a month and a yes to
+ * investing. These applicants go straight to the calendar; everyone else
+ * gets the "I'll be in touch" screen and the coach decides.
+ */
+export function isCallReady(a: { monthlyIncome?: string | null; investReady?: string | null }) {
+  return Boolean(a.monthlyIncome && a.monthlyIncome !== 'under_3k' && MONTHLY_INCOME.some((c) => c.value === a.monthlyIncome) && a.investReady === 'yes');
+}
 
 /** Every status a coach can put an application in, in pipeline order. */
 export const APPLICATION_STATUSES = [
@@ -128,12 +152,11 @@ export type ApplicationAnswers = {
   firstName: string;
   email: string;
   phone: string;
-  instagram: string;
   ageRange: string;
   goal: string;
   obstacle: string;
   experience: string;
-  startWhen: string;
+  monthlyIncome: string;
   investReady: string;
 };
 
@@ -141,12 +164,11 @@ export const EMPTY_ANSWERS: ApplicationAnswers = {
   firstName: '',
   email: '',
   phone: '',
-  instagram: '',
   ageRange: '',
   goal: '',
   obstacle: '',
   experience: '',
-  startWhen: '',
+  monthlyIncome: '',
   investReady: '',
 };
 
@@ -158,25 +180,23 @@ export function checkAnswer(key: keyof ApplicationAnswers, value: string): strin
   const v = value.trim();
   switch (key) {
     case 'firstName':
-      if (!v) return 'Your first name, so I know who I’m talking to.';
+      if (!v) return 'Enter your first name.';
       return v.length > LIMITS.firstName ? 'That’s longer than a first name.' : null;
     case 'email':
       return isEmail(v) ? null : 'That email doesn’t look right.';
     case 'phone':
-      return normalizePhone(v) === null ? 'That number doesn’t look right. Or leave it blank.' : null;
-    case 'instagram':
-      return normalizeInstagram(v) === null ? 'That handle doesn’t look right. Or leave it blank.' : null;
+      return normalizePhone(v) ? null : 'Enter a valid phone number.';
     case 'goal':
     case 'obstacle':
-      if (v.length < 3) return 'A sentence is enough. Be honest.';
+      if (v.length < 3) return 'A sentence is enough.';
       return v.length > LIMITS.longText ? 'Keep it under 1,500 characters.' : null;
     case 'ageRange':
       return AGE_RANGES.some((c) => c.value === v) ? null : 'Pick one.';
     case 'experience':
       return EXPERIENCE.some((c) => c.value === v) ? null : 'Pick one.';
-    case 'startWhen':
-      return START_WHEN.some((c) => c.value === v) ? null : 'Pick one.';
+    case 'monthlyIncome':
+      return MONTHLY_INCOME.some((c) => c.value === v) ? null : 'Pick one.';
     case 'investReady':
-      return INVEST_READY.some((c) => c.value === v) ? null : 'Pick one.';
+      return INVEST_CHOICES.some((c) => c.value === v) ? null : 'Pick one.';
   }
 }

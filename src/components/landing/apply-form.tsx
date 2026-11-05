@@ -7,13 +7,15 @@ import {
   AGE_RANGES,
   EMPTY_ANSWERS,
   EXPERIENCE,
-  INVEST_READY,
-  START_WHEN,
+  INVEST_CHOICES,
+  MONTHLY_INCOME,
   checkAnswer,
+  isCallReady,
   type ApplicationAnswers,
   type Choice,
 } from '@/lib/application-fields';
 import { cn } from '@/lib/utils';
+import { calendlyLink } from '@/lib/landing';
 
 /*
   The application, one question per screen.
@@ -35,31 +37,42 @@ type StepDef =
   | { key: Key; kind: 'long'; prompt: string; hint?: string; placeholder: string }
   | { key: Key; kind: 'choice'; prompt: string; hint?: string; choices: Choice[] };
 
-function steps(name: string): StepDef[] {
-  const you = name.trim() ? `, ${name.trim().split(' ')[0]}` : '';
-  return [
-    { key: 'firstName', kind: 'text', prompt: "First, what's your name?", placeholder: 'First name', autoComplete: 'given-name' },
-    { key: 'email', kind: 'email', prompt: `Good to meet you${you}. Best email?`, placeholder: 'you@email.com', autoComplete: 'email' },
-    { key: 'phone', kind: 'tel', prompt: 'Best number to text you?', hint: "Optional. It's the fastest way I'll reach you.", placeholder: '(555) 123-4567', optional: true, autoComplete: 'tel' },
-    { key: 'instagram', kind: 'text', prompt: 'Your Instagram?', hint: "Optional. So I know who's in my DMs.", placeholder: '@handle', optional: true },
-    { key: 'ageRange', kind: 'choice', prompt: 'How old are you?', choices: AGE_RANGES },
-    { key: 'goal', kind: 'long', prompt: 'What do you want to change?', hint: 'Your body, and how you feel walking into a room. Be specific.', placeholder: 'See my abs for the first time, lose the gut, keep it while still eating out…' },
-    { key: 'obstacle', kind: 'long', prompt: "What's been stopping you?", hint: 'Be honest. This is the part I can actually help with.', placeholder: 'Time, consistency, no plan, food…' },
-    { key: 'experience', kind: 'choice', prompt: 'Where are you with training right now?', choices: EXPERIENCE },
-    { key: 'startWhen', kind: 'choice', prompt: 'How soon do you want to start?', choices: START_WHEN },
-    {
-      key: 'investReady',
-      kind: 'choice',
-      prompt: 'Coaching is a real investment. Are you ready to invest in yourself if it’s the right fit?',
-      choices: INVEST_READY,
-    },
-  ];
-}
+const STEPS: StepDef[] = [
+  { key: 'firstName', kind: 'text', prompt: "What's your first name?", placeholder: 'First name', autoComplete: 'given-name' },
+  { key: 'email', kind: 'email', prompt: "What's your email?", placeholder: 'you@email.com', autoComplete: 'email' },
+  { key: 'phone', kind: 'tel', prompt: "What's the best phone number for you?", placeholder: '(555) 123-4567', autoComplete: 'tel' },
+  { key: 'ageRange', kind: 'choice', prompt: "What's your age?", choices: AGE_RANGES },
+  {
+    key: 'goal',
+    kind: 'long',
+    prompt: 'What do you want to see happen in the next couple months after working with me?',
+    hint: '(Seeing my abs for the first time, learning how to eat what I want and lose weight at the same time, building muscle, etc.)',
+    placeholder: 'Type your answer…',
+  },
+  { key: 'obstacle', kind: 'long', prompt: "What's been stopping you from getting there?", placeholder: 'Type your answer…' },
+  { key: 'experience', kind: 'choice', prompt: "What's your training experience right now?", choices: EXPERIENCE },
+  { key: 'monthlyIncome', kind: 'choice', prompt: "What's your current monthly income?", choices: MONTHLY_INCOME },
+  {
+    key: 'investReady',
+    kind: 'choice',
+    prompt:
+      "I'm not going to throw you in an app to figure it out on your own, and I'm not going to give you a course. I work with my clients personally. Is this something you can invest in at the moment?",
+    choices: INVEST_CHOICES,
+  },
+];
 
 const field =
   'w-full border-0 border-b-2 border-border bg-transparent px-0 pb-3 pt-1 text-2xl font-medium text-foreground placeholder:text-muted-foreground/40 focus:border-accent focus:outline-none focus:ring-0 sm:text-3xl';
 
-export function ApplyForm({ source, instagramUrl }: { source: string | null; instagramUrl: string }) {
+export function ApplyForm({
+  source,
+  instagramUrl,
+  calendlyUrl,
+}: {
+  source: string | null;
+  instagramUrl: string;
+  calendlyUrl: string;
+}) {
   const [answers, setAnswers] = useState<ApplicationAnswers>(EMPTY_ANSWERS);
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +82,7 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
   const inputRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const all = steps(answers.firstName);
+  const all = STEPS;
   const step = all[index]!;
   const total = all.length;
   const isLast = index === total - 1;
@@ -135,10 +148,19 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
     setError(null);
     // A beat so the tap visibly lands before the screen changes. The last
     // question waits for the Send button instead — sending is a decision.
-    if (!isLast) advanceTimer.current = setTimeout(() => next(updated), 220);
+    // The last question sends on the tap too: a yes should land on the
+    // calendar straight away, not behind one more button.
+    advanceTimer.current = setTimeout(() => next(updated), 220);
   }
 
-  if (done) return <Received name={answers.firstName} instagramUrl={instagramUrl} />;
+  if (done) {
+    // A fit goes straight to the calendar; everyone else hears back from the coach.
+    return calendlyUrl && isCallReady(answers) ? (
+      <BookCall name={answers.firstName} email={answers.email} calendlyUrl={calendlyUrl} />
+    ) : (
+      <Received name={answers.firstName} instagramUrl={instagramUrl} />
+    );
+  }
 
   const counter = `${index + 1} of ${total}`;
 
@@ -283,7 +305,8 @@ export function ApplyForm({ source, instagramUrl }: { source: string | null; ins
         </div>
 
         <div className="mt-auto flex flex-col gap-3 pt-8 sm:flex-row sm:items-center sm:justify-between">
-          {(step.kind !== 'choice' || isLast) && (
+          {step.kind === 'choice' && sending && <p className="text-sm text-muted-foreground">Sending…</p>}
+          {step.kind !== 'choice' && (
             <button
               type="submit"
               disabled={sending || (isLast && !value)}
@@ -311,34 +334,57 @@ function Received({ name, instagramUrl }: { name: string; instagramUrl: string }
   const first = name.trim().split(' ')[0];
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-2xl flex-col justify-center px-5 py-16 sm:px-8">
-      <div className="surface-sheen lit-edge relative motion-safe:animate-fade-in border border-border px-6 py-10 sm:px-10 sm:py-12">
-        <p className="readout text-[11px] uppercase text-success">
-          [ Application received ]
+      <div className="surface-sheen lit-edge relative motion-safe:animate-fade-in rounded-[20px] border border-border px-6 py-10 sm:px-10 sm:py-12">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-success">Application received</p>
+        <h1 className="landing-headline mt-4 text-3xl leading-[1.05] sm:text-5xl">Got it{first ? `, ${first}` : ''}.</h1>
+        <p className="mt-6 text-base leading-relaxed text-muted-foreground">
+          I read every application myself. If it looks like a fit, I&apos;ll reach out within 24 hours.
         </p>
-        <h1 className="display-wide mt-4 font-black text-3xl leading-[1.05] sm:text-5xl">
-          Got it{first ? `, ${first}` : ''}.
-        </h1>
-        <div className="mt-6 flex flex-col gap-4 text-base leading-relaxed text-muted-foreground">
-          <p>I read every application personally. Not an assistant, not a bot. Me.</p>
-          <p>
-            If it looks like a fit, I&apos;ll text or DM you within 24 hours to set up a call.
-            Keep an eye on your phone.
-          </p>
-        </div>
-        <div className="mt-8 flex flex-col gap-3 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="readout text-[10px] uppercase text-muted-foreground">Status: pending review</p>
-          <div className="flex gap-5">
-            {instagramUrl && (
-              <a href={instagramUrl} className="readout text-xs uppercase text-accent hover:underline">
-                Instagram
-              </a>
-            )}
-            <Link href="/coaching" className="readout text-xs uppercase text-accent hover:underline">
-              Back to the page
-            </Link>
-          </div>
+        <div className="mt-8 flex gap-6 border-t border-border pt-6 text-sm">
+          {instagramUrl && (
+            <a href={instagramUrl} className="text-accent hover:underline">
+              Instagram
+            </a>
+          )}
+          <Link href="/coaching" className="text-accent hover:underline">
+            Back to the page
+          </Link>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The calendar, right where the application ended. Name and email ride into
+ * Calendly so they don't type them twice.
+ */
+function BookCall({ name, email, calendlyUrl }: { name: string; email: string; calendlyUrl: string }) {
+  const first = name.trim().split(' ')[0];
+  const src = calendlyLink(calendlyUrl, name, email, { embed: true });
+  const direct = calendlyLink(calendlyUrl, name, email);
+  return (
+    <div className="mx-auto flex min-h-[100svh] w-full max-w-4xl flex-col px-5 py-10 sm:px-8 sm:py-14">
+      <div className="motion-safe:animate-fade-in text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-success">You&apos;re a fit</p>
+        <h1 className="landing-headline mt-3 text-balance text-3xl leading-[1.05] sm:text-5xl">
+          Grab a time for your call{first ? `, ${first}` : ''}.
+        </h1>
+        <p className="mx-auto mt-4 max-w-md text-base text-muted-foreground">
+          Pick whatever works this week and we&apos;ll get the ball rolling together.
+        </p>
+      </div>
+      <div className="mt-8 flex-1 overflow-hidden rounded-[20px] border border-border bg-white">
+        <iframe src={src} title="Book your call" className="h-[760px] w-full" />
+      </div>
+      <a
+        href={direct}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn-cta mx-auto mt-6 inline-flex h-12 items-center justify-center rounded-[999px] px-8 text-sm font-bold"
+      >
+        Calendar not loading? Open it here
+      </a>
     </div>
   );
 }
