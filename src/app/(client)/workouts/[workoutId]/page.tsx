@@ -272,9 +272,9 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                     href={demo.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="readout mb-2 inline-flex items-center gap-1.5 border border-accent/40 bg-accent/[0.07] px-2 py-1 text-[10px] uppercase text-accent transition-colors hover:bg-accent/15"
+                    className="mb-3 inline-flex items-center gap-2 rounded-lg border border-accent/50 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/20"
                   >
-                    <Play size={11} />
+                    <Play size={14} />
                     {demo.exact ? 'Watch demo' : 'Find a demo'}
                   </a>
                 )}
@@ -289,8 +289,29 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                   and stopped there. This is the one place they are useful:
                   next to the sets, before the first rep.
                 */}
+                {/* Start and finish photos, then the steps — what a client who
+                    has never done the movement needs before the first rep. */}
+                {we.exercise.imageUrls.length > 0 && (
+                  <div className="mb-3 grid grid-cols-2 gap-2">
+                    {we.exercise.imageUrls.slice(0, 2).map((src, i) => (
+                      <figure key={src} className="overflow-hidden rounded-lg border border-border/60">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={`${we.exercise.name}, ${i === 0 ? 'start' : 'finish'}`} loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                        <figcaption className="bg-secondary/40 py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-foreground/80">
+                          {i === 0 ? 'Start' : 'Finish'}
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                )}
+                {we.exercise.instructions && (
+                  <details className="mb-3 rounded-lg border border-border/60 bg-secondary/20 px-3 py-2">
+                    <summary className="cursor-pointer text-sm font-semibold text-foreground">How to do it</summary>
+                    <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground/85">{we.exercise.instructions}</p>
+                  </details>
+                )}
                 {(we.notes || we.exercise.cues) && (
-                  <div className="mb-3 flex flex-col gap-1.5 border-l-2 border-accent/40 bg-secondary/20 py-2 pl-3 pr-2 text-xs leading-relaxed text-muted-foreground">
+                  <div className="mb-3 flex flex-col gap-1.5 border-l-2 border-accent/60 bg-secondary/20 py-2 pl-3 pr-2 text-sm leading-relaxed text-foreground/85">
                     {/* Two different things: the note is what the coach said
                         about this movement in this program, the cues are how
                         to perform it at all. Sharing one slot meant a seeded

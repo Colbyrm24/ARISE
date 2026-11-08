@@ -259,3 +259,9 @@ test('the library filters as you type, every word must match', () => {
   assert.deepEqual(filterLibrary(lib, { q: 'chest', sort: 'muscle' }).map((e) => e.id), ['3', '1']);
   assert.deepEqual(filterLibrary(lib, {}).map((e) => e.id), ['2', '3', '1']);
 });
+
+test('thumbnailFor falls back to the library photo when there is no video', () => {
+  assert.equal(thumbnailFor({ videoUrl: null, video: null, imageUrls: ['https://cdn/x/0.jpg', 'https://cdn/x/1.jpg'] }), 'https://cdn/x/0.jpg');
+  assert.equal(thumbnailFor({ videoUrl: null, video: { thumbnailUrl: 'https://own/t.jpg' }, imageUrls: ['https://cdn/x/0.jpg'] }), 'https://own/t.jpg');
+  assert.equal(thumbnailFor({ videoUrl: null, video: null, imageUrls: [] }), null);
+});

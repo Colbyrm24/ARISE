@@ -1,11 +1,11 @@
 import { Dumbbell, Trash2, Video } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { watchUrlFor } from '@/lib/exercise-video';
-import { createExercise, deleteExercise, setExerciseVideo } from './actions';
+import { createExercise, deleteExercise, loadExerciseMedia, setExerciseVideo } from './actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -52,7 +52,10 @@ export default async function CoachExercisesPage({
   // Every movement a client is asked to do should come with a demonstration.
   // Counting what is still missing turns "add videos eventually" into a
   // number that goes down.
-  const missingVideos = await prisma.exercise.count({ where: { videoId: null } });
+  const [missingVideos, withPhotos] = await Promise.all([
+    prisma.exercise.count({ where: { videoId: null } }),
+    prisma.exercise.count({ where: { NOT: { imageUrls: { isEmpty: true } } } }),
+  ]);
 
   const filtering = Boolean(q || muscle || equipment);
 
@@ -64,6 +67,29 @@ export default async function CoachExercisesPage({
           {total} exercises. Every one of them is available when you build a workout template.
         </p>
       </header>
+
+      {/* Photos and steps. Clients see the start and finish photos plus the
+          steps on every movement that has them; movements without a pasted
+          video still get a "Find a demo" YouTube search, so nobody is left
+          guessing what a movement looks like. */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <p className="text-base font-semibold text-foreground">
+              {withPhotos} of {total} movements have photos and how-to steps
+            </p>
+            <p className="text-sm text-foreground/75">
+              Every movement also gets a demo button for clients. Paste your own video on any row
+              below to replace the YouTube search with your exact demo ({total - missingVideos} so far).
+            </p>
+          </div>
+          <form action={loadExerciseMedia}>
+            <Button type="submit" size="sm" className="shrink-0">
+              Add photos &amp; steps
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-6">
@@ -107,21 +133,16 @@ export default async function CoachExercisesPage({
                 Showing {exercises.length}
                 {exercises.length === 200 ? '+ (narrow your search)' : ''}
               </span>
-              {missingVideos > 0 && (
-                <span className="readout w-full border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
-                  {missingVideos} of {total} movements still have no demo video. Paste a link on any
-                  row below and it shows up inside the workout for every client.
-                </span>
-              )}
             </div>
           </form>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Add Exercise</CardTitle>
-        </CardHeader>
+        <details>
+        <summary className="cursor-pointer list-none px-6 py-4 text-sm font-semibold text-foreground hover:text-accent">
+          + Add your own exercise
+        </summary>
         <CardContent>
           <form action={createExercise} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Input name="name" placeholder="Exercise name" required className="sm:col-span-2" />
@@ -166,6 +187,7 @@ export default async function CoachExercisesPage({
             </Button>
           </form>
         </CardContent>
+        </details>
       </Card>
 
       {exercises.length === 0 ? (
@@ -189,13 +211,22 @@ export default async function CoachExercisesPage({
             <li key={ex.id}>
               <Card>
                 <CardContent className="flex items-start justify-between gap-4 pt-6">
-                  <div className="flex flex-col gap-2">
-                    <p className="text-sm font-medium">{ex.name}</p>
+                  {ex.imageUrls[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={ex.imageUrls[0]}
+                      alt=""
+                      loading="lazy"
+                      className="hidden h-20 w-28 shrink-0 rounded-lg object-cover sm:block"
+                    />
+                  ) : null}
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <p className="text-base font-semibold text-foreground">{ex.name}</p>
                     <div className="flex flex-wrap gap-1.5">
                       <Badge variant="accent">{ex.musclePrimary}</Badge>
                       <Badge variant="outline">{ex.equipment}</Badge>
                       <Badge variant="outline">{ex.difficulty}</Badge>
-                      {!videoUrl && <Badge variant="destructive">Needs video</Badge>}
+                      {!videoUrl && <Badge variant="outline">No video yet</Badge>}
                       {ex.muscleSecondary.map((m) => (
                         <Badge key={m} variant="default">
                           {m}
@@ -203,7 +234,10 @@ export default async function CoachExercisesPage({
                       ))}
                     </div>
                     {ex.instructions && (
-                      <p className="text-xs text-muted-foreground">{ex.instructions}</p>
+                      <details className="text-sm text-foreground/80">
+                        <summary className="cursor-pointer text-xs font-medium text-accent">How to do it</summary>
+                        <p className="mt-1 whitespace-pre-line leading-relaxed">{ex.instructions}</p>
+                      </details>
                     )}
 
                     {/* One demo link per exercise. Paste a YouTube, Vimeo or

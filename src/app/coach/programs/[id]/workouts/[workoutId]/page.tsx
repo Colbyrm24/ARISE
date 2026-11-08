@@ -53,6 +53,7 @@ export default async function WorkoutBuilderPage({ params }: { params: { id: str
         musclePrimary: true,
         equipment: true,
         videoUrl: true,
+        imageUrls: true,
         video: { select: { thumbnailUrl: true } },
       },
     }),
