@@ -232,18 +232,22 @@ export default async function ClientCalendarPage({
                             s.kind === 'rest'
                               ? 'bg-muted-foreground/40'
                               : s.done
-                                ? 'bg-accent shadow-[0_0_6px_1px_hsl(var(--accent)/0.7)]'
-                                : 'bg-transparent ring-1 ring-inset ring-border'
+                                ? 'bg-emerald-400 shadow-[0_0_6px_1px_rgb(52_211_153/0.7)]'
+                                : 'bg-orange-500 shadow-[0_0_6px_1px_rgb(249_115_22/0.6)]'
                           )}
                         />
                         <span
                           className={cn(
-                            'hidden truncate border px-1.5 py-0.5 text-[10px] leading-tight sm:block',
+                            'chip hidden truncate px-2 py-1 text-xs leading-tight sm:block',
                             s.kind === 'rest'
-                              ? 'border-border/50 text-muted-foreground'
+                              ? 'chip-rest'
                               : s.done
-                                ? 'border-accent/60 bg-accent/15 text-foreground'
-                                : 'border-border/60 text-muted-foreground'
+                                ? 'chip-done'
+                                : s.kind === 'cardio'
+                                  ? 'chip-cardio'
+                                  : ['photos', 'bodystats', 'checkin'].includes(s.kind)
+                                    ? 'chip-reminder'
+                                    : 'chip-workout'
                           )}
                         >
                           {s.label}

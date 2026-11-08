@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 import { Check, ChevronRight, MessageCircle } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -533,7 +534,7 @@ export default async function TodayPage({
                           className={
                             item.kind === 'rest'
                               ? 'text-sm text-muted-foreground'
-                              : 'glow-soft text-sm font-medium text-foreground'
+                              : 'text-base font-semibold text-white'
                           }
                         >
                           {item.kind === 'rest'
@@ -552,9 +553,12 @@ export default async function TodayPage({
                       {item.kind === 'workout' && item.workoutId && (
                         <Link
                           href={`/workouts/${item.workoutId}`}
-                          className="readout shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-xs uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                          className={cn(
+                            'chip shrink-0 px-5 py-2.5 text-sm uppercase tracking-wider',
+                            done ? 'chip-done' : 'chip-workout'
+                          )}
                         >
-                          {done ? 'View' : 'Start'}
+                          {done ? 'View' : 'Start workout'}
                         </Link>
                       )}
 
@@ -582,10 +586,10 @@ export default async function TodayPage({
                     </div>
 
                     {item.cardioTarget && (
-                      <p className="whitespace-pre-line text-sm text-foreground/85">{item.cardioTarget}</p>
+                      <p className="whitespace-pre-line text-base text-white/90">{item.cardioTarget}</p>
                     )}
                     {item.note && (
-                      <p className="whitespace-pre-line text-xs italic text-muted-foreground">{item.note}</p>
+                      <p className="whitespace-pre-line text-sm italic text-white/80">{item.note}</p>
                     )}
 
                     {/*

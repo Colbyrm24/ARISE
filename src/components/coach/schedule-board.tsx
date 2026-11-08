@@ -293,23 +293,25 @@ export function ScheduleBoard({
                           // Phones get the label over up to three lines rather
                           // than "Uppe…" in every square; wider screens fit it
                           // on one.
-                          'flex items-start gap-0.5 border px-1 py-0.5 text-[9px] leading-tight sm:items-center sm:text-[10px]',
+                          'chip flex items-start gap-1 px-1 py-0.5 text-[9px] leading-tight sm:items-center sm:px-2 sm:py-1 sm:text-xs',
                           !s.done && 'cursor-grab active:cursor-grabbing',
                           s.kind === 'rest'
-                            ? 'border-border/50 text-muted-foreground'
-                            : REMINDER_KINDS.includes(s.kind) && !s.done
-                              ? 'border-dashed border-border/60 text-muted-foreground'
-                              : s.done
-                              ? 'border-accent/60 bg-accent/15 text-foreground'
-                              : 'border-border/60 text-foreground/85',
-                          picked === s.id && 'border-accent bg-accent/25 text-foreground',
+                            ? 'chip-rest'
+                            : s.done
+                              ? 'chip-done'
+                              : REMINDER_KINDS.includes(s.kind)
+                                ? 'chip-reminder'
+                                : s.kind === 'cardio'
+                                  ? 'chip-cardio'
+                                  : 'chip-workout',
+                          picked === s.id && 'ring-2 ring-white',
                           dragging === s.id && 'opacity-40'
                         )}
                       >
                         {s.done ? (
-                          <Check size={9} className="hidden shrink-0 text-accent sm:block" />
+                          <Check size={11} className="hidden shrink-0 sm:block" />
                         ) : (
-                          <GripVertical size={9} className="hidden shrink-0 opacity-50 sm:block" />
+                          <GripVertical size={11} className="hidden shrink-0 opacity-70 sm:block" />
                         )}
                         <span className="line-clamp-3 break-words sm:line-clamp-1 sm:truncate">{s.label}</span>
                       </span>
