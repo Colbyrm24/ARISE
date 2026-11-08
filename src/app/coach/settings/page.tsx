@@ -73,7 +73,7 @@ export default async function CoachSettingsPage() {
           )}
           <Link
             href="/coach/schedule"
-            className="readout w-fit border border-border px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
+            className="readout w-fit border border-border px-3 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
           >
             Open hours and call link
           </Link>
@@ -109,10 +109,10 @@ export default async function CoachSettingsPage() {
               >
                 <input type="hidden" name="trigger" value={t} />
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="readout text-[11px] uppercase tracking-wider text-accent glow-soft">
+                  <span className="readout text-xs uppercase tracking-wider text-accent glow-soft">
                     {TRIGGER_LABELS[t]}
                   </span>
-                  <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
                     [{lines.length} in rotation]
                   </span>
                 </div>
@@ -127,7 +127,7 @@ export default async function CoachSettingsPage() {
                   Save
                 </Button>
                 {lines.length === 0 && (
-                  <p className="readout border border-destructive/40 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+                  <p className="readout border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     Nothing in rotation, so this one never sends. Load your program on the Programs
                     screen to get the defaults, or write your own above.
                   </p>

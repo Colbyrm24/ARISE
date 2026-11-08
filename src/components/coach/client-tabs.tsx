@@ -46,7 +46,7 @@ export function ClientTabs({ clientId }: { clientId: string }) {
             href={href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'readout shrink-0 border-b-2 px-3 py-2.5 text-[11px] uppercase tracking-wider transition-colors',
+              'readout shrink-0 border-b-2 px-3 py-2.5 text-xs uppercase tracking-wider transition-colors',
               active
                 ? 'border-accent text-accent'
                 : 'border-transparent text-muted-foreground hover:text-foreground'

@@ -50,7 +50,7 @@ export function Sidebar({ counts = {} }: { counts?: BadgeCounts }) {
                   />
                   <span className="flex-1">{label}</span>
                   {count > 0 && (
-                    <span className="readout border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[10px] leading-none text-accent">
+                    <span className="readout border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-xs leading-none text-accent">
                       {count > 99 ? '99+' : count}
                     </span>
                   )}

@@ -1,4 +1,4 @@
-import { X, Send, CalendarRange } from 'lucide-react';
+import { X, Send, CalendarRange, Copy, Scaling } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,12 @@ import {
   publishPlan,
   retirePlan,
   assignStandardPlan,
+  copyPlanFrom,
+  resizePlanToTarget,
 } from '@/app/coach/clients/[id]/plan-actions';
+import { copySourcesFor, currentCalories } from '@/lib/client-setup';
+import { requireCoach } from '@/lib/auth';
+import { servingsLabel } from '@/lib/plan-scale';
 
 /*
   Where the coach writes a client's day.
@@ -30,16 +35,41 @@ import {
 */
 
 const selectClass =
-  'readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-[11px] uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none';
+  'h-10 rounded-none border border-input bg-secondary/40 px-2 text-sm capitalize focus-visible:border-accent/60 focus-visible:outline-none';
 const fieldClass =
-  'h-9 min-w-0 rounded-none border border-input bg-secondary/40 px-2 text-sm placeholder:text-muted-foreground focus-visible:border-accent/60 focus-visible:outline-none';
+  'h-10 min-w-0 rounded-none border border-input bg-secondary/40 px-2 text-sm placeholder:text-muted-foreground focus-visible:border-accent/60 focus-visible:outline-none';
 
 export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
+  const coach = await requireCoach();
   const plan = await getActivePlan(clientId);
-  const [recipes, check] = await Promise.all([
+  const [recipes, check, sources, calories] = await Promise.all([
     prisma.recipe.findMany({ orderBy: { title: 'asc' }, take: 200 }),
     plan ? planVsTarget(clientId, plan.dayRange) : Promise.resolve(null),
+    copySourcesFor(coach.id, clientId),
+    currentCalories(clientId),
   ]);
+
+  // Reusing a plan: pick a client whose plan suits this one, and it comes
+  // over resized to this client's calories.
+  const copyForm =
+    sources.length > 0 ? (
+      <form action={copyPlanFrom} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <input type="hidden" name="clientId" value={clientId} />
+        <select name="fromClientId" required defaultValue="" aria-label="Copy plan from" className={`${fieldClass} sm:flex-1`}>
+          <option value="" disabled>
+            {plan ? "Replace with another client's plan…" : "Copy another client's plan…"}
+          </option>
+          {sources.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+        <Button type="submit" size="sm" variant="outline">
+          <Copy size={14} /> Copy, sized to them
+        </Button>
+      </form>
+    ) : null;
 
   return (
     <Card>
@@ -49,8 +79,9 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
       <CardContent className="flex flex-col gap-4">
         {!plan ? (
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground">
-              None yet. Add a line below and the plan is created with it — it shows on their
+            <p className="text-sm text-foreground/75">
+              None yet. Fastest: the standard plan or a copy of another client's, both sized to
+              their calories. Or add lines by hand below and the plan is created with it — it shows on their
               nutrition screen above everything else, so they open the app to a day rather than a
               search box.
             </p>
@@ -61,13 +92,14 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
             */}
             <form action={assignStandardPlan}>
               <input type="hidden" name="clientId" value={clientId} />
-              <Button type="submit" size="sm" variant="outline" className="w-full sm:w-auto">
-                <CalendarRange size={14} /> Put them on the standard plan
+              <Button type="submit" size="sm" className="w-full sm:w-auto">
+                <CalendarRange size={14} /> Standard plan, sized to {calories ? `${calories.toLocaleString('en-US')} cal` : 'them'}
               </Button>
             </form>
-            <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
-              [3 meals · 7 options each · ~2600 cal · ~190g protein]
+            <p className="text-sm text-foreground/70">
+              3 meals · 7 options each{calories ? '' : ' · ~2,600 cal until you set their calories'}
             </p>
+            {copyForm}
           </div>
         ) : (
           <>
@@ -97,15 +129,15 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
             {plan.bySlot.map((group) => (
               <div key={group.slot} className="flex flex-col gap-1">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <span className="text-sm font-bold uppercase tracking-wider text-accent">
                     {group.slot}
                     {group.items.length > 1 && (
-                      <span className="ml-2 normal-case tracking-normal">
+                      <span className="ml-2 font-normal normal-case tracking-normal text-foreground/70">
                         {group.items.length} options
                       </span>
                     )}
                   </span>
-                  <span className="readout text-[10px] text-muted-foreground">
+                  <span className="text-xs text-foreground/70">
                     {formatRange(group.calories)} cal · {formatRange(group.protein)}p
                   </span>
                 </div>
@@ -115,8 +147,13 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
                       key={item.id}
                       className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/40 py-1.5 last:border-b-0"
                     >
-                      <span className="min-w-0 flex-1 text-sm">{item.name}</span>
-                      <span className="readout shrink-0 text-[10px] text-muted-foreground">
+                      <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                        {item.name}
+                        {item.quantity !== 1 && (
+                          <span className="ml-2 text-xs font-semibold text-accent">{servingsLabel(item.quantity)}</span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-xs text-foreground/70">
                         {item.calories} cal · {item.protein}p · {item.carbs}c · {item.fat}f
                       </span>
                       <form action={removePlanItem} className="flex shrink-0">
@@ -138,7 +175,7 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
             <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
               {/* "One pick per meal", not a sum. The distinction is the whole
                   fix — see the header. */}
-              <p className="readout text-[11px] uppercase text-muted-foreground">
+              <p className="text-sm font-semibold uppercase text-foreground/80">
                 One of each{' '}
                 <span className="text-foreground">
                   {formatRange(plan.dayRange.calories)} cal ·{' '}
@@ -149,7 +186,7 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
 
               {check &&
               (check.calories.kind !== 'covers' || check.protein.kind !== 'covers') ? (
-                <p className="text-xs leading-relaxed text-destructive">
+                <p className="text-sm font-semibold leading-relaxed text-destructive">
                   Whatever they pick off this plan, the day comes in{' '}
                   {check.calories.kind !== 'covers' && (
                     <>
@@ -165,7 +202,7 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
                   .
                 </p>
               ) : check ? (
-                <p className="text-xs text-success">
+                <p className="text-sm font-semibold text-success">
                   They can hit their target off this plan.
                 </p>
               ) : (
@@ -181,6 +218,14 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
                     <Send size={13} /> Tell them
                   </Button>
                 </form>
+                {check && (check.calories.kind !== 'covers') && (
+                  <form action={resizePlanToTarget}>
+                    <input type="hidden" name="clientId" value={clientId} />
+                    <Button type="submit" size="sm">
+                      <Scaling size={13} /> Resize to their calories
+                    </Button>
+                  </form>
+                )}
                 <form action={retirePlan}>
                   <input type="hidden" name="planId" value={plan.id} />
                   <Button type="submit" size="sm" variant="ghost">
@@ -188,6 +233,7 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
                   </Button>
                 </form>
               </div>
+              {copyForm}
             </div>
           </>
         )}
@@ -236,7 +282,7 @@ export async function CoachMealPlanCard({ clientId }: { clientId: string }) {
               { n: 'fat', l: 'Fat' },
             ].map((f) => (
               <label key={f.n} className="flex min-w-0 flex-col gap-1">
-                <span className="readout text-[10px] uppercase text-muted-foreground">{f.l}</span>
+                <span className="text-sm font-semibold text-foreground">{f.l}</span>
                 <input
                   type="number"
                   name={f.n}

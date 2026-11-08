@@ -202,7 +202,7 @@ export async function CoachingPlanCard({
   return (
     <Card>
       <CardContent className="flex flex-col gap-3 pt-6">
-        <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="readout text-xs uppercase tracking-wider text-muted-foreground">
           Your coaching
         </p>
 
@@ -231,7 +231,7 @@ export async function CoachingPlanCard({
             <div key={sub.id} className="flex flex-col gap-2">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <p className="text-[15px] font-semibold">{sub.plan.name}</p>
-                <p className="readout text-[11px] uppercase text-muted-foreground">
+                <p className="readout text-xs uppercase text-muted-foreground">
                   {contract
                     ? `${money(contract.paid)} of ${money(contract.total)}`
                     : required === null
@@ -253,7 +253,7 @@ export async function CoachingPlanCard({
                 </div>
               )}
 
-              <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
+              <p className="readout text-xs uppercase leading-relaxed text-muted-foreground">
                 {contract
                   ? contract.met
                     ? 'Paid in full · '

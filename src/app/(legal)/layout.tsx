@@ -29,19 +29,19 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
         <footer className="mt-16 flex gap-6 border-t border-border pt-6">
           <Link
             href="/privacy"
-            className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+            className="readout text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
           >
             Privacy
           </Link>
           <Link
             href="/terms"
-            className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+            className="readout text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
           >
             Terms
           </Link>
           <a
             href="mailto:colbymullins24@gmail.com"
-            className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+            className="readout text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
           >
             Contact
           </a>

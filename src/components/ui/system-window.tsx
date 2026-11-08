@@ -109,7 +109,7 @@ const SystemWindow = React.forwardRef<HTMLDivElement, SystemWindowProps>(
               now, and past it the text wraps instead of the page scrolling
               sideways.
             */
-            <span className="readout max-w-[50%] text-right text-[10px] uppercase text-muted-foreground">
+            <span className="readout max-w-[50%] text-right text-xs uppercase text-muted-foreground">
               {meta}
             </span>
           )}

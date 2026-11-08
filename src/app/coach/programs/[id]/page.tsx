@@ -46,7 +46,7 @@ import { addSubscribers, removeSubscriber, unlinkSubscriber, relinkSubscriber } 
 
 const inputClass =
   'flex h-10 w-full border border-input bg-secondary/40 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-const labelClass = 'readout text-[10px] uppercase tracking-wider text-muted-foreground';
+const labelClass = 'readout text-xs uppercase tracking-wider text-muted-foreground';
 
 /*
   The program, laid out the way Trainerize lays one out: a rail on the left
@@ -295,7 +295,7 @@ export default async function ProgramBuilderPage({
       )}
     >
       <span className="truncate">{label}</span>
-      {sub && <span className="readout truncate text-[10px] uppercase text-muted-foreground">{sub}</span>}
+      {sub && <span className="readout truncate text-xs uppercase text-muted-foreground">{sub}</span>}
     </Link>
   );
 
@@ -311,7 +311,7 @@ export default async function ProgramBuilderPage({
 
       <header>
         <h1 className="text-2xl font-semibold">{template.name}</h1>
-        <p className="readout mt-1 text-[11px] uppercase text-muted-foreground">
+        <p className="readout mt-1 text-xs uppercase text-muted-foreground">
           {totalWeeks} week{totalWeeks === 1 ? '' : 's'} · {phases.length} phase{phases.length === 1 ? '' : 's'} ·{' '}
           {template.workouts.length} workout{template.workouts.length === 1 ? '' : 's'} · {subscribers.length}{' '}
           subscriber{subscribers.length === 1 ? '' : 's'}
@@ -344,7 +344,7 @@ export default async function ProgramBuilderPage({
             <input type="hidden" name="templateId" value={template.id} />
             <button
               type="submit"
-              className="readout inline-flex items-center gap-1 text-[11px] uppercase text-accent hover:underline"
+              className="readout inline-flex items-center gap-1 text-xs uppercase text-accent hover:underline"
             >
               <Plus size={12} />
               Add next phase
@@ -381,7 +381,7 @@ export default async function ProgramBuilderPage({
                               <span className="block truncate text-sm font-medium">{p.name}</span>
                               {p.summary && <span className="line-clamp-1 text-xs text-muted-foreground">{p.summary}</span>}
                             </span>
-                            <span className="readout shrink-0 text-[10px] uppercase text-muted-foreground">
+                            <span className="readout shrink-0 text-xs uppercase text-muted-foreground">
                               W{ranges[i].startWeek}–{ranges[i].endWeek} · {count} workout{count === 1 ? '' : 's'}
                             </span>
                           </Link>
@@ -614,14 +614,14 @@ function PhaseView({
                       <Link href={href} className="truncate text-sm font-semibold hover:text-accent">
                         {workout.name}
                       </Link>
-                      <p className="readout text-[11px] uppercase text-muted-foreground">
+                      <p className="readout text-xs uppercase text-muted-foreground">
                         {minutes ? `est. ${minutes} min` : 'est. — min'} | {count} exercise{count === 1 ? '' : 's'}
                       </p>
                       {firstLine && <p className="line-clamp-1 text-xs text-muted-foreground">{firstLine}</p>}
                       <div className="mt-1 flex flex-wrap items-center gap-4">
                         <Link
                           href={href}
-                          className="readout inline-flex items-center gap-1 text-[11px] uppercase text-accent hover:underline"
+                          className="readout inline-flex items-center gap-1 text-xs uppercase text-accent hover:underline"
                         >
                           <Pencil size={12} />
                           Edit
@@ -629,7 +629,7 @@ function PhaseView({
                         {/* Trainerize's Schedule: straight into Add Activity with this workout picked. */}
                         <Link
                           href={`/coach/programs/${templateId}?view=calendar&add=workout&workout=${workout.id}`}
-                          className="readout inline-flex items-center gap-1 text-[11px] uppercase text-muted-foreground hover:text-foreground"
+                          className="readout inline-flex items-center gap-1 text-xs uppercase text-muted-foreground hover:text-foreground"
                         >
                           <CalendarPlus size={12} />
                           Schedule
@@ -638,7 +638,7 @@ function PhaseView({
                           <input type="hidden" name="workoutId" value={workout.id} />
                           <button
                             type="submit"
-                            className="readout inline-flex items-center gap-1 text-[11px] uppercase text-muted-foreground hover:text-foreground"
+                            className="readout inline-flex items-center gap-1 text-xs uppercase text-muted-foreground hover:text-foreground"
                           >
                             <Copy size={12} />
                             Duplicate
@@ -667,7 +667,7 @@ function PhaseView({
                               </option>
                             ))}
                           </select>
-                          <button type="submit" className="readout text-[10px] uppercase text-accent hover:underline">
+                          <button type="submit" className="readout text-xs uppercase text-accent hover:underline">
                             Move
                           </button>
                         </form>

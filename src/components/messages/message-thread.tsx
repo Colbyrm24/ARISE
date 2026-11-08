@@ -129,7 +129,7 @@ export function MessageThread({
               {showDay && (
                 <div className="flex items-center gap-3 py-4">
                   <span className="h-px flex-1 bg-border/60" />
-                  <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
                     {label}
                   </span>
                   <span className="h-px flex-1 bg-border/60" />
@@ -195,7 +195,7 @@ export function MessageThread({
                       least important thing on the row and should not push the
                       words around. */}
                   {endsRun && (
-                    <span className="readout mt-1 px-1 text-[10px] text-muted-foreground tabular-nums">
+                    <span className="readout mt-1 px-1 text-xs text-muted-foreground tabular-nums">
                       {clockLabel(m.createdAt, tz)}
                     </span>
                   )}

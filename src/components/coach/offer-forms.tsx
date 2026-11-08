@@ -80,7 +80,7 @@ export function CopyLink({ url }: { url: string }) {
             // Clipboard blocked; the link is right there to select.
           }
         }}
-        className="readout inline-flex items-center gap-1.5 border border-border px-2.5 py-2 text-[10px] uppercase tracking-wider text-muted-foreground hover:border-accent/60 hover:text-accent"
+        className="readout inline-flex items-center gap-1.5 border border-border px-2.5 py-2 text-xs uppercase tracking-wider text-muted-foreground hover:border-accent/60 hover:text-accent"
       >
         {copied ? <Check size={12} /> : <Copy size={12} />}
         {copied ? 'Copied' : 'Copy'}

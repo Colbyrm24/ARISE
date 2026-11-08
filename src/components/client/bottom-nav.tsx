@@ -46,7 +46,7 @@ export function BottomNav({ hidden = [] }: { hidden?: string[] }) {
               <Link
                 href={href}
                 className={cn(
-                  'relative flex flex-col items-center gap-1 py-3 text-[11px] font-medium transition-colors',
+                  'relative flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors',
                   active ? 'glow-soft text-accent' : 'text-muted-foreground hover:text-foreground'
                 )}
               >

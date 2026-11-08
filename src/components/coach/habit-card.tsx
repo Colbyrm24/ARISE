@@ -76,22 +76,22 @@ export async function HabitCard({ clientId }: { clientId: string }) {
                   <span className="min-w-0 flex-1 text-sm">
                     {habitLabel(habit.goalType, habit.targetValue)}
                     {habit.goalType !== 'custom' && habit.targetValue && (
-                      <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
+                      <span className="readout ml-2 text-xs uppercase text-muted-foreground">
                         {habit.targetValue}
                       </span>
                     )}
                   </span>
 
                   {isTracked(habit.goalType) ? (
-                    <span className="readout text-[10px] uppercase text-muted-foreground">
+                    <span className="readout text-xs uppercase text-muted-foreground">
                       tracked
                     </span>
                   ) : streak > 0 ? (
-                    <span className="readout flex items-center gap-1 text-[10px] uppercase text-success">
+                    <span className="readout flex items-center gap-1 text-xs uppercase text-success">
                       <Flame size={11} /> {streak}d
                     </span>
                   ) : (
-                    <span className="readout text-[10px] uppercase text-muted-foreground">
+                    <span className="readout text-xs uppercase text-muted-foreground">
                       no streak
                     </span>
                   )}
@@ -118,7 +118,7 @@ export async function HabitCard({ clientId }: { clientId: string }) {
             name="goalType"
             defaultValue="water"
             aria-label="Habit"
-            className="readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-[11px] uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none"
+            className="readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-xs uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none"
           >
             {HABIT_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -145,7 +145,7 @@ export async function HabitCard({ clientId }: { clientId: string }) {
         */}
         <form action={setSteps} className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
           <input type="hidden" name="clientId" value={clientId} />
-          <span className="readout text-[10px] uppercase text-muted-foreground">Steps today</span>
+          <span className="readout text-xs uppercase text-muted-foreground">Steps today</span>
           <input
             type="number"
             name="steps"

@@ -69,7 +69,7 @@ export function BookSlots({ slots }: { slots: string[] }) {
     <form action={submit} className="flex flex-col gap-5">
       {days.map((day) => (
         <div key={day.label} className="flex flex-col gap-2">
-          <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+          <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
             {day.label}
           </span>
           <div className="flex flex-wrap gap-2">
@@ -83,7 +83,7 @@ export function BookSlots({ slots }: { slots: string[] }) {
                   aria-pressed={active}
                   // min-h-11 keeps these a real tap target on a phone; a 28px
                   // pill of monospace is not something you hit while walking.
-                  className={`readout min-h-11 border px-3 py-2 text-[11px] uppercase tracking-wider transition-colors ${
+                  className={`readout min-h-11 border px-3 py-2 text-xs uppercase tracking-wider transition-colors ${
                     active
                       ? 'border-accent bg-accent/15 text-accent'
                       : 'border-border/70 text-muted-foreground hover:border-accent/50 hover:text-foreground'

@@ -387,7 +387,7 @@ export function WorkoutBuilder({ programId, programName, backHref, workout, init
               done();
             }
           }}
-          className="readout inline-flex min-w-0 items-center gap-1.5 text-[11px] uppercase text-muted-foreground hover:text-accent"
+          className="readout inline-flex min-w-0 items-center gap-1.5 text-xs uppercase text-muted-foreground hover:text-accent"
         >
           <ArrowLeft size={14} className="shrink-0" />
           <span className="truncate">{programName}</span>
@@ -396,7 +396,7 @@ export function WorkoutBuilder({ programId, programName, backHref, workout, init
         <span
           role="status"
           className={cn(
-            'readout shrink-0 text-[10px] uppercase tracking-wider',
+            'readout shrink-0 text-xs uppercase tracking-wider',
             notice && !notice.ok ? 'text-destructive' : pending ? 'text-muted-foreground' : 'text-success'
           )}
         >
@@ -421,7 +421,7 @@ export function WorkoutBuilder({ programId, programName, backHref, workout, init
             type="button"
             onClick={() => setTab(t)}
             className={cn(
-              'readout py-2.5 text-[11px] uppercase tracking-wider',
+              'readout py-2.5 text-xs uppercase tracking-wider',
               tab === t ? 'border-b-2 border-accent text-foreground' : 'text-muted-foreground'
             )}
           >
@@ -495,7 +495,7 @@ export function WorkoutBuilder({ programId, programName, backHref, workout, init
                 {equipment.map((e) => (
                   <span
                     key={e}
-                    className="readout border border-border px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground"
+                    className="readout border border-border px-2 py-0.5 text-xs uppercase tracking-wider text-muted-foreground"
                   >
                     {e}
                   </span>
@@ -522,7 +522,7 @@ export function WorkoutBuilder({ programId, programName, backHref, workout, init
 
           {/* Toolbar: acts on the ticked rows. */}
           <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-y border-border bg-background/95 px-4 py-2 backdrop-blur sm:px-6">
-            <span className="readout mr-auto text-[10px] uppercase tracking-wider text-muted-foreground">
+            <span className="readout mr-auto text-xs uppercase tracking-wider text-muted-foreground">
               {selectedIds.length ? `${selectedIds.length} selected` : `Exercises · ${rows.length}`}
             </span>
             {selectedIds.length >= 2 && (
@@ -616,7 +616,7 @@ export function WorkoutBuilder({ programId, programName, backHref, workout, init
                 <button
                   type="button"
                   onClick={() => setTab('library')}
-                  className="readout text-[11px] uppercase text-accent lg:hidden"
+                  className="readout text-xs uppercase text-accent lg:hidden"
                 >
                   Open library
                 </button>
@@ -635,7 +635,7 @@ export function WorkoutBuilder({ programId, programName, backHref, workout, init
                   >
                     {block.superset && (
                       <div className="flex items-center justify-between gap-2 border-b border-accent/30 px-3 py-1.5">
-                        <span className="readout text-[10px] uppercase tracking-wider text-accent">
+                        <span className="readout text-xs uppercase tracking-wider text-accent">
                           Superset {block.letter} · back to back
                         </span>
                       </div>
@@ -789,7 +789,7 @@ function ToolButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'readout inline-flex h-8 items-center gap-1.5 border px-2.5 text-[10px] uppercase tracking-wider transition-colors',
+        'readout inline-flex h-8 items-center gap-1.5 border px-2.5 text-xs uppercase tracking-wider transition-colors',
         danger
           ? 'border-destructive/60 text-destructive hover:bg-destructive/10'
           : 'border-border text-foreground hover:border-accent/50 hover:text-accent'
@@ -1017,13 +1017,13 @@ function RowCard({
           className="flex min-w-0 flex-1 flex-col items-start gap-0.5 text-left">
           <span className="flex w-full items-center gap-2">
             {label && (
-              <span className="readout shrink-0 border border-accent/50 px-1 text-[10px] text-accent">{label}</span>
+              <span className="readout shrink-0 border border-accent/50 px-1 text-xs text-accent">{label}</span>
             )}
             <span className="truncate text-sm font-semibold">{row.name}</span>
           </span>
           <span className="text-xs text-foreground/85">{prescriptionText(p)}</span>
-          {rest && <span className="readout text-[10px] uppercase text-muted-foreground">{rest}</span>}
-          {row.notes && <span className="line-clamp-1 text-[11px] italic text-muted-foreground">{row.notes}</span>}
+          {rest && <span className="readout text-xs uppercase text-muted-foreground">{rest}</span>}
+          {row.notes && <span className="line-clamp-1 text-xs italic text-muted-foreground">{row.notes}</span>}
         </button>
         <button
           type="button"
@@ -1105,7 +1105,7 @@ function RowCard({
             />
           </label>
           <div className="col-span-3 flex flex-wrap items-center justify-between gap-2 sm:col-span-6">
-            <span className="readout text-[10px] uppercase text-muted-foreground">
+            <span className="readout text-xs uppercase text-muted-foreground">
               {total} set rows on the client&apos;s screen
             </span>
             {!hasRest && (
@@ -1113,7 +1113,7 @@ function RowCard({
                 type="button"
                 onClick={onAddRest}
                 disabled={pendingRow}
-                className="readout inline-flex items-center gap-1 text-[10px] uppercase text-accent hover:underline"
+                className="readout inline-flex items-center gap-1 text-xs uppercase text-accent hover:underline"
               >
                 <Timer size={12} /> Rest after{inSuperset ? ' superset' : ''}
               </button>
@@ -1145,7 +1145,7 @@ function RestBlock({
       )}
     >
       <Timer size={14} className="shrink-0 text-accent" />
-      <span className="readout text-[11px] uppercase tracking-wider">{restBlockText(seconds)}</span>
+      <span className="readout text-xs uppercase tracking-wider">{restBlockText(seconds)}</span>
       <span className="flex-1" />
       <select
         value={seconds}
@@ -1197,13 +1197,13 @@ function Library({
   return (
     <div className="flex flex-col gap-3 px-4 py-5 sm:px-6">
       <div className="flex items-center justify-between gap-2">
-        <span className="readout text-[11px] uppercase tracking-wider text-muted-foreground">
+        <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
           Exercise library · {shown.length}
         </span>
         <button
           type="button"
           onClick={() => setCustom((c) => !c)}
-          className="readout inline-flex items-center gap-1 text-[11px] uppercase text-accent hover:underline"
+          className="readout inline-flex items-center gap-1 text-xs uppercase text-accent hover:underline"
         >
           <Plus size={13} /> Custom exercise
         </button>
@@ -1332,7 +1332,7 @@ function CustomExerciseForm({
         if (!res.ok) setError(res.message ?? 'That did not save.');
       }}
     >
-      <span className="readout text-[10px] uppercase tracking-wider text-accent">New custom exercise</span>
+      <span className="readout text-xs uppercase tracking-wider text-accent">New custom exercise</span>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" required maxLength={120} className={field} />
       <div className="flex gap-2">
         <input

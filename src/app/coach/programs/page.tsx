@@ -234,7 +234,7 @@ export default async function CoachProgramsPage() {
                       ) : (
                         <span
                           title="In use — a client is assigned to this, or has trained from it"
-                          className="readout text-[10px] uppercase tracking-wider text-muted-foreground"
+                          className="readout text-xs uppercase tracking-wider text-muted-foreground"
                         >
                           In use
                         </span>

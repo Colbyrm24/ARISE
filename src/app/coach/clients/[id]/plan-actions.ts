@@ -8,6 +8,7 @@ import { assignOptionPlan } from '@/lib/recipe-seed';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { isMealSlot } from '@/lib/meal-plans';
 import { notify } from '@/lib/notifications';
+import { copyPlan, currentCalories, resizeActivePlan } from '@/lib/client-setup';
 
 /*
   Writing a client's meal plan.
@@ -205,6 +206,35 @@ export async function assignStandardPlan(formData: FormData) {
   if (!clientId) return;
   if (!(await coachOwnsClient(coach.id, clientId))) return;
 
-  await assignOptionPlan(coach.id, clientId);
-  revalidatePath(`/coach/clients/${clientId}`);
+  // Sized to their calories when they have a target, so it lands on their
+  // number rather than the plan's.
+  await assignOptionPlan(coach.id, clientId, await currentCalories(clientId));
+  refresh(clientId);
+}
+
+/**
+ * Copies another client's plan onto this one, resized to this client's
+ * calories. Build a good plan once, then reuse it for everyone it suits.
+ */
+export async function copyPlanFrom(formData: FormData) {
+  const coach = await requireCoach();
+  const clientId = formData.get('clientId') as string | null;
+  const fromClientId = formData.get('fromClientId') as string | null;
+  if (!clientId || !fromClientId || clientId === fromClientId) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
+  if (!(await coachOwnsClient(coach.id, fromClientId))) return;
+
+  await copyPlan(coach.id, fromClientId, clientId);
+  refresh(clientId);
+}
+
+/** Resizes the current plan to their current calories — press after changing the target. */
+export async function resizePlanToTarget(formData: FormData) {
+  const coach = await requireCoach();
+  const clientId = formData.get('clientId') as string | null;
+  if (!clientId) return;
+  if (!(await coachOwnsClient(coach.id, clientId))) return;
+
+  await resizeActivePlan(clientId);
+  refresh(clientId);
 }

@@ -118,7 +118,7 @@ export default async function ProfilePage() {
                 <Icon size={16} className="text-accent" />
                 {label}
               </span>
-              <span className="readout text-[10px] uppercase text-muted-foreground">Open</span>
+              <span className="readout text-xs uppercase text-muted-foreground">Open</span>
             </Link>
           ))}
         </CardContent>
@@ -139,7 +139,7 @@ export default async function ProfilePage() {
               <Bell size={16} className="text-accent" />
               Updates
             </span>
-            <span className="readout text-[10px] uppercase text-muted-foreground">Open</span>
+            <span className="readout text-xs uppercase text-muted-foreground">Open</span>
           </Link>
         </CardContent>
       </Card>
@@ -150,7 +150,7 @@ export default async function ProfilePage() {
           <div>
             <p className="text-base font-medium">{user?.profile?.fullName ?? 'Your name'}</p>
             <p className="text-sm text-muted-foreground">{user?.email}</p>
-            <p className="readout mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+            <p className="readout mt-1 text-xs uppercase tracking-wider text-muted-foreground">
               Tap the photo to change it
             </p>
           </div>
@@ -185,7 +185,7 @@ export default async function ProfilePage() {
           <Link
             key={href}
             href={href}
-            className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+            className="readout text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
           >
             {label}
           </Link>

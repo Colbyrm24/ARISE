@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { servingsLabel } from '@/lib/plan-scale';
 import { Check, ChevronDown, Trash2 } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { recipesVisibleToClient } from '@/lib/recipe-scope';
@@ -67,7 +68,7 @@ const CATEGORIES = [
 ];
 
 const selectClass =
-  'readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-[11px] uppercase ' +
+  'readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-xs uppercase ' +
   'text-foreground focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 ' +
   'focus-visible:ring-accent/50';
 
@@ -115,7 +116,7 @@ function PlanOption({ item, photo }: { item: PlanItem; photo?: string | null }) 
             item.name
           )}
           {item.quantity !== 1 && (
-            <span className="readout ml-2 text-[10px] uppercase">×{item.quantity}</span>
+            <span className="ml-2 text-xs font-semibold text-accent">{servingsLabel(item.quantity)}</span>
           )}
         </p>
         <p className="mt-0.5 text-xs text-foreground/70">
@@ -126,7 +127,7 @@ function PlanOption({ item, photo }: { item: PlanItem; photo?: string | null }) 
         <input type="hidden" name="itemId" value={item.id} />
         <button
           type="submit"
-          className="readout border border-border/70 px-2.5 py-1 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent focus-visible:border-accent focus-visible:outline-none"
+          className="readout border border-border/70 px-2.5 py-1 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent focus-visible:border-accent focus-visible:outline-none"
         >
           {/* Not "Log" — this is a choice being made, and "had this" is the
               sentence the client is actually saying when they tap it. */}
@@ -159,7 +160,7 @@ function Fold({
     <details open={open} className="group border-b border-border/50 last:border-b-0">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-3.5 text-sm transition-colors hover:text-accent [&::-webkit-details-marker]:hidden">
         <span>{label}</span>
-        <span className="readout flex items-center gap-2 text-[10px] uppercase text-muted-foreground">
+        <span className="readout flex items-center gap-2 text-xs uppercase text-muted-foreground">
           {hint}
           <ChevronDown
             size={14}
@@ -280,7 +281,7 @@ export default async function NutritionPage({
   return (
     <div className="flex flex-col gap-5">
       <header>
-        <p className="readout text-[11px] uppercase text-muted-foreground">Nutrition</p>
+        <p className="readout text-xs uppercase text-muted-foreground">Nutrition</p>
         <h1 className="display mt-1.5 text-2xl">Today</h1>
       </header>
 
@@ -299,7 +300,7 @@ export default async function NutritionPage({
                 <p className="display text-5xl leading-none tabular-nums">
                   {head.amount.toLocaleString('en-US')}
                 </p>
-                <p className="readout mt-2 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <p className="readout mt-2 text-xs uppercase tracking-wider text-muted-foreground">
                   {head.kind === 'left'
                     ? 'calories left'
                     : head.kind === 'over'
@@ -308,7 +309,7 @@ export default async function NutritionPage({
                 </p>
               </div>
               {calorieGoal && (
-                <p className="readout pb-1 text-right text-[11px] text-muted-foreground">
+                <p className="readout pb-1 text-right text-xs text-muted-foreground">
                   {eaten.calories.toLocaleString('en-US')} of{' '}
                   {calorieGoal.toLocaleString('en-US')}
                 </p>
@@ -355,7 +356,7 @@ export default async function NutritionPage({
             homework.
           */}
           {target && (
-            <p className="readout text-[11px] text-muted-foreground">
+            <p className="readout text-xs text-muted-foreground">
               Carbs {Math.round(eaten.carbs)}/{Math.round(Number(target.carbs))}g
               <span className="px-2 opacity-40">·</span>
               Fat {Math.round(eaten.fat)}/{Math.round(Number(target.fat))}g
@@ -406,15 +407,15 @@ export default async function NutritionPage({
           {synced && (
             <div className="flex items-center justify-between gap-3 border border-dashed border-border/70 px-3 py-2.5">
               <div className="min-w-0">
-                <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                <p className="readout text-xs uppercase tracking-wider text-muted-foreground">
                   Synced from Apple Health
                 </p>
-                <p className="readout mt-1 text-[11px] text-foreground">
+                <p className="readout mt-1 text-xs text-foreground">
                   {synced.calories.toLocaleString('en-US')} cal · {Math.round(synced.protein)}p ·{' '}
                   {Math.round(synced.carbs)}c · {Math.round(synced.fat)}f
                 </p>
               </div>
-              <span className="readout shrink-0 text-[10px] uppercase text-muted-foreground">
+              <span className="readout shrink-0 text-xs uppercase text-muted-foreground">
                 Whole day
               </span>
             </div>
@@ -452,7 +453,7 @@ export default async function NutritionPage({
                     className="group/meal flex flex-col"
                   >
                     <summary className="flex cursor-pointer list-none items-baseline justify-between gap-3 border-b border-border/60 pb-1.5 [&::-webkit-details-marker]:hidden">
-                      <span className="readout flex items-baseline gap-2 text-[11px] uppercase tracking-wider text-foreground">
+                      <span className="readout flex items-baseline gap-2 text-xs uppercase tracking-wider text-foreground">
                         {section.slot}
                         {toEat.length > 1 && (
                           <span className="normal-case tracking-normal text-muted-foreground">
@@ -465,13 +466,13 @@ export default async function NutritionPage({
                           className="self-center text-muted-foreground transition-transform duration-200 group-open/meal:rotate-180"
                         />
                       </span>
-                      <span className="readout text-[10px] text-muted-foreground">
+                      <span className="readout text-xs text-muted-foreground">
                         {formatRange(section.plannedCalories)} cal
                       </span>
                     </summary>
 
                     {toEat.length > 1 && (
-                      <span className="readout pt-2 text-[10px] uppercase text-muted-foreground">
+                      <span className="readout pt-2 text-xs uppercase text-muted-foreground">
                         Pick one
                       </span>
                     )}
@@ -485,10 +486,10 @@ export default async function NutritionPage({
               return (
                 <div key={section.slot} className="flex flex-col">
                   <div className="flex items-baseline justify-between gap-3 border-b border-border/60 pb-1.5">
-                    <span className="readout text-[11px] uppercase tracking-wider text-foreground">
+                    <span className="readout text-xs uppercase tracking-wider text-foreground">
                       {section.slot}
                     </span>
-                    <span className="readout text-[10px] text-muted-foreground">
+                    <span className="readout text-xs text-muted-foreground">
                       {section.calories.toLocaleString('en-US')} cal · {section.protein}p
                     </span>
                   </div>
@@ -508,7 +509,7 @@ export default async function NutritionPage({
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm">{log.name}</p>
-                          <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                          <p className="readout mt-0.5 text-xs text-muted-foreground">
                             {log.calories} cal · {Math.round(log.protein)}p ·{' '}
                             {Math.round(log.carbs)}c · {Math.round(log.fat)}f
                             {note && (
@@ -542,7 +543,7 @@ export default async function NutritionPage({
                   {toEat.length > 0 && (
                     <details className="group/opts mt-1 flex flex-col">
                       <summary className="flex cursor-pointer list-none items-center gap-2 py-1 [&::-webkit-details-marker]:hidden">
-                        <span className="readout text-[10px] uppercase text-muted-foreground">
+                        <span className="readout text-xs uppercase text-muted-foreground">
                           {toEat.length} other {toEat.length === 1 ? 'option' : 'options'}
                         </span>
                         <ChevronDown
@@ -559,7 +560,7 @@ export default async function NutritionPage({
 
                   {/* Nothing left to choose from and something is in. */}
                   {section.planned.length > 0 && toEat.length === 0 && (
-                    <p className="readout flex items-center gap-1.5 pt-2 text-[10px] uppercase text-success">
+                    <p className="readout flex items-center gap-1.5 pt-2 text-xs uppercase text-success">
                       <Check size={12} /> That&apos;s the meal in
                     </p>
                   )}
@@ -612,7 +613,7 @@ export default async function NutritionPage({
                     key={c}
                     href={`/nutrition?cat=${encodeURIComponent(c)}`}
                     className={
-                      'readout border px-2 py-1 text-[10px] uppercase transition-colors ' +
+                      'readout border px-2 py-1 text-xs uppercase transition-colors ' +
                       (cat === c && !q
                         ? 'border-accent/50 bg-accent/10 text-accent'
                         : 'border-border text-muted-foreground hover:border-accent/40 hover:text-accent')
@@ -638,7 +639,7 @@ export default async function NutritionPage({
                     >
                       <div className="min-w-0 sm:flex-1">
                         <p className="text-sm">{food.name}</p>
-                        <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                        <p className="readout mt-0.5 text-xs text-muted-foreground">
                           {food.servingSize} · {food.calories} cal ·{' '}
                           {Math.round(Number(food.protein))}p · {Math.round(Number(food.carbs))}c ·{' '}
                           {Math.round(Number(food.fat))}f
@@ -691,7 +692,7 @@ export default async function NutritionPage({
                   { n: 'fat', l: 'Fat g', req: false },
                 ].map((f) => (
                   <label key={f.n} className="flex flex-col gap-1">
-                    <span className="readout text-[10px] uppercase text-muted-foreground">
+                    <span className="readout text-xs uppercase text-muted-foreground">
                       {f.l}
                     </span>
                     <input
@@ -707,7 +708,7 @@ export default async function NutritionPage({
                 ))}
               </div>
               <label className="flex flex-col gap-1">
-                <span className="readout text-[10px] uppercase text-muted-foreground">
+                <span className="readout text-xs uppercase text-muted-foreground">
                   Photo (optional)
                 </span>
                 <input
@@ -715,7 +716,7 @@ export default async function NutritionPage({
                   name="photo"
                   accept="image/*"
                   capture="environment"
-                  className="readout w-full rounded-none border border-input bg-secondary/40 p-2 text-[11px] file:mr-3 file:rounded-none file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-[10px] file:uppercase file:tracking-wider file:text-foreground"
+                  className="readout w-full rounded-none border border-input bg-secondary/40 p-2 text-xs file:mr-3 file:rounded-none file:border-0 file:bg-secondary file:px-3 file:py-1 file:text-xs file:uppercase file:tracking-wider file:text-foreground"
                 />
               </label>
 
@@ -734,7 +735,7 @@ export default async function NutritionPage({
                       name="save"
                       className="h-4 w-4 rounded-none border-border bg-secondary accent-[hsl(var(--accent))]"
                     />
-                    <span className="readout text-[10px] uppercase text-muted-foreground">
+                    <span className="readout text-xs uppercase text-muted-foreground">
                       Save for next time
                     </span>
                   </label>

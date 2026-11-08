@@ -185,7 +185,7 @@ export default async function ProgressPage() {
           <CardTitle>Achievements</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <p className="readout text-[11px] uppercase tracking-wider text-muted-foreground">
+          <p className="readout text-xs uppercase tracking-wider text-muted-foreground">
             {earnedCount(badges)} of {badges.length} earned
           </p>
           <AchievementBoard states={badges} />

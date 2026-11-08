@@ -45,7 +45,7 @@ export function WeekStrip({ days }: { days: StripDay[] }) {
         >
           <span
             className={cn(
-              'readout text-[10px] uppercase',
+              'readout text-xs uppercase',
               day.isSelected ? 'text-accent' : 'text-muted-foreground'
             )}
           >

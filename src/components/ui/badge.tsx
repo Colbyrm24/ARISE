@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
   readout tag rather than a label someone wrote.
 */
 const badgeVariants = cva(
-  'inline-flex items-center rounded-none px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] ring-1 ring-inset',
+  'inline-flex items-center rounded-none px-2 py-0.5 font-mono text-xs uppercase tracking-[0.14em] ring-1 ring-inset',
   {
     variants: {
       variant: {

@@ -27,7 +27,7 @@ import { dayKey } from '@/lib/month-grid';
 const fieldClass =
   'h-9 min-w-0 rounded-none border border-input bg-secondary/40 px-2 text-sm placeholder:text-muted-foreground focus-visible:border-accent/60 focus-visible:outline-none';
 const selectClass =
-  'readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-[11px] uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none';
+  'readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-xs uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none';
 
 function loadInvites(coachId: string) {
   return prisma.clientInvite.findMany({
@@ -126,7 +126,7 @@ export async function InvitePanel({
         </p>
 
         {templates.length === 0 && (
-          <p className="readout text-[10px] uppercase leading-relaxed text-[hsl(var(--destructive))]">
+          <p className="readout text-xs uppercase leading-relaxed text-[hsl(var(--destructive))]">
             No agreement template yet, so paying links can&apos;t be made — add one on the Payments
             screen. Existing-client links still work.
           </p>
@@ -158,7 +158,7 @@ export async function InvitePanel({
             />
             <span className="flex flex-col gap-0.5">
               <span className="text-[13px]">They already pay me somewhere else</span>
-              <span className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
+              <span className="readout text-xs uppercase leading-relaxed text-muted-foreground">
                 No checkout. They still sign the agreement picked below. Set Starts to the date
                 they actually began with you.
               </span>
@@ -191,7 +191,7 @@ export async function InvitePanel({
               ))}
             </select>
             <label className="flex items-center gap-2">
-              <span className="readout text-[10px] uppercase text-muted-foreground">Starts</span>
+              <span className="readout text-xs uppercase text-muted-foreground">Starts</span>
               <input
                 type="date"
                 name="startDate"
@@ -209,7 +209,7 @@ export async function InvitePanel({
           */}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <label className="flex flex-col gap-1">
-              <span className="readout text-[10px] uppercase text-muted-foreground">
+              <span className="readout text-xs uppercase text-muted-foreground">
                 Price override
               </span>
               {/*
@@ -236,7 +236,7 @@ export async function InvitePanel({
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="readout text-[10px] uppercase text-muted-foreground">
+              <span className="readout text-xs uppercase text-muted-foreground">
                 No. of payments
               </span>
               <input
@@ -249,7 +249,7 @@ export async function InvitePanel({
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="readout text-[10px] uppercase text-muted-foreground">
+              <span className="readout text-xs uppercase text-muted-foreground">
                 Term months
               </span>
               <input
@@ -268,7 +268,7 @@ export async function InvitePanel({
               the only thing that says when the charges stop.
             */}
             <label className="flex flex-col gap-1">
-              <span className="readout text-[10px] uppercase text-muted-foreground">
+              <span className="readout text-xs uppercase text-muted-foreground">
                 Total value
               </span>
               <input
@@ -281,7 +281,7 @@ export async function InvitePanel({
             </label>
           </div>
 
-          <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
+          <p className="readout text-xs uppercase leading-relaxed text-muted-foreground">
             Price override is ignored on plans imported from Stripe — Stripe charges what its own
             price says, and the agreement has to match the money.
           </p>
@@ -293,7 +293,7 @@ export async function InvitePanel({
 
         {invites.length > 0 && (
           <div className="flex flex-col border-t border-border/60 pt-3">
-            <span className="readout pb-1 text-[10px] uppercase text-muted-foreground">
+            <span className="readout pb-1 text-xs uppercase text-muted-foreground">
               Links waiting to be used
             </span>
             {invites.map((invite) => {
@@ -321,7 +321,7 @@ export async function InvitePanel({
                         </span>
                       )}
                     </p>
-                    <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                    <p className="readout mt-0.5 text-xs text-muted-foreground">
                       {invite.plan.name} ·{' '}
                       {invite.skipPayment
                         ? invite.agreementTemplateId

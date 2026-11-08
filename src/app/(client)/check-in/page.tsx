@@ -35,7 +35,7 @@ export default async function CheckInPage({
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <p className="readout text-[11px] uppercase text-muted-foreground">Weekly</p>
+        <p className="readout text-xs uppercase text-muted-foreground">Weekly</p>
         <h1 className="display mt-1.5 text-2xl">Check-in</h1>
       </header>
 
@@ -108,12 +108,12 @@ export default async function CheckInPage({
                     {typeof a.adherence === 'number' ? (
                       <span className="flex items-center gap-2">
                         <Count value={a.adherence} total={10} />
-                        <span className="readout text-[10px] uppercase text-muted-foreground">
+                        <span className="readout text-xs uppercase text-muted-foreground">
                           adherence
                         </span>
                       </span>
                     ) : (
-                      <span className="readout text-[10px] uppercase text-muted-foreground">
+                      <span className="readout text-xs uppercase text-muted-foreground">
                         Submitted
                       </span>
                     )}

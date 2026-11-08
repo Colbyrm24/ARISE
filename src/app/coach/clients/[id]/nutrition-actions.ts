@@ -1,10 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { prisma } from '@/lib/prisma';
 import { requireCoach } from '@/lib/auth';
 import { coachOwnsClient } from '@/lib/coach-guard';
-import { todayFor } from '@/lib/day';
+import { writeTarget } from '@/lib/client-setup';
 
 /** Sets a new calorie/macro target for a client, effective today. */
 export async function setNutritionTarget(formData: FormData) {
@@ -41,35 +40,11 @@ export async function setNutritionTarget(formData: FormData) {
   if (!(await coachOwnsClient(coach.id, clientId))) return;
 
   /*
-    Effective from the CLIENT's today, not the coach's. He sets numbers at
-    9pm Eastern for a client in Los Angeles; that client is still mid-
-    afternoon, and stamping tomorrow would leave them eating to the old
-    target for the rest of a day they think has already changed.
+    Effective from the CLIENT's today, and upserted so re-saving a typo on the
+    same day replaces it rather than leaving two rows to disagree. Both live
+    in writeTarget now, which the one-screen setup shares.
   */
-  const client = await prisma.user.findUnique({
-    where: { id: clientId },
-    select: { profile: { select: { timezone: true } } },
-  });
-
-  /*
-    Upsert, not create.
-
-    This always inserted, against a table with no unique on
-    (client_id, effective_date). So a coach who set 2,800, spotted a typo and
-    re-saved 2,400 left two rows sharing a date — and which one the client ate
-    to was whatever Postgres returned first. `planVsTarget` and
-    `getDayContexts` both resolve with `orderBy: effectiveDate desc` and take
-    the first, so the two screens could disagree on the same page load, on the
-    one number the whole product is about.
-
-    Correcting a number you just typed is the normal case, not the edge case.
-  */
-  const effectiveDate = todayFor(client);
-  await prisma.nutritionTarget.upsert({
-    where: { clientId_effectiveDate: { clientId, effectiveDate } },
-    create: { clientId, calories, protein, carbs, fat, effectiveDate },
-    update: { calories, protein, carbs, fat },
-  });
+  await writeTarget(clientId, { calories, protein, carbs, fat });
 
   revalidatePath(`/coach/clients/${clientId}`);
 }

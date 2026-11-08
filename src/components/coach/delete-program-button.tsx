@@ -69,7 +69,7 @@ export function DeleteProgramButton({
       <button
         type="button"
         onClick={() => setArmed(false)}
-        className="readout text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+        className="readout text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
       >
         Cancel
       </button>
@@ -92,7 +92,7 @@ function Confirm({ name }: { name: string }) {
       disabled={pending}
       aria-label={`Confirm deleting ${name}`}
       className={cn(
-        'readout border border-destructive/60 px-2 py-1 text-[10px] uppercase tracking-wider text-destructive transition-colors',
+        'readout border border-destructive/60 px-2 py-1 text-xs uppercase tracking-wider text-destructive transition-colors',
         pending ? 'opacity-60' : 'hover:bg-destructive/10'
       )}
     >

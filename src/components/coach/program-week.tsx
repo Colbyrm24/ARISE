@@ -100,7 +100,7 @@ export function ProgramWeek({
           <form action={setWeekSteps} className="flex flex-wrap items-end gap-3 border-b border-border pb-5">
             <input type="hidden" name="templateId" value={templateId} />
             <label className="flex flex-col gap-1.5">
-              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
                 Steps every day
               </span>
               <input

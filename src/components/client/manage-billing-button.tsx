@@ -43,7 +43,7 @@ export function ManageBillingButton({ label = 'Update payment method' }: { label
         type="button"
         onClick={open}
         disabled={busy}
-        className="readout inline-flex w-fit items-center gap-1.5 border border-border px-2.5 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent disabled:opacity-50"
+        className="readout inline-flex w-fit items-center gap-1.5 border border-border px-2.5 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent disabled:opacity-50"
       >
         <CreditCard size={12} />
         {busy ? 'Opening…' : label}

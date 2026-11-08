@@ -40,7 +40,7 @@ export default function GoodbyePage() {
             Thanks for training with us. If you ever want to come back, you start
             fresh — there is nothing left to restore.
           </p>
-          <Link href="/login" className="readout text-[10px] uppercase text-accent hover:underline">
+          <Link href="/login" className="readout text-xs uppercase text-accent hover:underline">
             Back to sign in
           </Link>
         </div>

@@ -45,7 +45,7 @@ export function StartProgramForm({
       <input type="hidden" name="clientId" value={clientId} />
 
       <label className="flex flex-col gap-1.5">
-        <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">Program</span>
+        <span className="readout text-xs uppercase tracking-wider text-muted-foreground">Program</span>
         <select name="templateId" className={fieldClass} required defaultValue={currentTemplateId ?? ''}>
           <option value="" disabled>
             Pick a program…
@@ -60,11 +60,11 @@ export function StartProgramForm({
 
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
-          <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">Starts</span>
+          <span className="readout text-xs uppercase tracking-wider text-muted-foreground">Starts</span>
           <input name="startDate" type="date" required defaultValue={defaultStart} className={fieldClass} />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">Length</span>
+          <span className="readout text-xs uppercase tracking-wider text-muted-foreground">Length</span>
           <select name="weeks" defaultValue="26" className={fieldClass}>
             <option value="4">4 weeks</option>
             <option value="8">8 weeks</option>

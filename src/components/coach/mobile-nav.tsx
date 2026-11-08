@@ -54,7 +54,7 @@ export function CoachMobileNav({ counts = {} }: { counts?: BadgeCounts }) {
 
           <nav className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-border bg-card">
             <div className="flex h-16 items-center justify-between px-5">
-              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
                 Console
               </span>
               <button
@@ -87,7 +87,7 @@ export function CoachMobileNav({ counts = {} }: { counts?: BadgeCounts }) {
                       <Icon size={17} className={active ? 'glow-ink text-accent' : undefined} />
                       <span className="flex-1">{item.label}</span>
                       {count > 0 && (
-                        <span className="readout border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[10px] leading-none text-accent">
+                        <span className="readout border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-xs leading-none text-accent">
                           {count > 99 ? '99+' : count}
                         </span>
                       )}

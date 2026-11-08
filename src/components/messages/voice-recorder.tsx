@@ -230,7 +230,7 @@ export function VoiceRecorder({
 
   if (state === 'denied') {
     return (
-      <p className="readout self-center px-2 text-[10px] uppercase text-muted-foreground">
+      <p className="readout self-center px-2 text-xs uppercase text-muted-foreground">
         Mic blocked
       </p>
     );
@@ -246,7 +246,7 @@ export function VoiceRecorder({
       <div className="absolute inset-0 z-10 flex items-center gap-2 border border-input bg-background px-2">
         <audio src={clip.url} controls className="h-8 min-w-0 flex-1" />
         {error && (
-          <span className="readout shrink-0 text-[10px] uppercase text-destructive">{error}</span>
+          <span className="readout shrink-0 text-xs uppercase text-destructive">{error}</span>
         )}
         <button
           type="button"
@@ -279,7 +279,7 @@ export function VoiceRecorder({
         className="flex h-11 shrink-0 items-center gap-2 border border-destructive/50 bg-destructive/10 px-3 text-destructive"
       >
         <Square size={14} className="fill-current" />
-        <span className="readout text-[11px] tabular-nums">{clock(seconds)}</span>
+        <span className="readout text-xs tabular-nums">{clock(seconds)}</span>
       </button>
     );
   }

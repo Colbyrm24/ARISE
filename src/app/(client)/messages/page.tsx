@@ -106,7 +106,7 @@ export default async function MessagesPage() {
         )}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-semibold">{coachName}</h1>
-          <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+          <p className="readout text-xs uppercase tracking-wider text-muted-foreground">
             Your coach
           </p>
         </div>
