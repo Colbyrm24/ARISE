@@ -915,3 +915,51 @@ body::before {
 .text-cta {
   color: hsl(var(--cta));
 }
+
+/*
+  ---------------------------------------------------------------------------
+  Calendar chips
+  ---------------------------------------------------------------------------
+
+  Every calendar in the app (the program builder, a client's calendar, the
+  coach's schedule board) draws its sessions with these, so a workout looks
+  the same wherever it appears.
+
+  Workouts are warm orange — the thing to go and do, and the warmest colour
+  on a cool blue screen, so it pulls the eye. Cardio and anything finished
+  are green. Rest stays quiet, reminders get a soft violet outline. Text is
+  white and bold on all of them so it reads at a glance.
+*/
+.chip {
+  border-radius: 0.5rem;
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.25);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+.chip:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.chip-workout {
+  background: linear-gradient(135deg, hsl(20 100% 54%), hsl(36 100% 52%));
+  border: 1px solid hsl(32 100% 68% / 0.7);
+  box-shadow: 0 0 14px -3px hsl(24 100% 55% / 0.6);
+}
+.chip-cardio,
+.chip-done {
+  background: linear-gradient(135deg, hsl(150 72% 36%), hsl(162 78% 42%));
+  border: 1px solid hsl(150 70% 62% / 0.7);
+  box-shadow: 0 0 14px -3px hsl(152 80% 45% / 0.55);
+}
+.chip-rest {
+  background: hsl(var(--secondary) / 0.55);
+  border: 1px solid hsl(var(--border));
+  color: hsl(0 0% 100% / 0.75);
+  font-weight: 500;
+  text-shadow: none;
+}
+.chip-reminder {
+  background: hsl(268 70% 55% / 0.2);
+  border: 1px dashed hsl(268 85% 72% / 0.7);
+}

@@ -110,13 +110,13 @@ const KIND_ICON: Record<string, typeof Dumbbell> = {
 };
 
 const KIND_CHIP: Record<string, string> = {
-  workout: 'border-accent/70 bg-accent/20 text-foreground',
-  cardio: 'border-success/60 bg-success/15 text-foreground',
-  rest: 'border-border/60 bg-secondary/40 text-foreground/70',
-  photos: 'border-dashed border-border text-foreground/80',
-  bodystats: 'border-dashed border-border text-foreground/80',
-  checkin: 'border-dashed border-border text-foreground/80',
-  message: 'border-accent/40 italic text-foreground/80',
+  workout: 'chip chip-workout',
+  cardio: 'chip chip-cardio',
+  rest: 'chip chip-rest',
+  photos: 'chip chip-reminder',
+  bodystats: 'chip chip-reminder',
+  checkin: 'chip chip-reminder',
+  message: 'chip chip-reminder italic',
 };
 
 /** The day's place in the program, said the way a coach reads the grid. */
@@ -228,7 +228,7 @@ export function ProgramCalendar(props: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-foreground/80">
+        <p className="text-sm text-white/85">
           Every client starts on a Monday. Click a day to add or edit; drag a workout to move it.
         </p>
         <div className="relative">
@@ -388,7 +388,7 @@ export function ProgramCalendar(props: Props) {
                       ) : (
                         <span />
                       )}
-                      <span className="shrink-0 text-xs tabular-nums text-foreground/50">
+                      <span className="shrink-0 text-xs tabular-nums text-white/55">
                         {dayIndex}
                       </span>
                     </div>
@@ -411,13 +411,13 @@ export function ProgramCalendar(props: Props) {
                               setOver(null);
                             }}
                             className={cn(
-                              'flex cursor-grab items-start gap-1 border px-0.5 py-0.5 text-[9px] font-medium leading-tight active:cursor-grabbing sm:px-2 sm:py-1.5 sm:text-sm',
+                              'flex cursor-grab items-start gap-1.5 px-1 py-0.5 text-[9px] leading-tight active:cursor-grabbing sm:px-2.5 sm:py-2 sm:text-sm',
                               KIND_CHIP[it.kind],
-                              picked === it.id && 'border-accent bg-accent/25 text-foreground',
+                              picked === it.id && 'ring-2 ring-white',
                               dragging === it.id && 'opacity-40'
                             )}
                           >
-                            <Icon size={13} className="mt-0.5 hidden shrink-0 opacity-80 sm:block" />
+                            <Icon size={14} className="mt-0.5 hidden shrink-0 sm:block" />
                             <span className="line-clamp-3 min-w-0 break-words sm:line-clamp-2">{it.title}</span>
                           </span>
                         );
