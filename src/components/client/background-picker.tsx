@@ -16,7 +16,7 @@ export function BackgroundPicker({ current }: { current: BackgroundId }) {
     <div className="flex flex-col gap-3">
       <div>
         <p className="text-sm font-medium">Background</p>
-        <p className="readout mt-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="readout mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">
           Changes everywhere, right away
         </p>
       </div>

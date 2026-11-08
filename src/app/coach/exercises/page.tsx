@@ -249,7 +249,7 @@ export default async function CoachExercisesPage({
                         name="videoUrl"
                         defaultValue={videoUrl ?? ''}
                         placeholder="Demo video URL"
-                        className="readout h-8 w-full max-w-xs rounded-none border border-input bg-secondary/40 px-2 text-[11px] focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                        className="readout h-8 w-full max-w-xs rounded-none border border-input bg-secondary/40 px-2 text-xs focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
                       />
                       <Button type="submit" variant="ghost" size="sm">
                         Save
@@ -259,7 +259,7 @@ export default async function CoachExercisesPage({
                           href={videoUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="readout shrink-0 text-[10px] uppercase text-accent hover:underline"
+                          className="readout shrink-0 text-xs uppercase text-accent hover:underline"
                         >
                           Watch
                         </a>

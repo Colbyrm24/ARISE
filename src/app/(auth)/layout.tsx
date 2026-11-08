@@ -40,7 +40,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             ARISE
           </span>
         </span>
-        <span className="readout text-[10px] uppercase text-muted-foreground">
+        <span className="readout text-xs uppercase text-muted-foreground">
           Private coaching, done right
         </span>
       </div>
@@ -60,13 +60,13 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <nav className="relative mt-12 flex gap-6">
         <Link
           href="/privacy"
-          className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+          className="readout text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
         >
           Privacy
         </Link>
         <Link
           href="/terms"
-          className="readout text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent"
+          className="readout text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
         >
           Terms
         </Link>

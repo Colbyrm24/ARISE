@@ -170,7 +170,7 @@ export function PushToggle({ vapidPublicKey }: { vapidPublicKey: string }) {
   if (state === 'loading' || state === 'unconfigured') return null;
 
   const note = (text: string) => (
-    <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">{text}</p>
+    <p className="readout text-xs uppercase leading-relaxed text-muted-foreground">{text}</p>
   );
 
   if (state === 'needs-install') {

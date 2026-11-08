@@ -98,7 +98,7 @@ export default async function CoachClientsPage({
         </p>
         {segmentMatch && (
           <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            <span className="readout border border-accent/40 bg-accent/[0.07] px-2 py-1 text-[10px] uppercase text-accent">
+            <span className="readout border border-accent/40 bg-accent/[0.07] px-2 py-1 text-xs uppercase text-accent">
               {segmentMatch.label}
             </span>
             <Link href="/coach/clients" className="text-xs text-muted-foreground hover:text-accent">

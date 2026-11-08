@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 const fieldClass =
   'h-9 min-w-0 rounded-none border border-input bg-secondary/40 px-2 text-sm placeholder:text-muted-foreground focus-visible:border-accent/60 focus-visible:outline-none';
 const selectClass =
-  'readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-[11px] uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none';
+  'readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-xs uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none';
 
 // A short list beats a 400-entry dropdown nobody scrolls. Anything missing can
 // still be typed, because the action validates against Intl rather than this.
@@ -73,7 +73,7 @@ export default async function CoachSchedulePage() {
                     {b.note && <p className="mt-0.5 text-xs text-muted-foreground">{b.note}</p>}
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <span className="readout text-[11px] uppercase text-accent">
+                    <span className="readout text-xs uppercase text-accent">
                       {new Intl.DateTimeFormat('en-US', {
                         timeZone: tz,
                         weekday: 'short',
@@ -123,7 +123,7 @@ export default async function CoachSchedulePage() {
                 >
                   <span className="min-w-0 flex-1 text-sm">
                     {WEEKDAY_NAMES[a.weekday]}
-                    <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
+                    <span className="readout ml-2 text-xs uppercase text-muted-foreground">
                       {formatMinute(a.startMinute)} – {formatMinute(a.endMinute)} ·{' '}
                       {a.slotMinutes} min
                     </span>
@@ -155,11 +155,11 @@ export default async function CoachSchedulePage() {
               ))}
             </select>
             <label className="flex flex-col gap-1">
-              <span className="readout text-[10px] uppercase text-muted-foreground">From</span>
+              <span className="readout text-xs uppercase text-muted-foreground">From</span>
               <input type="time" name="start" defaultValue="09:00" className={fieldClass} />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="readout text-[10px] uppercase text-muted-foreground">To</span>
+              <span className="readout text-xs uppercase text-muted-foreground">To</span>
               <input type="time" name="end" defaultValue="17:00" className={fieldClass} />
             </label>
             <select
@@ -205,7 +205,7 @@ export default async function CoachSchedulePage() {
           </form>
 
           <form action={setTimezone} className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
-            <span className="readout text-[10px] uppercase text-muted-foreground">Your timezone</span>
+            <span className="readout text-xs uppercase text-muted-foreground">Your timezone</span>
             <select name="timezone" defaultValue={tz} aria-label="Timezone" className={selectClass}>
               {[...new Set([tz, ...COMMON_ZONES])].map((z) => (
                 <option key={z} value={z}>

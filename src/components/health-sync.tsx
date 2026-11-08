@@ -61,7 +61,7 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
       </div>
 
       {hasToken && !token && (
-        <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
+        <p className="readout text-xs uppercase leading-relaxed text-muted-foreground">
           {lastUsed ? `Last received ${lastUsed}.` : 'Set up, nothing received yet.'} A new key
           replaces the old one.
         </p>
@@ -86,7 +86,7 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
           <button
             type="button"
             onClick={() => copy(token)}
-            className="readout break-all border border-border bg-secondary/40 p-2 text-left text-[11px] transition-colors hover:border-accent/60"
+            className="readout break-all border border-border bg-secondary/40 p-2 text-left text-xs transition-colors hover:border-accent/60"
           >
             {token}
           </button>
@@ -103,11 +103,11 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
             who would rather not install anything.
           */}
           <details open={open} className="text-xs">
-            <summary className="readout cursor-pointer text-[10px] uppercase tracking-wider text-muted-foreground">
+            <summary className="readout cursor-pointer text-xs uppercase tracking-wider text-muted-foreground">
               How to set it up — about 3 minutes
             </summary>
 
-            <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-accent">
+            <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-accent">
               The easy way
             </p>
             <ol className="mt-1.5 flex list-decimal flex-col gap-1.5 pl-4 leading-relaxed text-muted-foreground">
@@ -124,7 +124,7 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
                 <button
                   type="button"
                   onClick={() => copy(`${origin}/api/health`)}
-                  className="readout mt-1 block w-full break-all border border-border bg-secondary/40 p-1.5 text-left text-[10px] text-foreground transition-colors hover:border-accent/60"
+                  className="readout mt-1 block w-full break-all border border-border bg-secondary/40 p-1.5 text-left text-xs text-foreground transition-colors hover:border-accent/60"
                 >
                   {origin}/api/health
                 </button>
@@ -135,7 +135,7 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
                 <button
                   type="button"
                   onClick={() => copy(`Bearer ${token}`)}
-                  className="readout mt-1 block w-full break-all border border-border bg-secondary/40 p-1.5 text-left text-[10px] text-foreground transition-colors hover:border-accent/60"
+                  className="readout mt-1 block w-full break-all border border-border bg-secondary/40 p-1.5 text-left text-xs text-foreground transition-colors hover:border-accent/60"
                 >
                   Bearer {token}
                 </button>
@@ -165,7 +165,7 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
               </li>
             </ol>
 
-            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Or without installing anything
             </p>
             <ol className="mt-1.5 flex list-decimal flex-col gap-1.5 pl-4 leading-relaxed text-muted-foreground">
@@ -193,7 +193,7 @@ export function HealthSync({ hasToken, lastUsed }: { hasToken: boolean; lastUsed
           </details>
 
           {copied && (
-            <p className="readout text-[10px] uppercase text-success">Copied</p>
+            <p className="readout text-xs uppercase text-success">Copied</p>
           )}
         </div>
       )}

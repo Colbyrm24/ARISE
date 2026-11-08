@@ -71,47 +71,59 @@ export function NutritionTargetForm({
     <form action={action} className="flex flex-col gap-2">
       <input type="hidden" name="clientId" value={clientId} />
       <div className="grid grid-cols-2 gap-2">
-        <Input
-          name="calories"
-          type="number"
-          min="0"
-          placeholder="Calories"
-          required
-          value={calories}
-          onChange={(e) => onCalories(e.target.value)}
-        />
-        <Input
-          name="protein"
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="Protein (g)"
-          required
-          value={protein}
-          onChange={(e) => setProtein(e.target.value)}
-        />
-        <Input
-          name="carbs"
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="Carbs (g)"
-          required
-          value={carbs}
-          onChange={(e) => setCarbs(e.target.value)}
-        />
-        <Input
-          name="fat"
-          type="number"
-          step="0.1"
-          min="0"
-          placeholder="Fat (g)"
-          required
-          value={fat}
-          onChange={(e) => setFat(e.target.value)}
-        />
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-foreground">Calories</span>
+          <Input
+            name="calories"
+            type="number"
+            min="0"
+            placeholder="Calories"
+            required
+            value={calories}
+            onChange={(e) => onCalories(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-foreground">Protein (g)</span>
+          <Input
+            name="protein"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="Protein (g)"
+            required
+            value={protein}
+            onChange={(e) => setProtein(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-foreground">Carbs (g)</span>
+          <Input
+            name="carbs"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="Carbs (g)"
+            required
+            value={carbs}
+            onChange={(e) => setCarbs(e.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-semibold text-foreground">Fat (g)</span>
+          <Input
+            name="fat"
+            type="number"
+            step="0.1"
+            min="0"
+            placeholder="Fat (g)"
+            required
+            value={fat}
+            onChange={(e) => setFat(e.target.value)}
+          />
+        </label>
       </div>
-      <p className="readout text-[10px] uppercase leading-relaxed text-muted-foreground">
+      <p className="text-sm leading-relaxed text-foreground/70">
         Macros fill in from the calories. Type over any of them to change it.
       </p>
       <SaveButton existing={Boolean(current)} />

@@ -34,7 +34,7 @@ export function AchievementBoard({ states }: { states: AchievementState[] }) {
               {a.title}
             </span>
             {a.earned ? (
-              <span className="readout shrink-0 text-[10px] uppercase tracking-wider text-accent">
+              <span className="readout shrink-0 text-xs uppercase tracking-wider text-accent">
                 Earned
               </span>
             ) : (

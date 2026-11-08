@@ -58,7 +58,7 @@ export default async function ApplicationsPage({
       key={href}
       href={href}
       className={cn(
-        'readout flex items-center gap-2 border px-3 py-2 text-[11px] uppercase transition-colors',
+        'readout flex items-center gap-2 border px-3 py-2 text-xs uppercase transition-colors',
         active
           ? 'border-accent/50 bg-accent/10 text-foreground'
           : 'border-border text-muted-foreground hover:border-accent/40 hover:text-foreground'
@@ -117,12 +117,12 @@ export default async function ApplicationsPage({
                       <div className="flex flex-wrap items-center gap-3">
                         <h2 className="text-xl font-semibold">{a.firstName}</h2>
                         {a.status === 'new' && (
-                          <span className="readout border border-accent/50 bg-accent/10 px-1.5 py-0.5 text-[10px] uppercase text-accent">
+                          <span className="readout border border-accent/50 bg-accent/10 px-1.5 py-0.5 text-xs uppercase text-accent">
                             New
                           </span>
                         )}
                       </div>
-                      <p className="readout mt-1 text-[11px] uppercase text-muted-foreground">
+                      <p className="readout mt-1 text-xs uppercase text-muted-foreground">
                         {labelFor(AGE_RANGES, a.ageRange)} · <LocalTime iso={a.createdAt.toISOString()} withZone={false} />
                         {a.source ? ` · via ${a.source}` : ''}
                       </p>
@@ -206,7 +206,7 @@ function Contact({
 function Answer({ label, text }: { label: string; text: string }) {
   return (
     <div>
-      <p className="readout text-[10px] uppercase text-muted-foreground">{label}</p>
+      <p className="readout text-xs uppercase text-muted-foreground">{label}</p>
       <p className="mt-1.5 whitespace-pre-line text-[15px] leading-relaxed">{text}</p>
     </div>
   );
@@ -215,7 +215,7 @@ function Answer({ label, text }: { label: string; text: string }) {
 function Readout({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div>
-      <dt className="readout text-[10px] uppercase text-muted-foreground">{label}</dt>
+      <dt className="readout text-xs uppercase text-muted-foreground">{label}</dt>
       <dd className={cn('mt-1 text-sm', strong ? 'text-success' : 'text-foreground')}>{value}</dd>
     </div>
   );

@@ -75,7 +75,7 @@ export function DeleteAccount({ email }: { email: string }) {
       <button
         type="button"
         onClick={expand}
-        className="readout self-center text-[10px] uppercase text-muted-foreground underline underline-offset-4 transition-colors hover:text-destructive"
+        className="readout self-center text-xs uppercase text-muted-foreground underline underline-offset-4 transition-colors hover:text-destructive"
       >
         Delete account
       </button>
@@ -97,7 +97,7 @@ export function DeleteAccount({ email }: { email: string }) {
       </p>
 
       {preview && (
-        <ul className="readout flex flex-col gap-1 text-[10px] uppercase text-muted-foreground">
+        <ul className="readout flex flex-col gap-1 text-xs uppercase text-muted-foreground">
           <li>{preview.meals} meals logged</li>
           <li>{preview.workouts} workouts logged</li>
           <li>{preview.weights} weigh-ins</li>

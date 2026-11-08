@@ -241,7 +241,7 @@ export default async function ClientAccountPage({
                 <input type="hidden" name="clientId" value={client.userId} />
                 <button
                   type="submit"
-                  className="readout self-start text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-destructive"
+                  className="readout self-start text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-destructive"
                 >
                   Cancel this link
                 </button>
@@ -267,21 +267,21 @@ export default async function ClientAccountPage({
                 They say they paid — check Stripe
               </Button>
               {searchParams?.checked === 'paid' ? (
-                <p className="readout text-[11px] uppercase text-[hsl(var(--accent))]">
+                <p className="readout text-xs uppercase text-[hsl(var(--accent))]">
                   Found it. Their payment is recorded and the agreement is waiting on their
                   signature.
                 </p>
               ) : searchParams?.checked === 'none' ? (
-                <p className="readout text-[11px] uppercase text-muted-foreground">
+                <p className="readout text-xs uppercase text-muted-foreground">
                   Stripe has no completed payment on{' '}
                   {pendingStripeLinks.length === 1 ? 'their link' : 'any of their links'} yet.
                 </p>
               ) : searchParams?.checked === 'error' ? (
-                <p className="readout text-[11px] uppercase text-[hsl(var(--destructive))]">
+                <p className="readout text-xs uppercase text-[hsl(var(--destructive))]">
                   Couldn&apos;t reach Stripe just then — try again in a moment.
                 </p>
               ) : (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Checks Stripe and finishes their agreement if the payment went through.
                 </p>
               )}

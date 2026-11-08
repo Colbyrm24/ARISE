@@ -183,7 +183,7 @@ export default async function WelcomePage() {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-lg flex-col justify-center gap-5 px-5 py-10">
       <header>
-        <p className="readout text-[11px] uppercase text-muted-foreground">ARISE</p>
+        <p className="readout text-xs uppercase text-muted-foreground">ARISE</p>
         <h1 className="mt-1.5 text-2xl font-bold">
           {waiting.title}, {firstName}.
         </h1>
@@ -257,7 +257,7 @@ export default async function WelcomePage() {
                 : intake > 0
                   ? 'Finish your intake'
                   : 'Fill in your intake'}
-              <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
+              <span className="readout ml-2 text-xs uppercase text-muted-foreground">
                 {intakeDone
                   ? `all ${INTAKE_SECTIONS} sections · review or update`
                   : intake > 0

@@ -333,7 +333,7 @@ function ResultCard({ result }: { result?: ClientResult }) {
   return (
     <article className={`${card} relative p-3`}>
       {example && (
-        <span className="absolute right-5 top-5 z-20 rounded-[999px] bg-background/85 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+        <span className="absolute right-5 top-5 z-20 rounded-[999px] bg-background/85 px-2.5 py-1 text-xs font-medium text-muted-foreground">
           Example
         </span>
       )}
@@ -352,7 +352,7 @@ function ResultCard({ result }: { result?: ClientResult }) {
                 className="aspect-[3/4]"
               />
             )}
-            <span className="absolute bottom-2 left-2 rounded-[999px] bg-background/85 px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+            <span className="absolute bottom-2 left-2 rounded-[999px] bg-background/85 px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
               {side}
             </span>
           </div>

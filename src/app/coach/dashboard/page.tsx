@@ -107,7 +107,7 @@ export default async function CoachDashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <header className="border-b border-border pb-5">
-        <p className="readout text-[11px] uppercase text-muted-foreground">
+        <p className="readout text-xs uppercase text-muted-foreground">
           {/* Server-rendered, so the zone has to be named or this flips to
               tomorrow's date mid-evening. */}
           {new Date().toLocaleDateString('en-US', {
@@ -138,7 +138,7 @@ export default async function CoachDashboardPage() {
                   >
                     {String(n).padStart(2, '0')}
                   </p>
-                  <p className="readout mt-2 text-[10px] uppercase text-muted-foreground">{label}</p>
+                  <p className="readout mt-2 text-xs uppercase text-muted-foreground">{label}</p>
                 </CardContent>
               </Card>
             </Link>
@@ -165,7 +165,7 @@ export default async function CoachDashboardPage() {
                     href={seg.href}
                     className="group flex flex-col gap-2 bg-card p-4 transition-colors hover:bg-secondary/50"
                   >
-                    <p className="readout min-h-[28px] text-[10px] uppercase leading-relaxed text-muted-foreground">
+                    <p className="readout min-h-[28px] text-xs uppercase leading-relaxed text-muted-foreground">
                       {seg.label}
                     </p>
                     <p
@@ -207,7 +207,7 @@ export default async function CoachDashboardPage() {
                 <form action={markAllNotificationsRead}>
                   <button
                     type="submit"
-                    className="readout text-[10px] uppercase text-accent hover:underline"
+                    className="readout text-xs uppercase text-accent hover:underline"
                   >
                     Mark all read
                   </button>
@@ -224,7 +224,7 @@ export default async function CoachDashboardPage() {
               <CardTitle>Recent clients</CardTitle>
               <Link
                 href="/coach/clients"
-                className="readout text-[10px] uppercase text-accent hover:underline"
+                className="readout text-xs uppercase text-accent hover:underline"
               >
                 View all
               </Link>
@@ -249,7 +249,7 @@ export default async function CoachDashboardPage() {
                           <p className="truncate text-sm font-medium">
                             {name ?? client.user.email}
                           </p>
-                          <p className="readout truncate text-[10px] text-muted-foreground">
+                          <p className="readout truncate text-xs text-muted-foreground">
                             {client.user.email}
                           </p>
                         </div>
@@ -304,7 +304,7 @@ export default async function CoachDashboardPage() {
                         <span className="font-medium">{a.name}</span>{' '}
                         <span className="text-muted-foreground">{a.text}</span>
                       </span>
-                      <span className="readout shrink-0 text-[10px] text-muted-foreground">
+                      <span className="readout shrink-0 text-xs text-muted-foreground">
                         {a.when}
                       </span>
                     </Link>

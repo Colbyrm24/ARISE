@@ -530,7 +530,7 @@ export async function BillingCard({
                 <span className="text-xs text-muted-foreground">
                   {when(p.paidAt ?? p.createdAt, timeZone)}
                 </span>
-                <span className="readout ml-auto text-[10px] uppercase text-muted-foreground">
+                <span className="readout ml-auto text-xs uppercase text-muted-foreground">
                   {p.status === 'succeeded' ? PROVIDER_LABELS[p.provider] : p.status}
                 </span>
               </li>

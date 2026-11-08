@@ -81,7 +81,7 @@ export default async function RecipePage({ params }: { params: { id: string } })
     <div className="flex flex-col gap-6">
       <Link
         href="/nutrition"
-        className="readout flex w-fit items-center gap-1.5 text-[11px] uppercase text-muted-foreground transition-colors hover:text-accent"
+        className="readout flex w-fit items-center gap-1.5 text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
       >
         <ArrowLeft size={14} />
         Nutrition
@@ -109,7 +109,7 @@ export default async function RecipePage({ params }: { params: { id: string } })
           ].map(([label, value]) => (
             <div key={label} className="rounded-lg border border-border/60 bg-secondary/30 px-2 py-2 text-center">
               <p className="text-lg font-bold text-foreground">{value}</p>
-              <p className="text-[11px] font-medium uppercase tracking-wider text-foreground/70">{label}</p>
+              <p className="text-xs font-medium uppercase tracking-wider text-foreground/70">{label}</p>
             </div>
           ))}
         </div>
@@ -135,7 +135,7 @@ export default async function RecipePage({ params }: { params: { id: string } })
                   key={i}
                   className="flex gap-3 border-b border-border/40 py-2 text-sm last:border-b-0"
                 >
-                  <span className="readout w-6 shrink-0 text-[11px] text-muted-foreground">
+                  <span className="readout w-6 shrink-0 text-xs text-muted-foreground">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <span>{line}</span>
@@ -151,7 +151,7 @@ export default async function RecipePage({ params }: { params: { id: string } })
           <SystemWindowContent className="flex flex-col gap-3 pt-4">
             {steps.map((step, i) => (
               <div key={i} className="flex gap-3">
-                <span className="readout w-6 shrink-0 pt-0.5 text-[11px] text-accent">
+                <span className="readout w-6 shrink-0 pt-0.5 text-xs text-accent">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <p className="text-sm leading-relaxed">{step}</p>

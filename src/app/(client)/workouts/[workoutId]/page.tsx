@@ -110,7 +110,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
     <div className="flex flex-col gap-5">
       <Link
         href="/workouts"
-        className="readout inline-flex w-fit items-center gap-1.5 text-[11px] uppercase text-muted-foreground transition-colors hover:text-accent"
+        className="readout inline-flex w-fit items-center gap-1.5 text-xs uppercase text-muted-foreground transition-colors hover:text-accent"
       >
         <ArrowLeft size={14} />
         Workouts
@@ -118,12 +118,12 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
 
       <header className="flex items-end justify-between gap-3 border-b border-border pb-4">
         <div>
-          <p className="readout text-[11px] uppercase text-muted-foreground">
+          <p className="readout text-xs uppercase text-muted-foreground">
             Session {String(workout.dayOrder).padStart(2, '0')}
           </p>
           <h1 className="display mt-1.5 text-2xl">{workout.name}</h1>
           {estMinutes > 0 && (
-            <p className="readout mt-1.5 text-[11px] uppercase text-muted-foreground">
+            <p className="readout mt-1.5 text-xs uppercase text-muted-foreground">
               est. {estMinutes} minutes
             </p>
           )}
@@ -135,7 +135,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             <Count value={doneSets} total={totalSets} className="text-base" />
           )}
           {prCount > 0 && (
-            <span className="readout border border-success/60 bg-success/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-success">
+            <span className="readout border border-success/60 bg-success/10 px-2 py-0.5 text-xs uppercase tracking-wider text-success">
               {prCount === 1 ? 'New PR' : `${prCount} new PRs`}
             </span>
           )}
@@ -152,7 +152,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
           <SystemWindowContent className="flex flex-col gap-4 pt-4">
             {workout.equipment.length > 0 && (
               <div className="flex flex-col gap-2">
-                <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                <p className="readout text-xs uppercase tracking-wider text-muted-foreground">
                   Equipment
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -166,7 +166,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
             )}
             {workout.instructions && (
               <div className="flex flex-col gap-2">
-                <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+                <p className="readout text-xs uppercase tracking-wider text-muted-foreground">
                   From your coach
                 </p>
                 <p className="text-sm leading-relaxed text-foreground/90">{workout.instructions}</p>
@@ -224,7 +224,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
               )}
             >
               {block.superset && (
-                <p className="readout text-[11px] uppercase tracking-wider text-accent">
+                <p className="readout text-xs uppercase tracking-wider text-accent">
                   Superset {block.letter} · go straight from one to the next, then rest
                 </p>
               )}
@@ -297,7 +297,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                       <figure key={src} className="overflow-hidden rounded-lg border border-border/60">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={src} alt={`${we.exercise.name}, ${i === 0 ? 'start' : 'finish'}`} loading="lazy" className="aspect-[4/3] w-full object-cover" />
-                        <figcaption className="bg-secondary/40 py-1 text-center text-[11px] font-semibold uppercase tracking-wider text-foreground/80">
+                        <figcaption className="bg-secondary/40 py-1 text-center text-xs font-semibold uppercase tracking-wider text-foreground/80">
                           {i === 0 ? 'Start' : 'Finish'}
                         </figcaption>
                       </figure>
@@ -368,7 +368,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                           */}
                           <span
                             className={cn(
-                              'readout mt-0.5 flex h-5 w-7 shrink-0 items-center justify-center gap-0.5 border text-[10px] uppercase',
+                              'readout mt-0.5 flex h-5 w-7 shrink-0 items-center justify-center gap-0.5 border text-xs uppercase',
                               logged
                                 ? 'border-success/50 bg-success/10 text-success'
                                 : 'border-destructive/40 text-destructive'
@@ -426,7 +426,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                                   className={cn(
                                     n === 0
                                       ? 'text-[15px] font-semibold leading-tight text-foreground'
-                                      : 'readout text-[11px] uppercase text-muted-foreground'
+                                      : 'readout text-xs uppercase text-muted-foreground'
                                   )}
                                 >
                                   {part}
@@ -528,7 +528,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
               row.restAfterSeconds ? (
                 <p
                   key={`rest-${row.id}`}
-                  className="readout flex items-center justify-center gap-2 border border-dashed border-border bg-secondary/20 py-2.5 text-[11px] uppercase tracking-wider text-muted-foreground"
+                  className="readout flex items-center justify-center gap-2 border border-dashed border-border bg-secondary/20 py-2.5 text-xs uppercase tracking-wider text-muted-foreground"
                 >
                   <Timer size={13} className="text-accent" />
                   {restBlockText(row.restAfterSeconds)}
@@ -568,7 +568,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
           <input type="hidden" name="workoutId" value={workout.id} />
           <input type="hidden" name="workoutLogId" value={todayLog?.id ?? ''} />
           <ReopenButton />
-          <p className="readout text-center text-[10px] uppercase text-muted-foreground">
+          <p className="readout text-center text-xs uppercase text-muted-foreground">
             Finished by accident? This puts the session back.
           </p>
         </form>

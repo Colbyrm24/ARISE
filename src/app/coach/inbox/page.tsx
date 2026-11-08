@@ -59,13 +59,13 @@ function Row({ thread, now }: { thread: WaitingThread; now: Date }) {
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-0.5">
-          <span className={cn('readout text-[11px]', WAIT_TONE[thread.waiting ? level : 'fresh'])}>
+          <span className={cn('readout text-xs', WAIT_TONE[thread.waiting ? level : 'fresh'])}>
             {label}
           </span>
           {/* Only worth saying when they've had to follow themselves up. One
               unanswered message is just the normal state of a waiting thread. */}
           {thread.unanswered > 1 && (
-            <span className="readout text-[10px] text-muted-foreground">
+            <span className="readout text-xs text-muted-foreground">
               {thread.unanswered} msgs
             </span>
           )}
@@ -110,7 +110,7 @@ export default async function CoachInboxPage() {
       */}
       {waiting.length > 0 && (
         <>
-          <p className="readout mt-8 text-[11px] uppercase tracking-wider text-accent">
+          <p className="readout mt-8 text-xs uppercase tracking-wider text-accent">
             Waiting on you
           </p>
           <Card className="mt-2">
@@ -127,7 +127,7 @@ export default async function CoachInboxPage() {
 
       {rest.length > 0 && (
         <>
-          <p className="readout mt-8 text-[11px] uppercase tracking-wider text-muted-foreground">
+          <p className="readout mt-8 text-xs uppercase tracking-wider text-muted-foreground">
             {waiting.length > 0 ? 'Answered' : 'All clients'}
           </p>
           <Card className="mt-2">

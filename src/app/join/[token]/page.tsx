@@ -39,7 +39,7 @@ export default async function JoinPage({ params }: { params: { token: string } }
             </p>
             <a
               href="/login"
-              className="readout mt-4 inline-block border border-accent/50 px-3 py-2 text-[11px] uppercase tracking-wider text-accent transition-colors hover:border-accent"
+              className="readout mt-4 inline-block border border-accent/50 px-3 py-2 text-xs uppercase tracking-wider text-accent transition-colors hover:border-accent"
             >
               Sign in
             </a>
@@ -82,7 +82,7 @@ export default async function JoinPage({ params }: { params: { token: string } }
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-5 px-5 py-10">
       <header>
-        <p className="readout text-[11px] uppercase text-muted-foreground">ARISE</p>
+        <p className="readout text-xs uppercase text-muted-foreground">ARISE</p>
         <h1 className="mt-1.5 text-2xl font-bold">
           {invite.name ? `${invite.name.split(' ')[0]}, you're in.` : "You're in."}
         </h1>
@@ -116,7 +116,7 @@ export default async function JoinPage({ params }: { params: { token: string } }
             client ever sees. Down here it has the whole width and wraps.
           */}
           {!existing && (
-            <p className="readout mb-4 border border-border/70 bg-secondary/30 px-3 py-2 text-[11px] uppercase leading-relaxed tracking-wider text-foreground">
+            <p className="readout mb-4 border border-border/70 bg-secondary/30 px-3 py-2 text-xs uppercase leading-relaxed tracking-wider text-foreground">
               {terms}
             </p>
           )}

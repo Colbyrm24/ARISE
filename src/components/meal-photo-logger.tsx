@@ -129,7 +129,7 @@ export function MealPhotoLogger() {
           className="flex flex-col items-center gap-2 border border-dashed border-border bg-secondary/20 px-4 py-8 text-muted-foreground transition-colors hover:border-accent/50 hover:text-accent"
         >
           <Camera size={22} />
-          <span className="readout text-[10px] uppercase tracking-wider">
+          <span className="readout text-xs uppercase tracking-wider">
             Photograph your plate
           </span>
         </button>
@@ -157,7 +157,7 @@ export function MealPhotoLogger() {
           name="meal"
           defaultValue="lunch"
           aria-label="Meal"
-          className="readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-[11px] uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none"
+          className="readout h-9 rounded-none border border-input bg-secondary/40 px-2 text-xs uppercase tracking-wider focus-visible:border-accent/60 focus-visible:outline-none"
         >
           {MEALS.map((m) => (
             <option key={m} value={m}>
@@ -171,7 +171,7 @@ export function MealPhotoLogger() {
       </div>
 
       {busy && (
-        <p className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+        <p className="readout text-xs uppercase tracking-wider text-muted-foreground">
           Reading the plate…
         </p>
       )}
@@ -190,7 +190,7 @@ export function MealPhotoLogger() {
             a guess, and a client who finds that out later trusts the next one
             less — so it says so before they have to ask.
           */}
-          <p className="readout mt-2 text-[10px] uppercase leading-relaxed text-muted-foreground">
+          <p className="readout mt-2 text-xs uppercase leading-relaxed text-muted-foreground">
             Logged as an estimate · {CONFIDENCE_COPY[result.confidence]} Your coach will confirm it.
           </p>
         </div>

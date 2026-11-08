@@ -25,7 +25,7 @@ import { phaseDates, subscriptionProgress } from '@/lib/program-sync';
   Ownership is checked by the layout that wraps every client tab.
 */
 
-const labelClass = 'readout text-[10px] uppercase tracking-wider text-muted-foreground';
+const labelClass = 'readout text-xs uppercase tracking-wider text-muted-foreground';
 
 const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 const fmtYear = (d: Date) =>
@@ -131,7 +131,7 @@ export default async function ClientProgramPage({ params }: { params: { id: stri
               {progress.state === 'upcoming' && <Badge>Starts in {progress.startsInDays}d</Badge>}
               {progress.state === 'finished' && <Badge variant="success">Finished</Badge>}
             </div>
-            <p className="readout text-[11px] uppercase text-muted-foreground">
+            <p className="readout text-xs uppercase text-muted-foreground">
               {active.startDate ? `Started ${fmtYear(active.startDate)}` : 'Start date not recorded'} ·{' '}
               {phases.length} phase{phases.length === 1 ? '' : 's'} · {workouts.length} workout
               {workouts.length === 1 ? '' : 's'}
@@ -207,12 +207,12 @@ export default async function ClientProgramPage({ params }: { params: { id: stri
                         {d?.current && <Badge variant="accent">Current</Badge>}
                         {d?.past && <Badge>Done</Badge>}
                       </div>
-                      <p className="readout mt-0.5 text-[11px] uppercase text-muted-foreground">
+                      <p className="readout mt-0.5 text-xs uppercase text-muted-foreground">
                         {d ? `${fmt(d.from)} – ${fmtYear(d.to)}` : `Weeks ${r.startWeek}–${r.endWeek}`} · {p.weeks} wk
                       </p>
                     </div>
                     {inPhase.length > 0 && (
-                      <span className="readout text-[11px] uppercase text-muted-foreground">
+                      <span className="readout text-xs uppercase text-muted-foreground">
                         {done}/{inPhase.length} sessions done
                       </span>
                     )}
@@ -239,7 +239,7 @@ export default async function ClientProgramPage({ params }: { params: { id: stri
                           <li key={w.id} className="flex items-center gap-3 py-2">
                             <Dumbbell size={14} className="shrink-0 text-muted-foreground" />
                             <span className="min-w-0 flex-1 truncate text-sm">{w.name}</span>
-                            <span className="readout shrink-0 text-[10px] uppercase text-muted-foreground">
+                            <span className="readout shrink-0 text-xs uppercase text-muted-foreground">
                               {minutes ? `${minutes} min · ` : ''}
                               {count} ex
                             </span>
@@ -275,7 +275,7 @@ function PastPrograms({
             <Link href={`/coach/programs/${p.template.id}`} className="truncate hover:text-accent">
               {p.template.name}
             </Link>
-            <span className="readout shrink-0 text-[10px] uppercase text-muted-foreground">
+            <span className="readout shrink-0 text-xs uppercase text-muted-foreground">
               {p.startDate ? `from ${fmtYear(p.startDate)}` : '—'}
             </span>
           </li>

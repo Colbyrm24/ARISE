@@ -110,7 +110,7 @@ export default async function FollowMySplitPage() {
                     <Input id="slug" name="slug" defaultValue={firstName} required />
                   </div>
                 </div>
-                <p className="readout text-[11px] text-muted-foreground">
+                <p className="readout text-xs text-muted-foreground">
                   Your page will be {siteUrl}/follow/<span className="text-foreground">[address]</span>
                 </p>
                 <div className="flex flex-col gap-2">
@@ -193,8 +193,8 @@ export default async function FollowMySplitPage() {
             type="submit"
             className={
               offer.active
-                ? 'readout border border-success/50 bg-success/10 px-3 py-2 text-[10px] uppercase text-success'
-                : 'readout border border-border px-3 py-2 text-[10px] uppercase text-muted-foreground'
+                ? 'readout border border-success/50 bg-success/10 px-3 py-2 text-xs uppercase text-success'
+                : 'readout border border-border px-3 py-2 text-xs uppercase text-muted-foreground'
             }
           >
             {offer.active ? 'Live — tap to close signups' : 'Closed — tap to open signups'}
@@ -220,7 +220,7 @@ export default async function FollowMySplitPage() {
               { label: 'Members now', value: payingNow.toLocaleString('en-US') },
             ].map((s) => (
               <div key={s.label}>
-                <dt className="readout text-[10px] uppercase text-muted-foreground">{s.label}</dt>
+                <dt className="readout text-xs uppercase text-muted-foreground">{s.label}</dt>
                 <dd className="readout mt-1 text-xl text-foreground">{s.value}</dd>
               </div>
             ))}
@@ -317,7 +317,7 @@ export default async function FollowMySplitPage() {
                     <Link href={`/coach/clients/${m.userId}`} className="hover:text-accent">
                       {name}
                     </Link>
-                    <span className="readout text-[11px] text-muted-foreground">
+                    <span className="readout text-xs text-muted-foreground">
                       {isMinor(m.birthDate, today) ? '13–17' : '18+'} ·{' '}
                       {m.status === 'active' && ending ? 'Ending' : STATUS_LABELS[m.status]}
                       {m.startDate

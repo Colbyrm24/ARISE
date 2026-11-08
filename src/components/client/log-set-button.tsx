@@ -109,7 +109,7 @@ export function FinishButton({
   return (
     <div className="flex flex-col gap-2">
       {remaining > 0 && (
-        <p className="readout text-center text-[10px] uppercase leading-relaxed text-muted-foreground">
+        <p className="readout text-center text-xs uppercase leading-relaxed text-muted-foreground">
           {remaining} {remaining === 1 ? 'set' : 'sets'} still blank — finishing saves what you
           typed and closes the session
         </p>

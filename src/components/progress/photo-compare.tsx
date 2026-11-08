@@ -29,10 +29,10 @@ export function PhotoCompare({ pairs }: { pairs: ComparePair[] }) {
       {pairs.map((pair) => (
         <div key={pair.angle} className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="readout text-[11px] uppercase tracking-wider text-foreground">
+            <span className="readout text-xs uppercase tracking-wider text-foreground">
               {pair.angle}
             </span>
-            <span className="readout text-[10px] uppercase text-muted-foreground">
+            <span className="readout text-xs uppercase text-muted-foreground">
               {spanLabel(pair.daysApart)}
             </span>
           </div>
@@ -54,7 +54,7 @@ export function PhotoCompare({ pairs }: { pairs: ComparePair[] }) {
                     <span className="text-xs text-muted-foreground">Unavailable</span>
                   </div>
                 )}
-                <figcaption className="readout text-[10px] uppercase text-muted-foreground">
+                <figcaption className="readout text-xs uppercase text-muted-foreground">
                   {when} · {dayLabel(photo.date)}
                 </figcaption>
               </figure>

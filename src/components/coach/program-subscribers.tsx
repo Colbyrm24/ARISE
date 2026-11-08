@@ -37,7 +37,7 @@ export type SubscriberRow = {
 
 const fieldClass =
   'flex h-10 w-full border border-input bg-secondary/40 px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-const labelClass = 'readout text-[10px] uppercase tracking-wider text-muted-foreground';
+const labelClass = 'readout text-xs uppercase tracking-wider text-muted-foreground';
 const ARMED_MS = 5000;
 
 function AddButton({ count }: { count: number }) {
@@ -79,7 +79,7 @@ function ConfirmAction({
         type="button"
         onClick={() => setArmed(true)}
         className={cn(
-          'readout inline-flex items-center gap-1 text-[11px] uppercase text-muted-foreground',
+          'readout inline-flex items-center gap-1 text-xs uppercase text-muted-foreground',
           danger ? 'hover:text-destructive' : 'hover:text-foreground'
         )}
       >
@@ -94,7 +94,7 @@ function ConfirmAction({
       <button
         type="button"
         onClick={() => setArmed(false)}
-        className="readout text-[10px] uppercase text-muted-foreground hover:text-foreground"
+        className="readout text-xs uppercase text-muted-foreground hover:text-foreground"
       >
         Cancel
       </button>
@@ -111,7 +111,7 @@ function ConfirmSubmit({ text, danger }: { text: string; danger?: boolean }) {
       type="submit"
       disabled={pending}
       className={cn(
-        'readout border px-2 py-1 text-[10px] uppercase',
+        'readout border px-2 py-1 text-xs uppercase',
         danger ? 'border-destructive/60 text-destructive hover:bg-destructive/10' : 'border-accent/60 text-accent hover:bg-accent/10',
         pending && 'opacity-60'
       )}
@@ -222,7 +222,7 @@ export function ProgramSubscribers({
                       />
                       <span className="min-w-0 flex-1 truncate">{c.name}</span>
                       {subscribed.has(c.id) && (
-                        <span className="readout shrink-0 text-[10px] uppercase text-muted-foreground">on it</span>
+                        <span className="readout shrink-0 text-xs uppercase text-muted-foreground">on it</span>
                       )}
                     </label>
                   </li>
@@ -245,7 +245,7 @@ export function ProgramSubscribers({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="readout text-[11px] uppercase text-muted-foreground hover:text-foreground"
+                  className="readout text-xs uppercase text-muted-foreground hover:text-foreground"
                 >
                   Close
                 </button>
@@ -285,7 +285,7 @@ export function ProgramSubscribers({
                       {s.linked ? 'Linked' : 'Unlinked'}
                     </Badge>
                   </div>
-                  <p className="readout text-[11px] uppercase text-muted-foreground">
+                  <p className="readout text-xs uppercase text-muted-foreground">
                     {s.start ? `Started ${s.start}` : 'Start date unknown'} · {s.where}
                   </p>
                   {s.syncNote && <p className="text-xs text-muted-foreground">{s.syncNote}</p>}
@@ -304,7 +304,7 @@ export function ProgramSubscribers({
                       <input type="hidden" name="subscriptionId" value={s.id} />
                       <button
                         type="submit"
-                        className="readout inline-flex items-center gap-1 text-[11px] uppercase text-accent hover:underline"
+                        className="readout inline-flex items-center gap-1 text-xs uppercase text-accent hover:underline"
                       >
                         <Link2 size={12} />
                         Relink

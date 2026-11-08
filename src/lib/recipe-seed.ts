@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { resizeLine, scaleFactor, typicalDay } from '@/lib/plan-scale';
 
 /*
   The meal library.
@@ -320,8 +321,19 @@ export async function seedRecipeLibrary(coachId: string) {
  * to eat in September. recipeId still rides along so the client can open the
  * full method from the plan.
  */
-export async function assignOptionPlan(coachId: string, clientId: string) {
+export async function assignOptionPlan(coachId: string, clientId: string, targetCalories?: number | null) {
   const { byTitle } = await seedRecipeLibrary(coachId);
+
+  // Sized to them. The plan is written for ~2,600; somebody on 2,000 gets ¾
+  // servings of everything and somebody on 3,200 gets 1¼, so one pick per
+  // meal lands on their number instead of the plan's.
+  const base = typicalDay(RECIPES);
+  const factor = scaleFactor(targetCalories, base);
+  const lines = RECIPES.map((r) => ({ r, ...resizeLine({ quantity: 1, ...r }, factor) }));
+  const day = typicalDay(lines.map((l) => ({ meal: l.r.meal, calories: l.calories })));
+  const protein = Math.round(
+    typicalDay(lines.map((l) => ({ meal: l.r.meal, calories: l.protein })))
+  );
 
   // One active plan at a time, or the client's screen has to guess.
   await prisma.mealPlan.updateMany({ where: { clientId, active: true }, data: { active: false } });
@@ -331,13 +343,13 @@ export async function assignOptionPlan(coachId: string, clientId: string) {
       clientId,
       coachId,
       name: PLAN_NAME,
-      note: 'Seven ways to do each meal. Pick one from every meal and the day lands around 2,600 calories and 190g of protein.',
+      note: `Seven ways to do each meal. Pick one from every meal and the day lands around ${day.toLocaleString('en-US')} calories and ${protein}g of protein.`,
       active: true,
     },
   });
 
   await prisma.mealPlanItem.createMany({
-    data: RECIPES.map((r, i) => ({
+    data: lines.map(({ r, ...l }) => ({
       planId: plan.id,
       meal: r.meal,
       // Grouped by meal, so the options under Breakfast read in a stable
@@ -346,16 +358,16 @@ export async function assignOptionPlan(coachId: string, clientId: string) {
       position: { breakfast: 0, lunch: 1, dinner: 2 }[r.meal] * 100 + r.day,
       recipeId: byTitle.get(r.title) ?? null,
       name: r.title,
-      quantity: 1,
-      calories: r.calories,
-      protein: r.protein,
-      carbs: r.carbs,
-      fat: r.fat,
+      quantity: l.quantity,
+      calories: l.calories,
+      protein: l.protein,
+      carbs: l.carbs,
+      fat: l.fat,
       // No "Day 3" note. It printed under the line on the client's screen as
       // if it meant something, and under an options plan it means nothing.
       note: null,
     })),
   });
 
-  return { planId: plan.id, items: RECIPES.length };
+  return { planId: plan.id, items: RECIPES.length, factor, day };
 }

@@ -78,8 +78,8 @@ function DayBar({ label, value, target }: { label: string; value: number; target
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex items-baseline justify-between gap-1">
-        <span className="readout text-[10px] uppercase text-muted-foreground">{label}</span>
-        <span className={`readout text-[10px] ${over ? 'text-destructive' : ''}`}>
+        <span className="readout text-xs uppercase text-muted-foreground">{label}</span>
+        <span className={`readout text-xs ${over ? 'text-destructive' : ''}`}>
           {value.toLocaleString()}
           <span className="text-muted-foreground">/{target.toLocaleString()}</span>
         </span>
@@ -105,10 +105,10 @@ function DayStrip({ day }: { day: DayContext }) {
         both wrap and the header turns into four ragged lines above the bars.
       */}
       <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
-        <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+        <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
           Day so far · {day.meals} logged
         </span>
-        {flag && <span className={`readout text-[10px] ${flag.tone}`}>{flag.text}</span>}
+        {flag && <span className={`readout text-xs ${flag.tone}`}>{flag.text}</span>}
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4">
         <DayBar label="Cal" value={day.calories} target={day.target.calories} />
@@ -148,11 +148,11 @@ function MealCard({ meal }: { meal: PendingMeal }) {
   return (
     <div className="border border-border bg-card">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/60 px-3 py-2">
-        <span className="readout flex h-7 w-7 shrink-0 items-center justify-center border border-border bg-secondary text-[10px] text-muted-foreground">
+        <span className="readout flex h-7 w-7 shrink-0 items-center justify-center border border-border bg-secondary text-xs text-muted-foreground">
           {meal.initials}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{meal.clientName}</span>
-        <span className="readout text-[10px] uppercase text-muted-foreground">
+        <span className="readout text-xs uppercase text-muted-foreground">
           {meal.meal ? `${meal.meal} · ` : ''}
           {ago(meal.loggedAt)}
         </span>
@@ -209,7 +209,7 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                     <strong className="text-foreground">Don&apos;t put these numbers in below</strong>
                     , it would count the day twice. Reply about it instead.
                     {meal.dayTotals && (
-                      <span className="readout mt-1 block text-[10px] uppercase text-muted-foreground">
+                      <span className="readout mt-1 block text-xs uppercase text-muted-foreground">
                         Their screen says {Math.round(meal.dayTotals.calories)} cal ·{' '}
                         {Math.round(meal.dayTotals.protein)}p ·{' '}
                         {Math.round(meal.dayTotals.carbs)}c · {Math.round(meal.dayTotals.fat)}f
@@ -241,7 +241,7 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                     stronger thing and takes about a second to verify.
                   */}
                   <p
-                    className={`readout mt-0.5 text-[10px] uppercase ${
+                    className={`readout mt-0.5 text-xs uppercase ${
                       est.source === 'screen' ? 'text-accent' : CONFIDENCE_TONE[est.confidence]
                     }`}
                   >
@@ -269,11 +269,11 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                     >
                       <span className="min-w-0 text-xs">
                         {item.name}
-                        <span className="readout ml-2 text-[10px] uppercase text-muted-foreground">
+                        <span className="readout ml-2 text-xs uppercase text-muted-foreground">
                           {item.portion}
                         </span>
                       </span>
-                      <span className="readout shrink-0 text-[10px] text-muted-foreground">
+                      <span className="readout shrink-0 text-xs text-muted-foreground">
                         {item.calories} cal · {item.protein}p · {item.carbs}c · {item.fat}f
                       </span>
                     </li>
@@ -324,7 +324,7 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                 { n: 'fat', l: 'Fat', v: meal.fat },
               ].map((f) => (
                 <label key={f.n} className="flex min-w-0 flex-col gap-1">
-                  <span className="readout text-[10px] uppercase text-muted-foreground">{f.l}</span>
+                  <span className="readout text-xs uppercase text-muted-foreground">{f.l}</span>
                   <input
                     type="number"
                     name={f.n}
@@ -348,7 +348,7 @@ function MealCard({ meal }: { meal: PendingMeal }) {
               submitted. Clear it and nothing sends.
             */}
             <label className="flex flex-col gap-1.5">
-              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="readout text-xs uppercase tracking-wider text-muted-foreground">
                 Reply to {meal.clientName.split(' ')[0]}
               </span>
               <textarea
@@ -433,7 +433,7 @@ export default async function CoachMealsPage() {
           permanent until he clears the front of it.
         */}
         {waiting > meals.length && (
-          <p className="readout mt-2 border border-accent/40 bg-accent/[0.06] px-3 py-2 text-[11px] uppercase leading-relaxed text-foreground">
+          <p className="readout mt-2 border border-accent/40 bg-accent/[0.06] px-3 py-2 text-xs uppercase leading-relaxed text-foreground">
             Showing the {meals.length} oldest of {waiting} waiting. Clear these and the rest move
             up.
           </p>

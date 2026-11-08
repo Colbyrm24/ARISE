@@ -10,6 +10,9 @@ import { StartProgramForm } from '@/components/coach/start-program';
 import { NutritionTargetForm } from '@/components/coach/nutrition-target-form';
 import { startProgram, unassignProgram } from './program-actions';
 import { setNutritionTarget } from './nutrition-actions';
+import { quickSetup } from './setup-actions';
+import { QuickSetupForm } from '@/components/coach/quick-setup';
+import { copySourcesFor } from '@/lib/client-setup';
 
 /*
   Overview — the two things a coach changes most: what they are training
@@ -91,9 +94,55 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
     : null;
   const programOptions = programTemplates.map((t) => ({ id: t.id, name: t.name }));
   const currentTarget = client.nutritionTargets[0] ?? null;
+  const [copySources, activePlan] = await Promise.all([
+    copySourcesFor(coach.id, client.userId),
+    prisma.mealPlan.findFirst({ where: { clientId: client.userId, active: true }, select: { id: true } }),
+  ]);
+  // Open by default for somebody not set up yet; folded away once they are,
+  // so the day-to-day cards below are what he sees first.
+  const needsSetup = !activeProgram || !currentTarget || !activePlan;
+  const targetNumbers = currentTarget
+    ? {
+        calories: currentTarget.calories,
+        protein: Number(currentTarget.protein),
+        carbs: Number(currentTarget.carbs),
+        fat: Number(currentTarget.fat),
+      }
+    : null;
 
   return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card className="sm:col-span-2 border-accent/40">
+          <details open={needsSetup} className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-5">
+              <span className="flex flex-col gap-1">
+                <span className="text-lg font-bold text-foreground">Set them up in one go</span>
+                <span className="text-sm text-foreground/70">
+                  Program, calories and meal plan — one press.
+                  {needsSetup && (
+                    <span className="ml-1 font-semibold text-accent">
+                      Missing: {[!activeProgram && 'program', !currentTarget && 'calories', !activePlan && 'meal plan']
+                        .filter(Boolean)
+                        .join(', ')}
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span className="text-sm font-semibold text-accent group-open:hidden">Open</span>
+            </summary>
+            <div className="px-5 pb-5">
+              <QuickSetupForm
+                action={quickSetup}
+                clientId={client.userId}
+                programs={programOptions}
+                defaultStart={defaultStart}
+                current={targetNumbers}
+                copySources={copySources}
+                hasPlan={Boolean(activePlan)}
+              />
+            </div>
+          </details>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>Training</CardTitle>
@@ -112,7 +161,7 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Dumbbell size={16} className="text-accent" />
-                    <p className="text-sm font-medium">{activeProgram.template.name}</p>
+                    <p className="text-base font-semibold">{activeProgram.template.name}</p>
                   </div>
                   <form action={unassignProgram}>
                     <input type="hidden" name="clientProgramId" value={activeProgram.id} />
@@ -122,7 +171,7 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
                     </button>
                   </form>
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-foreground/75">
                   {runsThrough ? (
                     <>Calendar runs through {runsThrough}</>
                   ) : (
@@ -170,14 +219,14 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
 
             {client.workoutLogs.length > 0 && (
               <div className="flex flex-col gap-2 border-t border-border pt-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-xs font-bold uppercase tracking-wide text-foreground/80">
                   Recent Activity
                 </p>
                 <ul className="flex flex-col gap-1.5">
                   {client.workoutLogs.map((log) => (
-                    <li key={log.id} className="flex items-center justify-between text-xs">
+                    <li key={log.id} className="flex items-center justify-between text-sm">
                       <span>{log.workout.name}</span>
-                      <span className="text-muted-foreground">
+                      <span className="text-foreground/70">
                         {log.startedAt.toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
@@ -200,8 +249,8 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
   {currentTarget && (
     <div className="flex items-center gap-2 rounded-xl border border-border bg-secondary/20 px-4 py-3">
       <Apple size={16} className="text-accent" />
-      <div className="text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">{currentTarget.calories} cal</span> ·{' '}
+      <div className="text-sm text-foreground/80">
+        <span className="text-base font-bold text-foreground">{currentTarget.calories} cal</span> ·{' '}
         {Number(currentTarget.protein)}g protein · {Number(currentTarget.carbs)}g carbs ·{' '}
         {Number(currentTarget.fat)}g fat
       </div>
@@ -216,16 +265,7 @@ export default async function ClientOverviewPage({ params }: { params: { id: str
   <NutritionTargetForm
     action={setNutritionTarget}
     clientId={client.userId}
-    current={
-      currentTarget
-        ? {
-            calories: currentTarget.calories,
-            protein: Number(currentTarget.protein),
-            carbs: Number(currentTarget.carbs),
-            fat: Number(currentTarget.fat),
-          }
-        : null
-    }
+    current={targetNumbers}
   />
 </CardContent>
 </Card>

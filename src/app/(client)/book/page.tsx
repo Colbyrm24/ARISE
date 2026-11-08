@@ -57,7 +57,7 @@ export default async function BookPage() {
                     <button
                       type="submit"
                       aria-label="Cancel this call"
-                      className="readout flex items-center gap-1 border border-border/70 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive"
+                      className="readout flex items-center gap-1 border border-border/70 px-2 py-1 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive"
                     >
                       <X size={12} /> Cancel
                     </button>

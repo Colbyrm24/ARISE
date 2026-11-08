@@ -92,7 +92,7 @@ function DoneButton({ itemId }: { itemId: string }) {
       <input type="hidden" name="itemId" value={itemId} />
       <button
         type="submit"
-        className="readout border border-border/70 px-3 py-1.5 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
+        className="readout border border-border/70 px-3 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
       >
         Done
       </button>
@@ -435,7 +435,7 @@ export default async function TodayPage({
     */
     <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:gap-y-6">
       <header className="lg:col-span-2">
-        <p className="readout text-[11px] uppercase text-muted-foreground">
+        <p className="readout text-xs uppercase text-muted-foreground">
           {/* Server-rendered, so the zone has to be named or this flips to
               tomorrow's date mid-evening for anyone west of UTC. */}
           {viewDate.toLocaleDateString('en-US', {
@@ -460,7 +460,7 @@ export default async function TodayPage({
           {unreadUpdates > 0 && (
             <Link
               href="/notifications"
-              className="readout shrink-0 border border-accent/40 bg-accent/10 px-2 py-1 text-[10px] uppercase text-accent"
+              className="readout shrink-0 border border-accent/40 bg-accent/10 px-2 py-1 text-xs uppercase text-accent"
             >
               [{unreadUpdates}] new
             </Link>
@@ -492,7 +492,7 @@ export default async function TodayPage({
       {!isToday && (
         <Link
           href="/today"
-          className="readout -mt-1 self-start text-[10px] uppercase text-muted-foreground transition-colors hover:text-accent lg:col-span-2"
+          className="readout -mt-1 self-start text-xs uppercase text-muted-foreground transition-colors hover:text-accent lg:col-span-2"
         >
           {isPast ? '← Back to today' : '← Back to today'}
         </Link>
@@ -543,7 +543,7 @@ export default async function TodayPage({
                             : item.label}
                         </span>
                         {item.kind === 'workout' && item.workout?.estMinutes && dayItems.length > 1 && (
-                          <span className="readout text-[10px] uppercase text-muted-foreground">
+                          <span className="readout text-xs uppercase text-muted-foreground">
                             {item.workout.estMinutes} min
                           </span>
                         )}
@@ -552,7 +552,7 @@ export default async function TodayPage({
                       {item.kind === 'workout' && item.workoutId && (
                         <Link
                           href={`/workouts/${item.workoutId}`}
-                          className="readout shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                          className="readout shrink-0 border border-accent/50 bg-accent/10 px-3 py-1.5 text-xs uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
                         >
                           {done ? 'View' : 'Start'}
                         </Link>
@@ -563,7 +563,7 @@ export default async function TodayPage({
                         <span className="flex shrink-0 items-center gap-2">
                           <Link
                             href={REMINDER_LINKS[item.kind]}
-                            className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                            className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-xs uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
                           >
                             Open
                           </Link>
@@ -595,11 +595,11 @@ export default async function TodayPage({
                     */}
                     {item.kind === 'cardio' && item.cardioMinutes && item.cardioTypeId && (
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <span className="readout text-[10px] uppercase text-muted-foreground">
+                        <span className="readout text-xs uppercase text-muted-foreground">
                           {item.cardioMinutes} min
                         </span>
                         {logged && !isToday ? (
-                          <span className="readout flex items-center gap-1 text-[10px] uppercase text-success">
+                          <span className="readout flex items-center gap-1 text-xs uppercase text-success">
                             <Check size={12} /> {logged} min done
                           </span>
                         ) : isToday ? (
@@ -617,7 +617,7 @@ export default async function TodayPage({
                             />
                             <button
                               type="submit"
-                              className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-[10px] uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
+                              className="readout border border-accent/50 bg-accent/10 px-3 py-1.5 text-xs uppercase tracking-wider text-accent transition-colors hover:bg-accent/20"
                             >
                               {logged ? 'Update' : 'Log'}
                             </button>
@@ -659,7 +659,7 @@ export default async function TodayPage({
                 href={nextCall.location.startsWith('http') ? nextCall.location : undefined}
                 target={nextCall.location.startsWith('http') ? '_blank' : undefined}
                 rel="noreferrer"
-                className="readout min-w-0 break-all text-[10px] uppercase text-muted-foreground hover:text-accent"
+                className="readout min-w-0 break-all text-xs uppercase text-muted-foreground hover:text-accent"
               >
                 {nextCall.location}
               </a>
@@ -775,7 +775,7 @@ export default async function TodayPage({
             */}
             <Link
               href="/leaderboard"
-              className="readout mt-1 flex items-center justify-between border-t border-border/50 pt-3 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:text-accent"
+              className="readout mt-1 flex items-center justify-between border-t border-border/50 pt-3 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:text-accent"
             >
               Where you stand
               <ChevronRight size={12} />
@@ -816,7 +816,7 @@ export default async function TodayPage({
               {todaysWorkout ? (
                 <>
                   <p className="text-base font-medium">{todaysWorkout.name}</p>
-                  <p className="readout mt-1 text-[11px] uppercase text-muted-foreground">
+                  <p className="readout mt-1 text-xs uppercase text-muted-foreground">
                     {workoutDone ? 'Complete' : todaysLog ? 'In progress' : 'Not started'}
                   </p>
                 </>
@@ -928,13 +928,13 @@ export default async function TodayPage({
                     <p className="readout text-2xl text-accent glow-soft">
                       {caloriesEaten.toLocaleString()}
                     </p>
-                    <p className="readout mt-1 text-[10px] uppercase text-muted-foreground">
+                    <p className="readout mt-1 text-xs uppercase text-muted-foreground">
                       Calories
                     </p>
                   </div>
                   <div className="text-center">
                     <p className="readout text-2xl text-accent glow-soft">{proteinEaten}g</p>
-                    <p className="readout mt-1 text-[10px] uppercase text-muted-foreground">
+                    <p className="readout mt-1 text-xs uppercase text-muted-foreground">
                       Protein
                     </p>
                   </div>
@@ -965,12 +965,12 @@ export default async function TodayPage({
         */}
         <Card>
           <CardContent className="pt-5">
-            <p className="readout text-[10px] uppercase text-muted-foreground">Steps</p>
+            <p className="readout text-xs uppercase text-muted-foreground">Steps</p>
             <p className="readout mt-2 text-xl text-accent glow-soft">
               {stepLog ? stepLog.steps.toLocaleString() : '—'}
             </p>
             {stepsHabit?.targetValue && (
-              <p className="readout mt-0.5 text-[10px] uppercase text-muted-foreground">
+              <p className="readout mt-0.5 text-xs uppercase text-muted-foreground">
                 of {Number(stepsHabit.targetValue).toLocaleString()}
               </p>
             )}
@@ -989,7 +989,7 @@ export default async function TodayPage({
               <button
                 type="submit"
                 aria-label="Save step count"
-                className="readout h-9 shrink-0 border border-border px-2 text-[10px] uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
+                className="readout h-9 shrink-0 border border-border px-2 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:border-accent/60 hover:text-accent"
               >
                 Save
               </button>
@@ -1005,7 +1005,7 @@ export default async function TodayPage({
             {!healthSync && (
               <Link
                 href="/profile"
-                className="readout mt-2 inline-flex items-center gap-1 text-[10px] uppercase leading-relaxed text-muted-foreground transition-colors hover:text-accent"
+                className="readout mt-2 inline-flex items-center gap-1 text-xs uppercase leading-relaxed text-muted-foreground transition-colors hover:text-accent"
               >
                 Sync from your phone instead
                 <ChevronRight size={11} />
@@ -1018,12 +1018,12 @@ export default async function TodayPage({
         <Link href="/progress">
           <Card interactive className="h-full">
             <CardContent className="pt-5">
-              <p className="readout text-[10px] uppercase text-muted-foreground">Weight</p>
+              <p className="readout text-xs uppercase text-muted-foreground">Weight</p>
               <p className="readout mt-2 text-xl text-accent glow-soft">
                 {latestWeight ? `${Number(latestWeight.weight).toFixed(1)}` : '—'}
                 {latestWeight && <span className="ml-1 text-xs text-muted-foreground">lb</span>}
               </p>
-              <span className="readout mt-3 flex items-center gap-1 text-[10px] uppercase text-muted-foreground">
+              <span className="readout mt-3 flex items-center gap-1 text-xs uppercase text-muted-foreground">
                 {weighedInToday ? 'Progress' : 'Weigh in'}
                 <ChevronRight size={12} />
               </span>
