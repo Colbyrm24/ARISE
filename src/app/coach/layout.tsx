@@ -1,4 +1,5 @@
 import { requireCoach } from '@/lib/auth';
+import { CoachMain } from '@/components/coach/coach-main';
 import { Sidebar } from '@/components/coach/sidebar';
 import { CoachMobileNav } from '@/components/coach/mobile-nav';
 import { countPendingMeals } from '@/lib/meal-review';
@@ -33,7 +34,7 @@ export default async function CoachLayout({ children }: { children: React.ReactN
         <CoachMobileNav counts={counts} />
       </div>
       <main className="md:pl-60">
-        <div className="mx-auto max-w-6xl px-6 py-8 md:px-10 md:py-10">{children}</div>
+        <CoachMain>{children}</CoachMain>
       </main>
     </div>
   );

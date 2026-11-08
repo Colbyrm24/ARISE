@@ -161,9 +161,9 @@ export async function startMemberCalendar(clientId: string, templateId: string) 
   ]);
 
   if (current?.templateId !== templateId || ahead === 0) {
-    await deployProgram({ clientId, templateId, startDate: today, weeks: MEMBER_WEEKS });
-    // Day 1 is today, so the subscription says so.
-    await setActiveProgram(clientId, templateId, today);
+    const r = await deployProgram({ clientId, templateId, startDate: today, weeks: MEMBER_WEEKS });
+    // Day 1 is where the deploy put it (a calendar program's Monday).
+    await setActiveProgram(clientId, templateId, r.from);
     return;
   }
   await setActiveProgram(clientId, templateId);
@@ -461,14 +461,14 @@ export async function refreshMemberCalendars(offerId: string) {
 
   for (const m of members) {
     const today = todayIn(zoneOf(m.user.profile));
-    await deployProgram({
+    const r = await deployProgram({
       clientId: m.userId,
       templateId: offer.templateId,
       startDate: today,
       weeks: MEMBER_WEEKS,
     });
-    // The program restarts from today, so that is their new Day 1.
-    await setActiveProgram(m.userId, offer.templateId, today);
+    // The program restarts this week, so that Monday is their new Day 1.
+    await setActiveProgram(m.userId, offer.templateId, r.from);
   }
   return members.length;
 }

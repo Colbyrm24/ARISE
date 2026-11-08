@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { todayIn, zoneOf } from '@/lib/day';
 import { pickPrimary } from '@/lib/schedule-move';
 import { implicitPhase, isRestDay, materialize, orderDayItems, programWeeks } from '@/lib/program-calendar';
 
@@ -44,6 +45,11 @@ function addDays(d: Date, n: number) {
  * single most common off-by-one in scheduling code — a program that starts on
  * a Sunday silently lands a whole week wrong. Converted once, here.
  */
+/** The Monday on or before a date-only value. */
+export function mondayOf(d: Date): Date {
+  return addDays(d, 1 - isoWeekday(d));
+}
+
 export function isoWeekday(d: Date): number {
   const js = d.getUTCDay();
   return js === 0 ? 7 : js;
@@ -212,7 +218,13 @@ async function deployWeek({
  * deploy wrote from the start date on, unless it is finished.
  */
 async function deployCalendar({ clientId, templateId, startDate }: DeployOptions): Promise<DeployResult> {
-  const from = dateOnly(startDate);
+  /*
+    Day 1 is always a Monday. The coach's calendar is laid out Mon–Sun, so a
+    program has to land that way too: pick any day and it starts from the
+    Monday of that week. The days of that week before the one picked are
+    skipped, never written into the past as sessions they "missed".
+  */
+  const from = mondayOf(dateOnly(startDate));
 
   const [items, phases, client] = await Promise.all([
     prisma.programCalendarItem.findMany({
@@ -223,8 +235,16 @@ async function deployCalendar({ clientId, templateId, startDate }: DeployOptions
       },
     }),
     prisma.programPhase.findMany({ where: { templateId }, orderBy: { position: 'asc' }, select: { id: true, weeks: true } }),
-    prisma.client.findUnique({ where: { userId: clientId }, select: { tier: true } }),
+    prisma.client.findUnique({
+      where: { userId: clientId },
+      select: { tier: true, user: { select: { profile: { select: { timezone: true } } } } },
+    }),
   ]);
+  // Nothing is written or cleared before the day asked for (or before
+  // today): the Monday only fixes which column is Day 1.
+  const asked = dateOnly(startDate);
+  const today = todayIn(zoneOf(client?.user.profile));
+  const floor = today > asked ? today : asked;
 
   const span = Math.min(
     MAX_WEEKS,
@@ -239,7 +259,7 @@ async function deployCalendar({ clientId, templateId, startDate }: DeployOptions
     anyone else those items are simply not written.
   */
   const skipKinds = client?.tier === 'coaching' ? [] : ['message'];
-  const material = materialize(items, from, span * 7, { skipKinds });
+  const material = materialize(items, from, span * 7, { skipKinds }).filter((m) => m.date >= floor);
   // Nothing this client can receive (a calendar of only message items, for a
   // member with no thread): stop before the clear, the way the week deploy
   // does with an empty week. Callers read created 0 as "nothing deployed",
@@ -253,7 +273,7 @@ async function deployCalendar({ clientId, templateId, startDate }: DeployOptions
       clientId,
       templateId: { not: null },
       completedAt: null,
-      date: { gte: from },
+      date: { gte: floor },
     },
   });
 

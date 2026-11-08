@@ -288,10 +288,11 @@ export default async function ProgramBuilderPage({
       href={href}
       aria-current={current === key ? 'page' : undefined}
       className={cn(
-        'flex min-w-0 flex-col border px-3 py-2 text-sm transition-colors lg:border-0 lg:border-l-2',
+        'flex min-w-0 flex-col border px-3 py-2 text-sm transition-colors',
+        current !== 'calendar' && 'lg:border-0 lg:border-l-2',
         current === key
           ? 'border-accent bg-accent/[0.08] text-foreground'
-          : 'border-border text-muted-foreground hover:text-foreground lg:border-transparent'
+          : cn('border-border text-foreground/75 hover:text-foreground', current !== 'calendar' && 'lg:border-transparent')
       )}
     >
       <span className="truncate">{label}</span>
@@ -318,9 +319,22 @@ export default async function ProgramBuilderPage({
         </p>
       </header>
 
-      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
-        <nav aria-label="Program" className="flex flex-col gap-3 lg:sticky lg:top-4">
-          <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-0">
+      {/* On the calendar the program menu becomes one row across the top, so
+          the calendar gets the full width of the screen. */}
+      <div
+        className={cn(
+          'flex flex-col gap-6',
+          current !== 'calendar' && 'lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start'
+        )}
+      >
+        <nav
+          aria-label="Program"
+          className={cn(
+            'flex flex-col gap-3',
+            current === 'calendar' ? 'lg:flex-row lg:flex-wrap lg:items-center lg:gap-x-4' : 'lg:sticky lg:top-4'
+          )}
+        >
+          <div className={cn('flex flex-wrap gap-2', current !== 'calendar' && 'lg:flex-col lg:gap-0')}>
             {railLink(
               'summary',
               `${base}?view=summary`,
@@ -329,8 +343,8 @@ export default async function ProgramBuilderPage({
             )}
             {railLink('calendar', `${base}?view=calendar`, 'Calendar', onCalendar ? `${calItems.length} items` : 'empty')}
           </div>
-          <span className={cn(labelClass, 'lg:mt-3 lg:px-3')}>Training phases</span>
-          <div className="flex flex-wrap gap-2 lg:flex-col lg:gap-0">
+          <span className={cn(labelClass, current !== 'calendar' && 'lg:mt-3 lg:px-3')}>Training phases</span>
+          <div className={cn('flex flex-wrap gap-2', current !== 'calendar' && 'lg:flex-col lg:gap-0')}>
             {phases.map((p, i) =>
               railLink(
                 p.id,
@@ -340,7 +354,7 @@ export default async function ProgramBuilderPage({
               )
             )}
           </div>
-          <form action={addPhase} className="lg:px-3">
+          <form action={addPhase} className={cn(current !== 'calendar' && 'lg:px-3')}>
             <input type="hidden" name="templateId" value={template.id} />
             <button
               type="submit"

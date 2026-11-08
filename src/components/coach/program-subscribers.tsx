@@ -231,7 +231,7 @@ export function ProgramSubscribers({
             )}
             <div className="grid gap-3 sm:grid-cols-[200px_1fr] sm:items-end">
               <label className="flex flex-col gap-1.5">
-                <span className={labelClass}>Start date (Day 1)</span>
+                <span className={labelClass}>Starts (from that week's Monday)</span>
                 <input name="startDate" type="date" required defaultValue={defaultStart} className={fieldClass} />
               </label>
               <p className="text-xs text-muted-foreground">
