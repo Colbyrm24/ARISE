@@ -10,7 +10,6 @@ import {
   CalendarDays,
   ClipboardCheck,
   MessageCircle,
-  CalendarClock,
   Bell,
   CircleUser, 
   Trophy,
@@ -41,7 +40,6 @@ const ITEMS = [
   { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { href: '/check-in', label: 'Check-in', icon: ClipboardCheck },
   { href: '/messages', label: 'Messages', icon: MessageCircle },
-  { href: '/book', label: 'Book a call', icon: CalendarClock },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/profile', label: 'Profile', icon: CircleUser },
 ] as const;
