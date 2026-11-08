@@ -95,11 +95,15 @@ const REVIEW_NOTE: Record<string, { text: string; tone: string }> = {
  * Pulled out of the page because it is now rendered from two places — inside
  * an unopened meal, and under the already-eaten lines of a meal in progress.
  */
-function PlanOption({ item }: { item: PlanItem }) {
+function PlanOption({ item, photo }: { item: PlanItem; photo?: string | null }) {
   return (
     <div className="flex items-center gap-3 py-2.5">
+      {photo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={photo} alt="" loading="lazy" className="h-12 w-16 shrink-0 rounded-md object-cover" />
+      ) : null}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm text-muted-foreground">
+        <p className="truncate text-sm font-medium text-foreground">
           {item.recipeId ? (
             <Link
               href={`/recipes/${item.recipeId}`}
@@ -114,8 +118,8 @@ function PlanOption({ item }: { item: PlanItem }) {
             <span className="readout ml-2 text-[10px] uppercase">×{item.quantity}</span>
           )}
         </p>
-        <p className="readout mt-0.5 text-[10px] text-muted-foreground">
-          {item.calories} cal · {item.protein}p{item.note ? ` · ${item.note}` : ''}
+        <p className="mt-0.5 text-xs text-foreground/70">
+          {item.calories} cal · {item.protein}g protein{item.note ? ` · ${item.note}` : ''}
         </p>
       </div>
       <form action={logPlanItem} className="shrink-0">
@@ -221,7 +225,7 @@ export default async function NutritionPage({
       // query below already follows. Unfiltered, this tab listed every
       // coach's recipes to every client in the product.
       where: recipeScope,
-      select: { id: true, title: true, calories: true, protein: true, carbs: true, fat: true },
+      select: { id: true, title: true, imageUrl: true, calories: true, protein: true, carbs: true, fat: true },
       orderBy: { title: 'asc' },
     }),
     /*
@@ -242,6 +246,9 @@ export default async function NutritionPage({
     }),
     getActivePlan(user.id),
   ]);
+  // Plan lines carry a recipe id, not the photo; the recipe list above
+  // already holds every photo this client can see.
+  const photoByRecipe = new Map(recipes.map((r) => [r.id, r.imageUrl] as const));
 
   const photoUrls = await signMealPhotoUrls(
     todayLogs.map((l) => l.photoPath).filter((p): p is string => Boolean(p))
@@ -469,7 +476,7 @@ export default async function NutritionPage({
                       </span>
                     )}
                     {toEat.map((item) => (
-                      <PlanOption key={item.id} item={item} />
+                      <PlanOption key={item.id} item={item} photo={item.recipeId ? photoByRecipe.get(item.recipeId) : null} />
                     ))}
                   </details>
                 );
@@ -545,7 +552,7 @@ export default async function NutritionPage({
                         />
                       </summary>
                       {toEat.map((item) => (
-                        <PlanOption key={item.id} item={item} />
+                        <PlanOption key={item.id} item={item} photo={item.recipeId ? photoByRecipe.get(item.recipeId) : null} />
                       ))}
                     </details>
                   )}
@@ -747,8 +754,13 @@ export default async function NutritionPage({
                     key={recipe.id}
                     className="flex flex-col gap-2 border-b border-border/40 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
                   >
-                    <div className="min-w-0 sm:flex-1">
-                      <p className="text-sm">
+                    <div className="flex min-w-0 items-center gap-3 sm:flex-1">
+                      {recipe.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={recipe.imageUrl} alt="" loading="lazy" className="h-12 w-16 shrink-0 rounded-md object-cover" />
+                      ) : null}
+                      <div className="min-w-0">
+                      <p className="text-sm font-medium">
                         <Link
                           href={`/recipes/${recipe.id}`}
                           className="underline decoration-accent/40 underline-offset-4 transition-colors hover:text-accent"
@@ -756,10 +768,11 @@ export default async function NutritionPage({
                           {recipe.title}
                         </Link>
                       </p>
-                      <p className="readout mt-0.5 text-[10px] text-muted-foreground">
+                      <p className="mt-0.5 text-xs text-foreground/70">
                         {recipe.calories} cal · {Math.round(Number(recipe.protein))}p ·{' '}
                         {Math.round(Number(recipe.carbs))}c · {Math.round(Number(recipe.fat))}f
                       </p>
+                      </div>
                     </div>
                     <form action={logMeal} className="flex shrink-0 items-center gap-2">
                       <input type="hidden" name="recipeId" value={recipe.id} />

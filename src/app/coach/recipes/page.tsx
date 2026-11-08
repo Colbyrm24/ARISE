@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { requireCoach } from '@/lib/auth';
 import { recipesVisibleToCoach } from '@/lib/recipe-scope';
-import { createRecipe, deleteRecipe, loadRecipeLibrary } from './actions';
+import { createRecipe, deleteRecipe, loadRecipeLibrary, loadRecipePhotos } from './actions';
 
 export default async function CoachRecipesPage() {
   /*
@@ -42,11 +42,18 @@ export default async function CoachRecipesPage() {
             macros. From there you can put any client on the whole week in one press from their
             page.
           </p>
-          <form action={loadRecipeLibrary}>
-            <Button type="submit" size="sm" className="w-full shrink-0 sm:w-auto">
-              <Download size={15} /> Load meal library
-            </Button>
-          </form>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <form action={loadRecipeLibrary}>
+              <Button type="submit" size="sm" className="w-full sm:w-auto">
+                <Download size={15} /> Load meal library
+              </Button>
+            </form>
+            <form action={loadRecipePhotos}>
+              <Button type="submit" size="sm" variant="outline" className="w-full sm:w-auto">
+                Add photos ({recipes.filter((r) => r.imageUrl).length}/{recipes.length})
+              </Button>
+            </form>
+          </div>
         </CardContent>
       </Card>
 
@@ -92,9 +99,13 @@ export default async function CoachRecipesPage() {
             <li key={recipe.id}>
               <Card>
                 <CardContent className="flex items-center justify-between gap-4 pt-6">
-                  <div>
-                    <p className="text-sm font-medium">{recipe.title}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                  {recipe.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={recipe.imageUrl} alt="" loading="lazy" className="h-16 w-24 shrink-0 rounded-lg object-cover" />
+                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-semibold text-foreground">{recipe.title}</p>
+                    <p className="mt-1 text-sm text-foreground/75">
                       {recipe.calories} cal · {Number(recipe.protein)}g protein · {Number(recipe.carbs)}g carbs ·{' '}
                       {Number(recipe.fat)}g fat
                       {recipe.servingSize ? ` · ${recipe.servingSize}` : ''}

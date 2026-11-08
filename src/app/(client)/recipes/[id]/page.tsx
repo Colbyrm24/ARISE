@@ -87,15 +87,37 @@ export default async function RecipePage({ params }: { params: { id: string } })
         Nutrition
       </Link>
 
+      {recipe.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={recipe.imageUrl}
+          alt={recipe.title}
+          className="aspect-[16/9] w-full rounded-xl border border-border/60 object-cover"
+        />
+      )}
+
       <header>
         <h1 className="display text-2xl">{recipe.title}</h1>
-        <p className="readout mt-2 text-[11px] uppercase text-muted-foreground">
-          {recipe.calories} cal · {money(recipe.protein)}p · {money(recipe.carbs)}c ·{' '}
-          {money(recipe.fat)}f
-          {recipe.servingSize ? ` · ${recipe.servingSize}` : ''}
-        </p>
+        {/* The macros are the reason anyone opens this page, so they are the
+            biggest thing on it after the name, not an 11px footnote. */}
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {[
+            ['Calories', String(recipe.calories)],
+            ['Protein', `${money(recipe.protein)}g`],
+            ['Carbs', `${money(recipe.carbs)}g`],
+            ['Fat', `${money(recipe.fat)}g`],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-border/60 bg-secondary/30 px-2 py-2 text-center">
+              <p className="text-lg font-bold text-foreground">{value}</p>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-foreground/70">{label}</p>
+            </div>
+          ))}
+        </div>
+        {recipe.servingSize && (
+          <p className="mt-2 text-sm text-foreground/75">Serving: {recipe.servingSize}</p>
+        )}
         {totalTime > 0 && (
-          <p className="readout mt-1 flex items-center gap-1.5 text-[11px] uppercase text-muted-foreground">
+          <p className="mt-1 flex items-center gap-1.5 text-sm text-foreground/75">
             <Clock size={12} />
             {recipe.prepTime ? `${recipe.prepTime} min prep` : ''}
             {recipe.prepTime && recipe.cookTime ? ' · ' : ''}
