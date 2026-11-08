@@ -92,3 +92,22 @@ export async function loadRecipeLibrary() {
   await seedRecipeLibrary(coach.id);
   revalidatePath('/coach/recipes');
 }
+
+/**
+ * Puts a photo on every library recipe that doesn't have one yet
+ * (src/lib/recipe-photos.ts). One statement, and it never replaces a photo
+ * that is already set, so a picture the coach chose himself always stays.
+ */
+export async function loadRecipePhotos() {
+  await requireCoach();
+  const { RECIPE_PHOTO_IDS, recipePhotoUrl } = await import('@/lib/recipe-photos');
+  const rows = Object.keys(RECIPE_PHOTO_IDS).map((title) => ({ title, url: recipePhotoUrl(title) }));
+  await prisma.$executeRaw`
+    update recipes r
+       set image_url = v.url
+      from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as v(title text, url text)
+     where lower(r.title) = lower(v.title)
+       and (r.image_url is null or r.image_url = '')`;
+  revalidatePath('/coach/recipes');
+  revalidatePath('/nutrition');
+}
