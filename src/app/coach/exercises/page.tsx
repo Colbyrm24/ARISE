@@ -1,11 +1,10 @@
-import { Dumbbell, Trash2, Video } from 'lucide-react';
+import { Dumbbell, Play, Trash2, Video } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { watchUrlFor } from '@/lib/exercise-video';
-import { createExercise, deleteExercise, loadExerciseMedia, setExerciseVideo } from './actions';
+import { createExercise, deleteExercise, loadExerciseMedia, loadExerciseVideos, setExerciseVideo } from './actions';
 
 const selectClass =
   'flex h-11 w-full rounded-xl border border-input bg-secondary/40 px-4 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -63,31 +62,32 @@ export default async function CoachExercisesPage({
     <div className="flex flex-col gap-8">
       <header>
         <h1 className="text-2xl font-semibold">Exercise Library</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {total} exercises. Every one of them is available when you build a workout template.
-        </p>
+        <p className="mt-1 text-base text-foreground/80">{total} exercises, all ready to drop into a workout.</p>
       </header>
 
-      {/* Photos and steps. Clients see the start and finish photos plus the
-          steps on every movement that has them; movements without a pasted
-          video still get a "Find a demo" YouTube search, so nobody is left
-          guessing what a movement looks like. */}
+      {/* One press fills a demo video on every movement that hasn't got
+          one, and photos + steps on every movement with a library match.
+          Neither touches anything you pasted or wrote yourself. */}
       <Card>
         <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-1">
-            <p className="text-base font-semibold text-foreground">
-              {withPhotos} of {total} movements have photos and how-to steps
+            <p className="text-lg font-semibold text-foreground">
+              {total - missingVideos} of {total} have a demo video
             </p>
-            <p className="text-sm text-foreground/75">
-              Every movement also gets a demo button for clients. Paste your own video on any row
-              below to replace the YouTube search with your exact demo ({total - missingVideos} so far).
+            <p className="text-sm text-foreground/80">
+              Clients tap the video right inside their workout. {withPhotos} also have start and finish photos.
             </p>
           </div>
-          <form action={loadExerciseMedia}>
-            <Button type="submit" size="sm" className="shrink-0">
-              Add photos &amp; steps
-            </Button>
-          </form>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {missingVideos > 0 && (
+              <form action={loadExerciseVideos}>
+                <Button type="submit" size="sm">Add videos</Button>
+              </form>
+            )}
+            <form action={loadExerciseMedia}>
+              <Button type="submit" size="sm" variant="outline">Add photos &amp; steps</Button>
+            </form>
+          </div>
         </CardContent>
       </Card>
 
@@ -124,12 +124,12 @@ export default async function CoachExercisesPage({
               {filtering && (
                 <a
                   href="/coach/exercises"
-                  className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                  className="text-sm text-foreground/80 underline-offset-4 hover:underline"
                 >
                   Clear
                 </a>
               )}
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span className="ml-auto text-sm text-foreground/75">
                 Showing {exercises.length}
                 {exercises.length === 200 ? '+ (narrow your search)' : ''}
               </span>
@@ -207,64 +207,59 @@ export default async function CoachExercisesPage({
             const videoUrl = ex.video
               ? watchUrlFor(ex.video.storageProvider, ex.video.externalId)
               : null;
+            const thumb = ex.video?.thumbnailUrl ?? ex.imageUrls[0] ?? null;
             return (
             <li key={ex.id}>
               <Card>
                 <CardContent className="flex items-start justify-between gap-4 pt-6">
-                  {ex.imageUrls[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={ex.imageUrls[0]}
-                      alt=""
-                      loading="lazy"
-                      className="hidden h-20 w-28 shrink-0 rounded-lg object-cover sm:block"
-                    />
-                  ) : null}
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <p className="text-base font-semibold text-foreground">{ex.name}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Badge variant="accent">{ex.musclePrimary}</Badge>
-                      <Badge variant="outline">{ex.equipment}</Badge>
-                      <Badge variant="outline">{ex.difficulty}</Badge>
-                      {!videoUrl && <Badge variant="outline">No video yet</Badge>}
-                      {ex.muscleSecondary.map((m) => (
-                        <Badge key={m} variant="default">
-                          {m}
-                        </Badge>
-                      ))}
-                    </div>
-                    {ex.instructions && (
-                      <details className="text-sm text-foreground/80">
-                        <summary className="cursor-pointer text-xs font-medium text-accent">How to do it</summary>
-                        <p className="mt-1 whitespace-pre-line leading-relaxed">{ex.instructions}</p>
-                      </details>
-                    )}
-
-                    {/* One demo link per exercise. Paste a YouTube, Vimeo or
-                        direct video URL; submitting it empty clears it. */}
-                    <form action={setExerciseVideo} className="mt-1 flex items-center gap-2">
-                      <input type="hidden" name="exerciseId" value={ex.id} />
-                      <Video size={14} className={videoUrl ? 'text-accent' : 'text-muted-foreground'} />
-                      <input
-                        name="videoUrl"
-                        defaultValue={videoUrl ?? ''}
-                        placeholder="Demo video URL"
-                        className="readout h-8 w-full max-w-xs rounded-none border border-input bg-secondary/40 px-2 text-xs focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-                      />
-                      <Button type="submit" variant="ghost" size="sm">
-                        Save
-                      </Button>
+                  {thumb ? (
+                    <div className="relative hidden h-20 w-32 shrink-0 overflow-hidden rounded-lg sm:block">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
                       {videoUrl && (
-                        <a
-                          href={videoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="readout shrink-0 text-xs uppercase text-accent hover:underline"
-                        >
-                          Watch
-                        </a>
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                          <Play size={22} className="text-white" fill="currentColor" />
+                        </span>
                       )}
-                    </form>
+                    </div>
+                  ) : null}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    <p className="text-lg font-semibold text-foreground">{ex.name}</p>
+                    <p className="text-sm text-foreground/80">
+                      {ex.musclePrimary} · {ex.equipment}
+                    </p>
+
+                    {/* Paste a YouTube, Vimeo or direct link to swap the demo;
+                        saving it empty clears it. Folded away because almost
+                        every movement already has one. */}
+                    <details className="mt-1 text-sm">
+                      <summary className="w-fit cursor-pointer font-semibold text-accent">
+                        {videoUrl ? 'Change video' : 'Add a video'}
+                      </summary>
+                      <form action={setExerciseVideo} className="mt-2 flex items-center gap-2">
+                        <input type="hidden" name="exerciseId" value={ex.id} />
+                        <Video size={14} className="text-accent" />
+                        <input
+                          name="videoUrl"
+                          defaultValue={videoUrl ?? ''}
+                          placeholder="Paste a YouTube link"
+                          className="h-9 w-full max-w-sm rounded-none border border-input bg-secondary/40 px-2 text-sm focus-visible:border-accent/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+                        />
+                        <Button type="submit" variant="ghost" size="sm">
+                          Save
+                        </Button>
+                        {videoUrl && (
+                          <a
+                            href={videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 text-sm font-semibold text-accent hover:underline"
+                          >
+                            Watch
+                          </a>
+                        )}
+                      </form>
+                    </details>
                   </div>
                   <form action={deleteExercise}>
                     <input type="hidden" name="id" value={ex.id} />
