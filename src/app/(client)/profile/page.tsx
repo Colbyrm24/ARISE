@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarDays, Bell, LineChart, ClipboardCheck } from 'lucide-react';
+import { Bell, LineChart, ClipboardCheck } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui/card';
 import { BackgroundPicker } from '@/components/client/background-picker';
@@ -138,21 +138,6 @@ export default async function ProfilePage() {
             <span className="flex items-center gap-3">
               <Bell size={16} className="text-accent" />
               Updates
-            </span>
-            <span className="readout text-[10px] uppercase text-muted-foreground">Open</span>
-          </Link>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-6">
-          <Link
-            href="/book"
-            className="flex items-center justify-between gap-3 text-sm transition-colors hover:text-accent"
-          >
-            <span className="flex items-center gap-3">
-              <CalendarDays size={16} className="text-accent" />
-              Book a call with your coach
             </span>
             <span className="readout text-[10px] uppercase text-muted-foreground">Open</span>
           </Link>
