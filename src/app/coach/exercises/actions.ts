@@ -142,3 +142,37 @@ export async function loadExerciseMedia() {
      where lower(e.name) = lower(v.name)`;
   revalidatePath('/coach/exercises');
 }
+
+/**
+ * Attaches a YouTube demo to every exercise that has none, from the list in
+ * src/lib/exercise-videos.ts (found by searching YouTube for each movement
+ * and keeping a short, on-topic demo).
+ *
+ * One statement: picks the targets once, writes a video row for each and
+ * points the exercise at it. Exercises that already have a video — anything
+ * the coach pasted — are left alone, so it is safe to press twice.
+ */
+export async function loadExerciseVideos() {
+  await requireCoach();
+  const { EXERCISE_VIDEOS } = await import('@/lib/exercise-videos');
+  const rows = Object.entries(EXERCISE_VIDEOS).map(([name, yt]) => ({ name, yt }));
+  await prisma.$executeRaw`
+    with v as (
+      select * from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as v(name text, yt text)
+    ),
+    targets as materialized (
+      select e.id as eid, v.yt, gen_random_uuid()::text as vid
+        from exercises e join v on lower(e.name) = lower(v.name)
+       where e.video_id is null
+    ),
+    ins as (
+      insert into exercise_videos (id, storage_provider, external_id, thumbnail_url)
+      select vid, 'youtube', yt, 'https://i.ytimg.com/vi/' || yt || '/hqdefault.jpg' from targets
+      returning id
+    )
+    update exercises e
+       set video_id = t.vid, video_url = 'https://www.youtube.com/watch?v=' || t.yt
+      from targets t
+     where e.id = t.eid and exists (select 1 from ins where ins.id = t.vid)`;
+  revalidatePath('/coach/exercises');
+}

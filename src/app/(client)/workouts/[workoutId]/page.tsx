@@ -14,6 +14,7 @@ import {
   Cell,
 } from '@/components/ui/system-window';
 import { demoLinkFor } from '@/lib/exercise-video';
+import { ExerciseDemo } from '@/components/exercise-demo';
 import {
   describeSet,
   summarise,
@@ -231,6 +232,8 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
         {block.rows.map(({ row: we, label }) => {
           const done = we.sets.filter((s) => loggedBySetId.has(s.id)).length;
           const demo = demoLinkFor(we.exercise);
+          const ytId =
+            we.exercise.video?.storageProvider === 'youtube' ? we.exercise.video.externalId : null;
           /*
             How many sets of how many reps — the question anyone actually asks
             about a movement, which until now could only be answered by
@@ -265,61 +268,59 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                     {plan.headline}
                   </p>
                 )}
-                {/* Sits above the sets on purpose — if you don't know the
-                    movement, you need it before the first rep, not after. */}
-                {demo && (
-                  <a
-                    href={demo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mb-3 inline-flex items-center gap-2 rounded-lg border border-accent/50 bg-accent/10 px-3 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent/20"
-                  >
-                    <Play size={14} />
-                    {demo.exact ? 'Watch demo' : 'Find a demo'}
-                  </a>
-                )}
                 {/*
-                  The coach's own cues and note for this movement.
-
-                  Both were written and read by nothing. `Exercise.cues` comes
-                  off a real field on the coach's exercise form labelled
-                  "Coaching cues", and `WorkoutExercise.notes` is set by the
-                  program seed — and neither had ever appeared on any screen,
-                  so every cue the coach typed went straight into the database
-                  and stopped there. This is the one place they are useful:
-                  next to the sets, before the first rep.
+                  What to watch, then what to do. The video plays right here;
+                  photos stand in when there isn't one. Everything else — the
+                  written steps and the general form cues — is folded under
+                  "How to do it", because most people just want to see it
+                  done once and get going.
                 */}
-                {/* Start and finish photos, then the steps — what a client who
-                    has never done the movement needs before the first rep. */}
-                {we.exercise.imageUrls.length > 0 && (
-                  <div className="mb-3 grid grid-cols-2 gap-2">
-                    {we.exercise.imageUrls.slice(0, 2).map((src, i) => (
-                      <figure key={src} className="overflow-hidden rounded-lg border border-border/60">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={src} alt={`${we.exercise.name}, ${i === 0 ? 'start' : 'finish'}`} loading="lazy" className="aspect-[4/3] w-full object-cover" />
-                        <figcaption className="bg-secondary/40 py-1 text-center text-xs font-semibold uppercase tracking-wider text-foreground/80">
-                          {i === 0 ? 'Start' : 'Finish'}
-                        </figcaption>
-                      </figure>
-                    ))}
-                  </div>
-                )}
-                {we.exercise.instructions && (
-                  <details className="mb-3 rounded-lg border border-border/60 bg-secondary/20 px-3 py-2">
-                    <summary className="cursor-pointer text-sm font-semibold text-foreground">How to do it</summary>
-                    <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground/85">{we.exercise.instructions}</p>
-                  </details>
-                )}
-                {(we.notes || we.exercise.cues) && (
-                  <div className="mb-3 flex flex-col gap-1.5 border-l-2 border-accent/60 bg-secondary/20 py-2 pl-3 pr-2 text-sm leading-relaxed text-foreground/85">
-                    {/* Two different things: the note is what the coach said
-                        about this movement in this program, the cues are how
-                        to perform it at all. Sharing one slot meant a seeded
-                        note silently hid the cues. */}
-                    {we.notes && <p>{we.notes}</p>}
-                    {we.exercise.cues && <p>{we.exercise.cues}</p>}
-                  </div>
-                )}
+                <div className="mb-3 flex flex-col gap-3">
+                  {ytId ? (
+                    <ExerciseDemo youtubeId={ytId} name={we.exercise.name} />
+                  ) : we.exercise.imageUrls.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {we.exercise.imageUrls.slice(0, 2).map((src, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={src}
+                          src={src}
+                          alt={`${we.exercise.name}, ${i === 0 ? 'start' : 'finish'}`}
+                          loading="lazy"
+                          className="aspect-[4/3] w-full rounded-lg border border-border/60 object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {/* The coach's note for this movement in this program — the
+                      one piece of text worth reading every time. */}
+                  {we.notes && (
+                    <p className="rounded-lg border-l-4 border-accent bg-accent/10 px-3 py-2 text-base font-medium leading-snug text-foreground">
+                      {we.notes}
+                    </p>
+                  )}
+
+                  {(we.exercise.instructions || we.exercise.cues || (!ytId && demo)) && (
+                    <details className="rounded-lg border border-border/60 bg-secondary/20 px-3 py-2">
+                      <summary className="cursor-pointer text-base font-semibold text-foreground">How to do it</summary>
+                      <div className="mt-2 flex flex-col gap-2 text-base leading-relaxed text-foreground/90">
+                        {we.exercise.cues && <p className="font-medium text-foreground">{we.exercise.cues}</p>}
+                        {we.exercise.instructions && <p className="whitespace-pre-line">{we.exercise.instructions}</p>}
+                        {!ytId && demo && (
+                          <a
+                            href={demo.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-accent hover:underline"
+                          >
+                            <Play size={14} /> Find a video
+                          </a>
+                        )}
+                      </div>
+                    </details>
+                  )}
+                </div>
 
                 <ul className="flex flex-col">
                   {we.sets.map((set, i) => {
@@ -426,7 +427,7 @@ export default async function WorkoutSessionPage({ params }: { params: { workout
                                   className={cn(
                                     n === 0
                                       ? 'text-[15px] font-semibold leading-tight text-foreground'
-                                      : 'readout text-xs uppercase text-muted-foreground'
+                                      : 'readout text-xs uppercase text-foreground/75'
                                   )}
                                 >
                                   {part}
