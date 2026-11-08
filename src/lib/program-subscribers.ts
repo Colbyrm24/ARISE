@@ -252,7 +252,9 @@ export async function subscribeClient(
   weeks: number = DEFAULT_WEEKS
 ): Promise<DeployResult> {
   const result = await deployProgram({ clientId, templateId, startDate, weeks });
-  if (result.created > 0) await setActiveProgram(clientId, templateId, startDate);
+  // result.from, not startDate: a calendar program is moved to that week's
+  // Monday, and the subscription has to agree on where Day 1 is.
+  if (result.created > 0) await setActiveProgram(clientId, templateId, result.from);
   return result;
 }
 

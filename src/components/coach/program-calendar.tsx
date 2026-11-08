@@ -110,18 +110,26 @@ const KIND_ICON: Record<string, typeof Dumbbell> = {
 };
 
 const KIND_CHIP: Record<string, string> = {
-  workout: 'border-accent/50 text-foreground',
-  cardio: 'border-success/50 text-foreground',
-  rest: 'border-border/50 text-muted-foreground',
-  photos: 'border-dashed border-border text-muted-foreground',
-  bodystats: 'border-dashed border-border text-muted-foreground',
-  checkin: 'border-dashed border-border text-muted-foreground',
-  message: 'border-accent/30 italic text-muted-foreground',
+  workout: 'border-accent/70 bg-accent/20 text-foreground',
+  cardio: 'border-success/60 bg-success/15 text-foreground',
+  rest: 'border-border/60 bg-secondary/40 text-foreground/70',
+  photos: 'border-dashed border-border text-foreground/80',
+  bodystats: 'border-dashed border-border text-foreground/80',
+  checkin: 'border-dashed border-border text-foreground/80',
+  message: 'border-accent/40 italic text-foreground/80',
 };
 
 /** The day's place in the program, said the way a coach reads the grid. */
+/*
+  Programs start on a Monday (see deployCalendar), so Day 1 is always a
+  Monday and the columns can say so — the way Trainerize lays it out, and
+  the way anyone actually thinks about a training week.
+*/
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const WEEKDAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
 function dayName(dayIndex: number) {
-  return `Day ${dayIndex} · W${weekOf(dayIndex)}`;
+  return `${WEEKDAYS[(dayIndex - 1) % 7]} · Week ${weekOf(dayIndex)}`;
 }
 
 export function ProgramCalendar(props: Props) {
@@ -220,8 +228,8 @@ export function ProgramCalendar(props: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          Day 1 is the client&apos;s start date. Click a day to edit it; drag an item to move it.
+        <p className="text-sm text-foreground/80">
+          Every client starts on a Monday. Click a day to add or edit; drag a workout to move it.
         </p>
         <div className="relative">
           <Button type="button" size="sm" onClick={() => setMenu((m) => !m)} aria-expanded={menu}>
@@ -301,12 +309,13 @@ export function ProgramCalendar(props: Props) {
 
       <SystemWindow plain>
         <SystemWindowContent className={cn('p-0 transition-opacity', pending && 'opacity-80')}>
-          <div className="grid grid-cols-[26px_repeat(7,minmax(0,1fr))] border-b border-border/60 sm:grid-cols-[40px_repeat(7,minmax(0,1fr))]">
+          <div className="sticky top-0 z-10 grid grid-cols-[26px_repeat(7,minmax(0,1fr))] border-b border-border/60 bg-card sm:grid-cols-[64px_repeat(7,minmax(0,1fr))]">
             <div />
-            {[1, 2, 3, 4, 5, 6, 7].map((d) => (
-              <div key={d} className="readout px-1 py-2 text-center text-[10px] uppercase text-muted-foreground">
-                <span className="sm:hidden">{d}</span>
-                <span className="hidden sm:inline">Day {d}</span>
+            {WEEKDAYS_SHORT.map((d, i) => (
+              <div key={d} className="px-1 py-3 text-center text-xs font-bold uppercase tracking-wider text-foreground sm:text-sm">
+                <span className="sm:hidden">{d.slice(0, 1)}</span>
+                <span className="hidden sm:inline">{d}</span>
+                <span className="sr-only">{WEEKDAYS[i]}</span>
               </div>
             ))}
           </div>
@@ -314,16 +323,17 @@ export function ProgramCalendar(props: Props) {
           {weeks.map((w) => (
             <div
               key={w}
-              className="grid grid-cols-[26px_repeat(7,minmax(0,1fr))] sm:grid-cols-[40px_repeat(7,minmax(0,1fr))]"
+              className="grid grid-cols-[26px_repeat(7,minmax(0,1fr))] sm:grid-cols-[64px_repeat(7,minmax(0,1fr))]"
             >
               {/* The week label doubles as "copy this week". */}
               <button
                 type="button"
                 onClick={() => setDialog({ mode: 'copy', week: w })}
                 title={`Copy week ${w} to other weeks`}
-                className="readout flex items-start justify-center border-b border-r border-border/40 pt-1.5 text-[10px] uppercase text-muted-foreground hover:text-accent"
+                className="flex flex-col items-center justify-start gap-0.5 border-b border-r border-border/40 pt-2 text-foreground/80 hover:text-accent"
               >
-                W{w}
+                <span className="hidden text-[10px] font-semibold uppercase tracking-wider sm:block">Week</span>
+                <span className="text-sm font-bold sm:text-lg">{w}</span>
               </button>
               {[1, 2, 3, 4, 5, 6, 7].map((d) => {
                 const dayIndex = (w - 1) * 7 + d;
@@ -359,7 +369,7 @@ export function ProgramCalendar(props: Props) {
                       if (id) move(id, dayIndex);
                     }}
                     className={cn(
-                      'min-h-[72px] min-w-0 cursor-pointer border-b border-r border-border/40 p-0.5 outline-none transition-colors sm:min-h-[96px] sm:p-1.5',
+                      'min-h-[72px] min-w-0 cursor-pointer border-b border-r border-border/40 p-0.5 outline-none transition-colors hover:bg-accent/[0.05] sm:min-h-[130px] sm:p-2',
                       !inPhase && 'bg-secondary/20',
                       openDay === dayIndex && 'ring-1 ring-inset ring-accent/70',
                       picked && 'hover:bg-accent/[0.08]',
@@ -378,7 +388,7 @@ export function ProgramCalendar(props: Props) {
                       ) : (
                         <span />
                       )}
-                      <span className="readout shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                      <span className="shrink-0 text-xs tabular-nums text-foreground/50">
                         {dayIndex}
                       </span>
                     </div>
@@ -401,14 +411,14 @@ export function ProgramCalendar(props: Props) {
                               setOver(null);
                             }}
                             className={cn(
-                              'flex cursor-grab items-start gap-0.5 border px-0.5 py-0.5 text-[9px] leading-tight active:cursor-grabbing sm:items-center sm:px-1 sm:text-[10px]',
+                              'flex cursor-grab items-start gap-1 border px-0.5 py-0.5 text-[9px] font-medium leading-tight active:cursor-grabbing sm:px-2 sm:py-1.5 sm:text-sm',
                               KIND_CHIP[it.kind],
                               picked === it.id && 'border-accent bg-accent/25 text-foreground',
                               dragging === it.id && 'opacity-40'
                             )}
                           >
-                            <Icon size={9} className="mt-px hidden shrink-0 opacity-70 sm:block" />
-                            <span className="line-clamp-3 min-w-0 break-words sm:line-clamp-1 sm:truncate">{it.title}</span>
+                            <Icon size={13} className="mt-0.5 hidden shrink-0 opacity-80 sm:block" />
+                            <span className="line-clamp-3 min-w-0 break-words sm:line-clamp-2">{it.title}</span>
                           </span>
                         );
                       })}
@@ -432,7 +442,7 @@ export function ProgramCalendar(props: Props) {
         >
           <SystemWindowContent className="flex flex-col gap-4">
             <p className="text-xs text-muted-foreground">
-              Week {weekOf(openDay)}, day {weekdayOf(openDay)}
+              Week {weekOf(openDay)}, {WEEKDAYS[weekdayOf(openDay) - 1]}
               {openPhase ? ` · ${openPhase.name}` : ' · after the last phase'}
             </p>
             {openItems.length === 0 ? (
@@ -682,18 +692,44 @@ function ActivityDialog({
   return (
     <Sheet title={editing ? 'Edit activity' : 'Add activity'} onClose={onClose}>
       <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1.5">
-          <span className={labelClass}>Day</span>
-          <input
-            type="number"
-            min={1}
-            max={Math.max(totalDays, 364)}
-            inputMode="numeric"
-            value={dayIndex}
-            onChange={(e) => setDayIndex(e.target.value)}
-            className={selectClass}
-          />
-        </label>
+        {/* Week and weekday rather than a raw day number — nobody thinks
+            "day 17", they think "week 3, Wednesday". */}
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1.5">
+            <span className={labelClass}>Week</span>
+            <select
+              value={Number.isInteger(day) && day >= 1 ? weekOf(day) : 1}
+              onChange={(e) => {
+                const wd = Number.isInteger(day) && day >= 1 ? weekdayOf(day) : 1;
+                setDayIndex(String((Number(e.target.value) - 1) * 7 + wd));
+              }}
+              className={selectClass}
+            >
+              {Array.from({ length: Math.max(1, Math.ceil(Math.max(totalDays, day || 1) / 7)) + 1 }, (_, i) => i + 1).map((w) => (
+                <option key={w} value={w}>
+                  Week {w}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={labelClass}>Day</span>
+            <select
+              value={Number.isInteger(day) && day >= 1 ? weekdayOf(day) : 1}
+              onChange={(e) => {
+                const w = Number.isInteger(day) && day >= 1 ? weekOf(day) : 1;
+                setDayIndex(String((w - 1) * 7 + Number(e.target.value)));
+              }}
+              className={selectClass}
+            >
+              {WEEKDAYS.map((name, i) => (
+                <option key={name} value={i + 1}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label className="flex flex-col gap-1.5">
           <span className={labelClass}>What</span>
           <select value={kind} onChange={(e) => setKind(e.target.value)} className={selectClass}>
@@ -707,7 +743,7 @@ function ActivityDialog({
       </div>
       <p className="-mt-2 text-xs text-muted-foreground">
         {Number.isInteger(day) && day >= 1
-          ? `Week ${weekOf(day)}, day ${weekdayOf(day)}${phase ? ` · ${phase.name}` : ''}`
+          ? `Week ${weekOf(day)}, ${WEEKDAYS[weekdayOf(day) - 1]}${phase ? ` · ${phase.name}` : ''}`
           : ' '}
       </p>
 
@@ -826,18 +862,16 @@ function ActivityDialog({
                       aria-pressed={on}
                       onClick={() => setWeekdays(on ? weekdays.filter((x) => x !== d) : [...weekdays, d])}
                       className={cn(
-                        'readout h-9 w-11 border text-[11px] uppercase',
-                        on ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted-foreground'
+                        'h-10 w-14 border text-sm font-semibold',
+                        on ? 'border-accent bg-accent/20 text-foreground' : 'border-border text-foreground/70'
                       )}
                     >
-                      D{d}
+                      {WEEKDAYS_SHORT[d - 1]}
                     </button>
                   );
                 })}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Days of the program week — D1 is the client&apos;s start day (Monday, if they start on a Monday).
-              </p>
+
               <div className="flex flex-wrap items-center gap-3 text-sm">
                 <label className="flex items-center gap-2">
                   <input type="radio" checked={repeatMode === 'weeks'} onChange={() => setRepeatMode('weeks')} />
