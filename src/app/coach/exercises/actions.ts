@@ -117,3 +117,28 @@ export async function setExerciseVideo(formData: FormData) {
 
   revalidatePath('/coach/exercises');
 }
+
+/**
+ * Puts start/finish photos and how-to steps on every exercise that has a
+ * match in the public-domain library (src/lib/exercise-media.ts).
+ *
+ * One statement, so it can't half-finish on a cold serverless start. Photos
+ * are refreshed every time; steps only fill an empty instructions field, so
+ * anything the coach wrote himself is never overwritten. Safe to press twice.
+ */
+export async function loadExerciseMedia() {
+  await requireCoach();
+  const { EXERCISE_MEDIA, exerciseImageUrls, exerciseStepsText } = await import('@/lib/exercise-media');
+  const rows = Object.keys(EXERCISE_MEDIA).map((name) => ({
+    name,
+    imgs: exerciseImageUrls(name),
+    steps: exerciseStepsText(name),
+  }));
+  await prisma.$executeRaw`
+    update exercises e
+       set image_urls = v.imgs,
+           instructions = coalesce(nullif(e.instructions, ''), v.steps)
+      from jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as v(name text, imgs text[], steps text)
+     where lower(e.name) = lower(v.name)`;
+  revalidatePath('/coach/exercises');
+}

@@ -96,7 +96,7 @@ export default async function ProgramBuilderPage({
           workoutExercises: {
             orderBy: { order: 'asc' },
             include: {
-              exercise: { select: { videoUrl: true, video: { select: { thumbnailUrl: true } } } },
+              exercise: { select: { videoUrl: true, imageUrls: true, video: { select: { thumbnailUrl: true } } } },
               sets: { orderBy: { setNumber: 'asc' } },
             },
           },
@@ -479,7 +479,7 @@ type PhaseWorkout = {
     supersetGroup: string | null;
     restAfterSeconds: number | null;
     sets: { type: string; targetReps: string | null; restSeconds: number | null; tempo: string | null }[];
-    exercise: { videoUrl: string | null; video: { thumbnailUrl: string | null } | null };
+    exercise: { videoUrl: string | null; imageUrls: string[]; video: { thumbnailUrl: string | null } | null };
   }[];
 };
 

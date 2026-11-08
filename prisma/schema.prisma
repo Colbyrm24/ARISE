@@ -538,6 +538,10 @@ model Exercise {
   // ExerciseVideo above is the uploaded-and-transcoded path; this is the one
   // that gets a library of 60 movements demonstrated in an afternoon.
   videoUrl         String?  @map("video_url")
+  // Start and finish photos. Filled from the public-domain library in
+  // src/lib/exercise-media.ts; empty for movements with no honest match.
+  // Applied by hand: prisma/exercise-images-migration.sql.
+  imageUrls        String[] @default([]) @map("image_urls")
   musclePrimary    String   @map("muscle_primary")
   muscleSecondary  String[] @map("muscle_secondary")
   equipment        String

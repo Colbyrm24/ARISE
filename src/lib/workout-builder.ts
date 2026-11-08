@@ -501,12 +501,15 @@ export function equipmentFor(exercises: { equipment: string | null | undefined }
 export function thumbnailFor(exercise: {
   videoUrl?: string | null;
   video?: { thumbnailUrl: string | null } | null;
+  imageUrls?: string[] | null;
 }): string | null {
   if (exercise.videoUrl) {
     const parsed = parseVideoUrl(exercise.videoUrl);
     if (parsed?.thumbnailUrl) return parsed.thumbnailUrl;
   }
-  return exercise.video?.thumbnailUrl ?? null;
+  // A coach's own video thumbnail wins; the library photo is the fallback so
+  // a movement with no video still shows what it looks like.
+  return exercise.video?.thumbnailUrl ?? exercise.imageUrls?.[0] ?? null;
 }
 
 export type LibraryItem = {
