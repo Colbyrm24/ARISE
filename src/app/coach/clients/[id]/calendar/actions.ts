@@ -54,10 +54,24 @@ export async function removeSession(clientId: string, itemId: string) {
   return run(clientId, () => removeItem(clientId, itemId));
 }
 
-export async function setDaySession(clientId: string, day: string, workoutId: string | null) {
-  return run(clientId, () =>
-    setDay(clientId, day, workoutId ? { kind: 'workout', workoutId } : { kind: 'rest' })
-  );
+/**
+ * Puts a workout (or a rest day) on a day — and, the way Trainerize does it,
+ * on the same weekday for the next `weeks - 1` weeks too. `weeks` of 1 is just
+ * this day. Each week goes through setDay, so each one replaces only that
+ * day's unfinished session and leaves its cardio and reminders alone.
+ */
+export async function setDaySession(clientId: string, day: string, workoutId: string | null, weeks = 1) {
+  const n = Number.isInteger(weeks) ? Math.min(52, Math.max(1, weeks)) : 1;
+  return run(clientId, async () => {
+    const choice = workoutId ? ({ kind: 'workout', workoutId } as const) : ({ kind: 'rest' } as const);
+    for (let k = 0; k < n; k++) {
+      const d = new Date(`${day}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + 7 * k);
+      const r = await setDay(clientId, d.toISOString().slice(0, 10), choice);
+      if (!r.ok) return r;
+    }
+    return { ok: true, message: n === 1 ? 'Saved.' : `Added for ${n} weeks.` } as EditResult;
+  });
 }
 
 export async function pushBack(clientId: string, from: string, days: number) {

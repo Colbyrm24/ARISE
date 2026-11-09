@@ -57,7 +57,7 @@ type Props = {
   workouts: { id: string; name: string }[];
   moveSession: (clientId: string, itemId: string, to: string) => Promise<Result>;
   removeSession: (clientId: string, itemId: string) => Promise<Result>;
-  setDaySession: (clientId: string, day: string, workoutId: string | null) => Promise<Result>;
+  setDaySession: (clientId: string, day: string, workoutId: string | null, weeks?: number) => Promise<Result>;
   pushBack: (clientId: string, from: string, days: number) => Promise<Result>;
 };
 
@@ -96,7 +96,14 @@ export function ScheduleBoard({
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
   const [dayChoice, setDayChoice] = useState('');
+  const [repeatWeeks, setRepeatWeeks] = useState('1');
   const [shiftDays, setShiftDays] = useState('1');
+
+  // The day's panel sits under the calendar; bring it into view when a day
+  // is clicked so it doesn't open off-screen.
+  useEffect(() => {
+    if (openDay) document.getElementById('day-panel')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [openDay]);
 
   // A refresh after a save hands down the server's truth; take it.
   useEffect(() => setItems(serverItems), [serverItems]);
@@ -335,6 +342,7 @@ export function ScheduleBoard({
 
       {openDay && (
         <SystemWindow
+          id="day-panel"
           title={longDate(openDay)}
           meta={
             <button
@@ -349,7 +357,7 @@ export function ScheduleBoard({
         >
           <SystemWindowContent className="flex flex-col gap-5">
             <div className="flex flex-col gap-2">
-              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="text-sm font-bold uppercase tracking-wider text-white/80">
                 On this day
               </span>
               {openItems.length === 0 ? (
@@ -397,63 +405,95 @@ export function ScheduleBoard({
               )}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
-                Make this day
-              </span>
-              <div className="flex gap-2">
-                <select
-                  value={dayChoice}
-                  onChange={(e) => setDayChoice(e.target.value)}
-                  className={selectClass}
-                >
-                  <option value="">— pick —</option>
-                  {workouts.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                  <option value="__rest">Rest day</option>
-                </select>
-                <Button
+            {/*
+              Add a training day, Trainerize-style: pick the workout, pick how
+              long it repeats on this weekday, one press. "Just this day" is
+              the old single-day edit.
+            */}
+            <div className="flex flex-col gap-3 rounded-xl border border-orange-400/40 bg-orange-500/[0.07] p-4">
+              <span className="text-base font-bold text-white">Add a training day</span>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_auto] sm:items-end">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold text-white">Workout</span>
+                  <select
+                    value={dayChoice}
+                    onChange={(e) => setDayChoice(e.target.value)}
+                    className={cn(selectClass, 'h-11 text-sm normal-case tracking-normal')}
+                  >
+                    <option value="">Pick a workout…</option>
+                    {workouts.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                      </option>
+                    ))}
+                    <option value="__rest">Rest day</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold text-white">Repeat</span>
+                  <select
+                    value={repeatWeeks}
+                    onChange={(e) => setRepeatWeeks(e.target.value)}
+                    className={cn(selectClass, 'h-11 text-sm normal-case tracking-normal')}
+                  >
+                    <option value="1">Just this day</option>
+                    {[2, 3, 4, 6, 8, 10, 12, 16, 20, 26, 52].map((n) => (
+                      <option key={n} value={n}>
+                        Every {new Date(`${openDay}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })} for {n} weeks
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
                   type="button"
-                  size="sm"
-                  variant="outline"
                   disabled={!dayChoice || pending}
                   onClick={() => {
                     const day = openDay;
+                    const weeks = Number(repeatWeeks) || 1;
                     const workoutId = dayChoice === '__rest' ? null : dayChoice;
                     const label = workoutId
                       ? workouts.find((w) => w.id === workoutId)?.name ?? 'Workout'
                       : 'Rest day';
-                    // Only the day's session is replaced; its cardio and
+                    const dates = Array.from({ length: weeks }, (_, k) => {
+                      const d = new Date(`${day}T00:00:00Z`);
+                      d.setUTCDate(d.getUTCDate() + 7 * k);
+                      return d.toISOString().slice(0, 10);
+                    });
+                    // Only each day's session is replaced; its cardio and
                     // reminders stay, the same as setDay on the server.
                     const next = [
-                      ...items.filter((i) => !(i.date === day && !i.done && SESSION_KINDS.includes(i.kind))),
-                      {
-                        id: `pending-${day}`,
-                        date: day,
+                      ...items.filter(
+                        (i) => !(dates.includes(i.date) && !i.done && SESSION_KINDS.includes(i.kind))
+                      ),
+                      ...dates.map((date) => ({
+                        id: `pending-${date}`,
+                        date,
                         kind: workoutId ? 'workout' : 'rest',
                         label,
                         done: false,
-                      },
+                      })),
                     ];
-                    commit(next, () => setDaySession(clientId, day, workoutId));
+                    commit(next, () => setDaySession(clientId, day, workoutId, weeks));
                     setDayChoice('');
+                    setRepeatWeeks('1');
                   }}
+                  className="chip chip-workout h-11 px-5 text-sm uppercase tracking-wider disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Set
-                </Button>
+                  Add
+                </button>
               </div>
+              <p className="text-sm text-white/75">
+                Replaces any unfinished workout already on those days. Cardio and check-ins on them stay.
+              </p>
               {workouts.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Workouts appear here once they&apos;re on a program.
+                <p className="text-sm text-white/75">
+                  Start them on a program first — its workouts show up here.
                 </p>
               )}
             </div>
 
             <div className="flex flex-col gap-2">
-              <span className="readout text-[10px] uppercase tracking-wider text-muted-foreground">
+              <span className="text-sm font-bold uppercase tracking-wider text-white/80">
                 Missed a day?
               </span>
               <div className="flex flex-wrap items-center gap-2">
