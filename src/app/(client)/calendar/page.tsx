@@ -5,6 +5,8 @@ import { requireClient } from '@/lib/auth';
 import { todayFor } from '@/lib/day';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { cn } from '@/lib/utils';
+import { StepsChip } from '@/components/steps-chip';
+import { STEP_FLOOR } from '@/lib/steps';
 import {
   WEEKDAYS,
   dayKey,
@@ -50,7 +52,7 @@ export default async function ClientCalendarPage({
   const { year, month } = parseMonth(searchParams?.m);
   const { gridStart, gridEnd, days } = monthGrid(year, month);
 
-  const [scheduled, nutrition, weights] = await Promise.all([
+  const [scheduled, nutrition, weights, stepLogs] = await Promise.all([
     // Every item on each day — a lift, a swim and a photo reminder all show.
     // Messages are the exception: they arrive in Messages on the day, and a
     // chip announcing one in advance would spoil it.
@@ -71,7 +73,12 @@ export default async function ClientCalendarPage({
           select: { date: true, weight: true },
         })
       : Promise.resolve([] as { date: Date; weight: unknown }[]),
+    prisma.stepLog.findMany({
+      where: { clientId: user.id, date: { gte: gridStart, lte: gridEnd } },
+      select: { date: true, steps: true },
+    }),
   ]);
+  const stepsByDay = new Map(stepLogs.map((l) => [dayKey(l.date), l.steps] as const));
 
   type DaySession = { id: string; kind: string; label: string; done: boolean };
   const sessionsByDay = new Map<string, DaySession[]>();
@@ -258,6 +265,9 @@ export default async function ClientCalendarPage({
                         </span>
                       </span>
                     ))}
+
+                    {/* 12–15k every day; turns to a tick once they've hit it. */}
+                    <StepsChip met={(stepsByDay.get(k) ?? 0) >= STEP_FLOOR} className="hidden sm:flex" />
 
                     {calories !== undefined && (
                       <span className="readout hidden truncate text-[10px] text-muted-foreground sm:block">

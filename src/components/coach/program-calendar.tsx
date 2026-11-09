@@ -21,6 +21,7 @@ import {
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { StepsChip } from '@/components/steps-chip';
 import {
   CALENDAR_KINDS,
   KIND_LABELS,
@@ -422,6 +423,7 @@ export function ProgramCalendar(props: Props) {
                           </span>
                         );
                       })}
+                      <StepsChip target={Math.max(0, ...list.map((it) => it.stepTarget ?? 0))} />
                     </div>
                   </div>
                 );
