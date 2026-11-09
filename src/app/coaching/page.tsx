@@ -118,7 +118,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
             </div>
             <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {results.mode === 'real'
-                ? results.items.map((r, i) => <ResultCard key={`${r.name}-${i}`} result={r} />)
+                ? results.items.map((r, i) => <ResultCard key={`${r.photo ?? r.name}-${i}`} result={r} />)
                 : Array.from({ length: results.slots }, (_, i) => <ResultCard key={i} />)}
             </div>
           </div>
@@ -337,6 +337,14 @@ function ResultCard({ result }: { result?: ClientResult }) {
           Example
         </span>
       )}
+      {result?.photo ? (
+        // One side-by-side image, exactly as the client's transformation was saved.
+        <div className="relative">
+          <PhotoSlot src={result.photo} alt={result.name ? `${result.name} before and after` : 'Client before and after'} placeholder="before and after" className="aspect-square" />
+          <span className="absolute bottom-2 left-2 rounded-[999px] bg-background/85 px-2 py-0.5 text-xs font-medium text-foreground">Before</span>
+          <span className="absolute bottom-2 right-2 rounded-[999px] bg-accent px-2 py-0.5 text-xs font-bold text-accent-foreground">After</span>
+        </div>
+      ) : (
       <div className="grid grid-cols-2 gap-2">
         {(['before', 'after'] as const).map((side) => (
           <div key={side} className="relative">
@@ -346,8 +354,8 @@ function ResultCard({ result }: { result?: ClientResult }) {
               </div>
             ) : (
               <PhotoSlot
-                src={side === 'before' ? result.beforePhoto : result.afterPhoto}
-                alt={`${result.name} ${side}`}
+                src={(side === 'before' ? result.beforePhoto : result.afterPhoto) ?? ''}
+                alt={`${result.name ?? 'Client'} ${side}`}
                 placeholder={`${side} photo`}
                 className="aspect-[3/4]"
               />
@@ -358,6 +366,8 @@ function ResultCard({ result }: { result?: ClientResult }) {
           </div>
         ))}
       </div>
+      )}
+      {(example || result.result || result.name || result.about) && (
       <div className="px-3 pb-4 pt-5">
         <p className={`text-2xl font-extrabold leading-tight tracking-tight ${example ? 'text-foreground/30' : 'text-accent glow-soft'}`}>
           {example ? 'Result line' : result.result}
@@ -366,6 +376,7 @@ function ResultCard({ result }: { result?: ClientResult }) {
         <p className="mt-0.5 text-sm text-muted-foreground">{example ? 'Age, job, life situation' : result.about}</p>
         {!example && result.timeframe && <p className="mt-3 text-xs text-muted-foreground">{result.timeframe}</p>}
       </div>
+      )}
     </article>
   );
 }

@@ -52,8 +52,8 @@ const real: ClientResult = {
   result: 'Lost 30 lbs',
   name: 'A',
   about: '40, engineer',
-  beforePhoto: '',
-  afterPhoto: '',
+  beforePhoto: '/b.jpg',
+  afterPhoto: '/a.jpg',
 };
 
 test('real results always win over placeholders', () => {
@@ -69,9 +69,17 @@ test('with no results the section is example slots or hidden, never invented peo
   assert.deepEqual(resultsView({ results: [], showResultPlaceholders: false }), { mode: 'hidden' });
 });
 
-test('a half-filled result entry is dropped rather than shown', () => {
-  const v = resultsView({ results: [{ ...real, name: ' ' }], showResultPlaceholders: false });
+test('a result without a picture is dropped rather than shown', () => {
+  const v = resultsView({
+    results: [{ ...real, photo: undefined, beforePhoto: '', afterPhoto: '' }],
+    showResultPlaceholders: false,
+  });
   assert.equal(v.mode, 'hidden');
+});
+
+test('a side-by-side photo alone is a real result; the words are optional', () => {
+  const v = resultsView({ results: [{ photo: '/results/result-1.jpg' }], showResultPlaceholders: true });
+  assert.equal(v.mode, 'real');
 });
 
 test('only http(s) and /public paths reach an img src', () => {
