@@ -77,7 +77,10 @@ export const PLACEHOLDER_SLOTS = 3;
 export function resultsView(
   content: Pick<LandingContent, 'results' | 'showResultPlaceholders'>
 ): ResultsView {
-  const items = content.results.filter((r) => r.result.trim() && r.name.trim());
+  // A result counts once it has a picture to show; the words are optional.
+  const items = content.results.filter(
+    (r) => safeImage(r.photo) || (safeImage(r.beforePhoto) && safeImage(r.afterPhoto))
+  );
   if (items.length > 0) return { mode: 'real', items };
   return content.showResultPlaceholders
     ? { mode: 'placeholder', slots: PLACEHOLDER_SLOTS }

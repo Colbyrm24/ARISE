@@ -25,14 +25,17 @@ export type HeadlineParts = {
 };
 
 export type ClientResult = {
-  /** The big line, e.g. "Lost 32 lbs" or "Down 4 inches, up 40 lbs on bench". */
-  result: string;
-  /** First name only. */
-  name: string;
-  /** Who they are: age, job, life situation. One short line. */
-  about: string;
-  beforePhoto: string;
-  afterPhoto: string;
+  /** The big line, e.g. "Lost 32 lbs" or "Down 4 inches, up 40 lbs on bench". Optional. */
+  result?: string;
+  /** First name only. Optional. */
+  name?: string;
+  /** Who they are: age, job, life situation. One short line. Optional. */
+  about?: string;
+  /** One side-by-side before/after image (how most transformations are saved). */
+  photo?: string;
+  /** Or two separate photos. */
+  beforePhoto?: string;
+  afterPhoto?: string;
   /** Optional: how long it took, e.g. "16 weeks". */
   timeframe?: string;
 };
@@ -137,7 +140,10 @@ export const LANDING: LandingContent = {
     { value: '6 months', label: 'lean, then keep it' },
   ],
 
-  results: [],
+  // Real client transformations. Add a name, result line and "about" to any
+  // of these when you have them — e.g. result: 'Lost 32 lbs', name: 'Mike',
+  // about: '44, owns a roofing company'.
+  results: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ photo: `/results/result-${n}.jpg` })),
 
   // Real clients only. Example of one entry:
   // {
@@ -147,7 +153,7 @@ export const LANDING: LandingContent = {
   //   videoUrl: 'https://youtube.com/…',   // optional
   // },
   testimonials: [],
-  showResultPlaceholders: true,
+  showResultPlaceholders: false,
 
   forYou: [
     "You're 28–50, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
@@ -188,7 +194,7 @@ export const LANDING: LandingContent = {
       "Most coaches get you lean with a strict meal plan. It works for 12 weeks, then real life shows up and it all comes back. I do it differently. You get lean eating the foods you love, so by the time you see your abs you already know how to keep them.",
       'The six-pack is the goal. Walking into any room, any restaurant and any vacation feeling like that guy, for the rest of your life, is the real win.',
     ],
-    photo: '',
+    photo: '/colby.jpg',
   },
 
   faq: [
