@@ -6,6 +6,7 @@ import { ArrowRight, Check, GripVertical, X } from 'lucide-react';
 import { SystemWindow, SystemWindowContent } from '@/components/ui/system-window';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { StepsChip } from '@/components/steps-chip';
 import { WEEKDAYS } from '@/lib/month-grid';
 import { planMove, SESSION_KINDS } from '@/lib/schedule-move';
 import { orderDayItems } from '@/lib/program-calendar';
@@ -323,6 +324,8 @@ export function ScheduleBoard({
                         <span className="line-clamp-3 break-words sm:line-clamp-1 sm:truncate">{s.label}</span>
                       </span>
                     ))}
+
+                    <StepsChip />
 
                     {day.food && (
                       <span className="readout block truncate text-[10px] text-muted-foreground">

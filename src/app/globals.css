@@ -969,3 +969,11 @@ body::before {
   background: hsl(268 70% 55% / 0.2);
   border: 1px dashed hsl(268 85% 72% / 0.7);
 }
+/* Steps: a softer green than cardio so the two never blur together — an
+   outline and tint rather than a solid fill, on every day of every calendar. */
+.chip-steps {
+  background: hsl(145 70% 45% / 0.16);
+  border: 1px solid hsl(145 75% 55% / 0.65);
+  color: hsl(145 85% 82%);
+  text-shadow: none;
+}

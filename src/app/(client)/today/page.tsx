@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { stepGoalFor } from '@/lib/steps';
 import { Check, ChevronRight, MessageCircle } from 'lucide-react';
 import { requireEntitledClient } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -412,7 +413,9 @@ export default async function TodayPage({
     legitimately ask for more walking than a leg day. A standing steps habit is
     the fallback. Null when neither is set, which renders as a plain count.
   */
-  const stepGoal = dayStepTarget ?? parseTarget(stepsHabit?.targetValue) ?? null;
+  // Never under 12k: the floor every client walks to, whatever a program or
+  // habit says (see @/lib/steps).
+  const stepGoal = stepGoalFor(dayStepTarget ?? parseTarget(stepsHabit?.targetValue));
 
   // A rest day has no session to finish, so its bar says so rather than
   // sitting at 0/1 all day looking like something missed.
