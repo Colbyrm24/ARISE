@@ -2,6 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
+import { estimateMealFromPhoto } from '@/lib/meal-estimate';
+import { downloadMealPhoto } from '@/lib/meal-photos';
 import { requireCoach } from '@/lib/auth';
 import { coachOwnsClient } from '@/lib/coach-guard';
 import { notify } from '@/lib/notifications';
@@ -232,6 +235,58 @@ export async function discardMeal(formData: FormData) {
   if (log.photoPath) {
     const { removeMealPhoto } = await import('@/lib/meal-photos');
     await removeMealPhoto(log.photoPath);
+  }
+  refresh(log.clientId);
+}
+
+/**
+ * Sends a photo the reader couldn't read back through it.
+ *
+ * For the logs that failed for reasons that weren't the photo's fault — the
+ * reader not being switched on yet, a timeout, a bad model id — so the coach
+ * gets numbers to confirm instead of typing them in himself. Not offered for
+ * "not food" or a whole-day screenshot, where reading it again changes nothing.
+ *
+ * On success the row becomes an ordinary estimate: the numbers count toward
+ * the client's day and the card turns into the usual confirm/correct one.
+ */
+export async function rereadMeal(formData: FormData) {
+  const coach = await requireCoach();
+  const log = await reviewableLog(coach.id, formData.get('logId') as string | null);
+  if (!log || log.reviewState !== 'failed' || !log.photoPath) return;
+
+  const ext = log.photoPath.split('.').pop()?.toLowerCase();
+  const mediaType =
+    ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : null;
+  if (!mediaType) return;
+
+  const photo = await downloadMealPhoto(log.photoPath);
+  if (!photo) return;
+
+  const description = log.name && log.name !== 'Meal photo' ? log.name : null;
+  const result = await estimateMealFromPhoto({ base64: photo.toString('base64'), mediaType, description });
+
+  if (!result.ok) {
+    await prisma.nutritionLog.update({
+      where: { id: log.id },
+      data: { estimate: { failed: result.reason, message: result.message } },
+    });
+  } else {
+    const e = result.estimate;
+    await prisma.nutritionLog.update({
+      where: { id: log.id },
+      data: {
+        name: e.name,
+        calories: e.calories,
+        protein: e.protein,
+        carbs: e.carbs,
+        fat: e.fat,
+        reviewState: 'estimated',
+        estimate: e as unknown as Prisma.InputJsonValue,
+      },
+    });
+    revalidatePath('/nutrition');
+    revalidatePath('/today');
   }
   refresh(log.clientId);
 }

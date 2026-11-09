@@ -45,6 +45,14 @@ export async function uploadMealPhoto(path: string, file: File) {
   return error?.message ?? null;
 }
 
+/** The photo's bytes, for reading it again. Null when it's gone. */
+export async function downloadMealPhoto(path: string): Promise<Buffer | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.storage.from(MEAL_PHOTO_BUCKET).download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
+
 export async function removeMealPhoto(path: string) {
   const supabase = createAdminClient();
   await supabase.storage.from(MEAL_PHOTO_BUCKET).remove([path]);

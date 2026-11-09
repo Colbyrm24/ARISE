@@ -11,7 +11,10 @@ import { Button } from '@/components/ui/button';
 import { macroReply, askIfThatsAll } from '@/lib/meal-reply';
 import type { DayContext } from '@/lib/day-shape';
 import { cn } from '@/lib/utils';
-import { confirmMeal, correctMeal, discardMeal } from './actions';
+import { confirmMeal, correctMeal, discardMeal, rereadMeal } from './actions';
+
+// A re-read waits on the photo model, the same as the client's upload does.
+export const maxDuration = 60;
 
 export const dynamic = 'force-dynamic';
 
@@ -219,7 +222,7 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                 ) : meal.failureReason === 'unavailable' ? (
                   <>
                     That was the reader failing, not the photo — the client did nothing wrong.
-                    Nothing was counted; put the numbers in below if you can read it yourself.
+                    Photo reading is on now, so press Read it again.
                   </>
                 ) : meal.failureReason === 'not-food' ? (
                   <>Nothing was counted. Worth asking what they meant to send.</>
@@ -228,6 +231,14 @@ function MealCard({ meal }: { meal: PendingMeal }) {
                 )}
               </p>
             </div>
+          ) : null}
+          {meal.failure && meal.failureReason !== 'day-summary' && meal.failureReason !== 'not-food' && meal.photoUrl ? (
+            <form action={rereadMeal}>
+              <input type="hidden" name="logId" value={meal.id} />
+              <Button type="submit" size="sm" className="w-full sm:w-auto">
+                Read it again
+              </Button>
+            </form>
           ) : (
             est && (
               <>
