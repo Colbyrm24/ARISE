@@ -116,7 +116,7 @@ export const LANDING: LandingContent = {
   },
   subheadline:
     'Private 1-on-1 coaching with me. We get you in the best shape of your life, then I teach you how to stay there while you still have dessert, drinks and dinners out.',
-  videoUrl: '',
+  videoUrl: 'https://www.youtube.com/watch?v=1PnVesMmLto',
   videoPoster: '',
   applyLabel: 'Apply now',
   applyNote: 'Takes about 2 minutes. I read every one myself.',
