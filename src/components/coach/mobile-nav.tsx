@@ -39,7 +39,7 @@ export function CoachMobileNav({ counts = {} }: { counts?: BadgeCounts }) {
       >
         <Menu size={18} />
         {anyBacklog && (
-          <span className="absolute -right-1 -top-1 h-2 w-2 bg-accent shadow-[0_0_8px_hsl(var(--accent)/0.8)]" />
+          <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgb(249_115_22/0.8)]" />
         )}
       </button>
 
@@ -87,7 +87,7 @@ export function CoachMobileNav({ counts = {} }: { counts?: BadgeCounts }) {
                       <Icon size={17} className={active ? 'glow-ink text-accent' : undefined} />
                       <span className="flex-1">{item.label}</span>
                       {count > 0 && (
-                        <span className="readout border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-xs leading-none text-accent">
+                        <span className="rounded-full bg-gradient-to-br from-orange-500 to-amber-500 px-2 py-0.5 text-xs font-bold leading-none text-white shadow-[0_0_10px_rgb(249_115_22/0.55)]">
                           {count > 99 ? '99+' : count}
                         </span>
                       )}
