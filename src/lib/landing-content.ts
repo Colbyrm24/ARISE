@@ -190,9 +190,9 @@ export const LANDING: LandingContent = {
   about: {
     heading: "I'm Colby.",
     paragraphs: [
-      "I coach men who are great at everything except taking care of themselves. Crushing it at work, solid with their people, and quietly sick of how they look with their shirt off.",
-      "Most coaches get you lean with a strict meal plan. It works for 12 weeks, then real life shows up and it all comes back. I do it differently. You get lean eating the foods you love, so by the time you see your abs you already know how to keep them.",
-      'The six-pack is the goal. Walking into any room, any restaurant and any vacation feeling like that guy, for the rest of your life, is the real win.',
+      "I help guys see their abs for the first time while building muscle at the same time. And you don't have to live some strict, miserable life to get there.",
+      "You still go out to eat. You still have a drink with the boys and dessert with your family. You still have time for your kids, your wife and your business. Your life doesn't stop because you're getting in shape.",
+      "After the first month, things start happening faster than you'd ever imagine. Most of my guys never look back, because once it's set up, everything just runs.",
     ],
     photo: '/colby.jpg',
   },
