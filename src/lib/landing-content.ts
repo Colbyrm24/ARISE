@@ -118,7 +118,7 @@ export const LANDING: LandingContent = {
     after: ', and keep it for life, without giving up the food they love',
   },
   subheadline:
-    'Private 1-on-1 coaching with me. We get you in the best shape of your life, then I teach you how to stay there while you still have dessert, drinks and dinners out.',
+    'Private 1-on-1 coaching with me. I get you in the best shape of your life, then I teach you how to stay there while you still have dessert, drinks and dinners out.',
   videoUrl: 'https://www.youtube.com/watch?v=1PnVesMmLto',
   videoPoster: '',
   applyLabel: 'Apply now',
@@ -175,7 +175,7 @@ export const LANDING: LandingContent = {
     },
     {
       title: 'Strategy call',
-      body: "We get on a call. If I can help you, I'll show you exactly how. If I can't, I'll tell you.",
+      body: "You and I get on a call. If I can help you, I'll show you exactly how. If I can't, I'll tell you.",
     },
     {
       title: 'Get lean, in the ARISE app',
@@ -183,7 +183,7 @@ export const LANDING: LandingContent = {
     },
     {
       title: 'Learn to keep it for life',
-      body: "I'm in touch with you every single day, and if you need a call, we jump on one. I adjust everything as you go, and I teach you how to eat out, drink and enjoy dessert without losing what you built. So you never have to start over again.",
+      body: "I'm in touch with you every single day, and if you need a call, I jump on one with you. I adjust everything as you go, and I teach you how to eat out, drink and enjoy dessert without losing what you built. So you never have to start over again.",
     },
   ],
 
@@ -226,7 +226,7 @@ export const LANDING: LandingContent = {
     {
       question: 'How much does it cost?',
       answer:
-        "This is premium 1-on-1 coaching and it's a real investment. We go through it on the call, once I know exactly what you need.",
+        "This is premium 1-on-1 coaching and it's a real investment. I'll go through it with you on the call, once I know exactly what you need.",
     },
   ],
 
