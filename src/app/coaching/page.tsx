@@ -55,7 +55,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
         <div aria-hidden className="landing-grid pointer-events-none absolute inset-0" />
         <div className={`${wrap} relative flex flex-col items-center text-center`}>
           <p className="landing-rise rounded-[999px] border border-accent/40 bg-accent/[0.06] px-4 py-1.5 text-xs font-medium text-accent glow-soft shadow-[0_0_24px_-6px_hsl(var(--accent)/0.6)]">
-            Private 1-on-1 coaching for men 28–50
+            Private 1-on-1 coaching for men 30+
           </p>
 
           <h1
