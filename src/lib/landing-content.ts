@@ -183,7 +183,7 @@ export const LANDING: LandingContent = {
     },
     {
       title: 'Learn to keep it for life',
-      body: "Weekly check-ins with me. I adjust everything as you go, and I teach you how to eat out, drink and enjoy dessert without losing what you built. So you never have to start over again.",
+      body: "I'm in touch with you every single day, and if you need a call, we jump on one. I adjust everything as you go, and I teach you how to eat out, drink and enjoy dessert without losing what you built. So you never have to start over again.",
     },
   ],
 
@@ -206,7 +206,7 @@ export const LANDING: LandingContent = {
     {
       question: 'How much time does this take each week?',
       answer:
-        'Most clients train 3–5 times a week, 45–75 minutes a session. Your plan is built around the time you actually have, not the time you wish you had.',
+        "Three days a week, about 30 minutes a session. That's all it takes to build the most muscle you can. Most people get this wrong and think more hours in the gym means more results. It doesn't. Short, hard, focused sessions do.",
     },
     {
       question: 'Do I need a gym?',
@@ -216,12 +216,12 @@ export const LANDING: LandingContent = {
     {
       question: "I'm in my 40s. Is it too late to get abs?",
       answer:
-        "No. Plenty of men get in the best shape of their life after 40. It takes a plan built for where your body is now, and someone adjusting it every week. That's my job.",
+        "No. Plenty of men get in the best shape of their life after 40. It takes a plan built for where your body is now, and someone adjusting it every day. That's my job.",
     },
     {
       question: 'How is this different from a program or an app?',
       answer:
-        "A program can't see you. I can. Every week I look at your check-in, your training and your numbers, and change what isn't working. You talk to me, not a bot.",
+        "A program can't see you. I can. I talk with you every single day, and whenever you need a call, I'm on it. There's no team and no assistant coach. It's just me and you, one on one, until you hit your goal. There's no way you fail.",
     },
     {
       question: 'How much does it cost?',
@@ -232,7 +232,7 @@ export const LANDING: LandingContent = {
 
   finalHeadline: 'See your abs. Keep them for life.',
   finalBody:
-    "Apply now. If it's a fit, you'll hear from me within 24 hours. If it isn't, I'll tell you straight.",
+    "Apply now. If it's a fit, you'll hear from me within 24 hours.",
 
   instagramUrl: 'https://www.instagram.com/colby.mullinss/',
   calendlyUrl: 'https://calendly.com/colbymullins24/new-meeting',
