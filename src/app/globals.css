@@ -80,6 +80,12 @@
     @apply border-border;
   }
   html {
+    /*
+      One notch up from the browser's 16px. Every size in the app is in rem,
+      so this lifts all of it together — the text was a touch small to read
+      comfortably at arm's length on a phone or across a desk.
+    */
+    font-size: 106.25%;
     color-scheme: dark;
   }
   /*
