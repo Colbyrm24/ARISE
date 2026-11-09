@@ -370,7 +370,7 @@ function BookCall({ name, email, calendlyUrl }: { name: string; email: string; c
           Grab a time for your call{first ? `, ${first}` : ''}.
         </h1>
         <p className="mx-auto mt-4 max-w-md text-base text-muted-foreground">
-          Pick whatever works this week and we&apos;ll get the ball rolling together.
+          Pick whatever works this week and I&apos;ll get the ball rolling with you.
         </p>
       </div>
       <div className="mt-8 flex-1 overflow-hidden rounded-[20px] border border-border bg-white">
