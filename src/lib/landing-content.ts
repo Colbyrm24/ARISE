@@ -110,12 +110,12 @@ export const LANDING: LandingContent = {
   coachName: 'Colby Mullins',
   pageTitle: '1-on-1 Coaching · Colby Mullins',
   pageDescription:
-    'Private 1-on-1 coaching for successful men 28–50. Get lean enough to see your abs, then keep them for life while still eating the food you love.',
+    'Private 1-on-1 coaching for men 30+. Get your six-pack while still eating the foods you love, and keep it for life.',
 
   headline: {
-    before: 'How successful men 28–50 get lean enough to ',
-    highlight: 'see their six-pack',
-    after: ', and keep it for life, without giving up the food they love',
+    before: 'How men 30+ get their ',
+    highlight: 'six-pack',
+    after: ' while still eating the foods they love',
   },
   subheadline:
     'Private 1-on-1 coaching with me. I get you in the best shape of your life, then I teach you how to stay there while you still have dessert, drinks and dinners out.',
@@ -156,7 +156,7 @@ export const LANDING: LandingContent = {
   showResultPlaceholders: false,
 
   forYou: [
-    "You're 28–50, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
+    "You're 30+, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
     'You want to see your abs. Not someday. For real, and for good.',
     "You don't want to live on chicken and rice. You want to get shredded and still have the steak dinner, the drinks and the dessert.",
     "You have the money to invest in doing this right, and you'll do the work when someone builds the plan and holds you to it.",
