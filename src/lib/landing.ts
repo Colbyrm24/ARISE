@@ -124,7 +124,7 @@ export function calendlyLink(base: string, name: string, email: string, opts: { 
   if (url.protocol !== 'https:' || !/(^|\.)calendly\.com$/i.test(url.hostname)) return '';
   if (opts.embed) {
     url.searchParams.set('embed_type', 'Inline');
-    url.searchParams.set('embed_domain', 'arise-eta-six.vercel.app');
+    url.searchParams.set('embed_domain', 'www.colbymullinscoaching.com');
   }
   url.searchParams.set('hide_gdpr_banner', '1');
   if (name.trim()) url.searchParams.set('name', name.trim());
