@@ -86,6 +86,8 @@ const SYSTEM = `You read photographs of food for a 1-on-1 fitness coach and retu
 
 The coach's clients are hitting daily calorie and protein targets, so your numbers get used, not admired. Follow these rules exactly.
 
+Always answer by calling the \`${TOOL_NAME}\` tool, exactly once — never in plain text, even when the photo isn't food or can't be read (the tool has fields for that).
+
 COMMIT TO A NUMBER. One figure per macro, never a range and never a hedge. If a portion is ambiguous, pick the most likely one and say which one you picked in the note. "About 600-800 calories" is a non-answer; "710 calories, assuming an 8oz sirloin" is an answer someone can correct.
 
 SAY WHAT YOU ASSUMED. Every item carries the portion you assumed for it. The coach corrects portions, not totals — they can only do that if they can see what you used.
@@ -313,11 +315,14 @@ export async function estimateMealFromPhoto(input: {
       model: AI_MODEL,
       max_tokens: 1200,
       system: SYSTEM,
-      // Forcing the tool is what makes this a data call rather than a chat.
-      // Without it the model sometimes answers in prose, and prose has to be
-      // parsed, and a parser is one more thing that can fail at 6am.
+      // The tool is what makes this a data call rather than a chat. Current
+      // models refuse a FORCED tool_choice ("type tool and any are not
+      // supported for this model" — a 400 on every photo), so it is offered
+      // with auto and the prompt tells it to always answer through the tool.
+      // A reply with no tool call still falls to 'unreadable' below, never a
+      // guessed number.
       tools: [TOOL],
-      tool_choice: { type: 'tool', name: TOOL_NAME },
+      tool_choice: { type: 'auto' },
       messages: [
         {
           role: 'user',
