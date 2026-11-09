@@ -34,7 +34,7 @@ export const anthropic = new Anthropic({
   could silently drift onto a different model than the chat. The env var is
   there so a model can be swapped from the dashboard without a deploy.
 */
-export const AI_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5';
+export const AI_MODEL = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-5-5';
 
 /** False when no key is configured, so callers can degrade instead of erroring. */
 export function aiConfigured() {
