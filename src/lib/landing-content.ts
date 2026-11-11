@@ -156,10 +156,10 @@ export const LANDING: LandingContent = {
   showResultPlaceholders: false,
 
   forYou: [
-    "You're 30+, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
+    "You're 25–50, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
     'You want to see your abs. Not someday. For real, and for good.',
     "You don't want to live on chicken and rice. You want to get shredded and still have the steak dinner, the drinks and the dessert.",
-    "You have the money to invest in doing this right, and you'll do the work when someone builds the plan and holds you to it.",
+    "You want someone hands-on with you every step of the way, not someone who sells you a course and leaves you to figure it out.",
   ],
   notForYou: [
     'You want a 12-week crash diet and then back to how you were.',
