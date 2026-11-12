@@ -161,11 +161,14 @@ export const LANDING: LandingContent = {
     "You don't want to live on chicken and rice. You want to get shredded and still have the steak dinner, the drinks and the dessert.",
     "You want someone hands-on with you every step of the way, not someone who sells you a course and leaves you to figure it out.",
   ],
+  // Shown as "My promise to you": nothing here turns anyone away. Each line is
+  // something Colby commits to, so a serious buyer reads it as certainty.
   notForYou: [
-    'You want a 12-week crash diet and then back to how you were.',
-    "You're looking for the cheapest option, not the one that works.",
-    "You won't send a check-in when nobody's forcing you.",
-    "You want to be told it's easy. It isn't. It's simple.",
+    "You'll never be guessing. Every workout and every meal is laid out for you.",
+    "You'll never be left on read. I text you back myself, 24/7.",
+    "You'll never have to give up the foods you love to get there.",
+    "If something isn't working, I change it that same day. You don't lose weeks.",
+    "Show up and do the work, and I'll make sure you get there.",
   ],
 
   // "What you get" — the offer, not the process. The call covers the rest.
