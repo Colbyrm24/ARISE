@@ -171,12 +171,12 @@ export const LANDING: LandingContent = {
   // "What you get" — the offer, not the process. The call covers the rest.
   steps: [
     {
-      title: 'Me, every single day',
-      body: "Text me whenever. I check in with you every day, and if you need a call, I jump on one. No team, no assistant. Just me.",
+      title: 'Me, 24/7',
+      body: "I'm on my phone all day texting back and forth with my clients. Message me anytime and you hear back from me, not a team or an assistant. Need a call? I'll jump on one.",
     },
     {
-      title: '3 workouts a week, 30 minutes each',
-      body: "That's all it takes to build real muscle. Every session is in your app with a video showing exactly how to do each move.",
+      title: 'Only 3 days a week in the gym',
+      body: "That's all you need to build real muscle. Want to train more? I'll build it around that. Every session is in your app with a video showing exactly how to do each move.",
     },
     {
       title: 'Eat the foods you love',
@@ -192,7 +192,7 @@ export const LANDING: LandingContent = {
     heading: "I'm Colby.",
     paragraphs: [
       "I help men see their abs for the first time while building muscle at the same time. And you don't have to live some strict, miserable life to get there.",
-      "You still go out to eat. You still have date nights with your wife and dessert with your family. You still have time for your kids and your business. Your life doesn't stop because you're getting in shape.",
+      "You still go out to eat, have a few drinks on the weekend and enjoy dessert. You still have time for the people you care about and everything you've got going on. Your life doesn't stop because you're getting in shape.",
       "Things start happening faster than you'd ever imagine. I haven't had a single client look back after seeing their progress in the first month.",
     ],
     photo: '/colby.jpg',
@@ -222,7 +222,7 @@ export const LANDING: LandingContent = {
     {
       question: 'How is this different from a program or an app?',
       answer:
-        "A program can't see you. I can. I talk with you every single day, and whenever you need a call, I'm on it. There's no team and no assistant coach. It's just me and you, one on one, until you hit your goal. There's no way you fail.",
+        "A program can't see you. I can. I'm on my phone 24/7 texting back and forth with my clients, and whenever you need a call, I'm on it. There's no team and no assistant coach. It's just me and you, one on one, until you hit your goal. There's no way you fail.",
     },
   ],
 
