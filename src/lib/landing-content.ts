@@ -164,7 +164,7 @@ export const LANDING: LandingContent = {
   // Shown as "My promise to you": nothing here turns anyone away. Each line is
   // something Colby commits to, so a serious buyer reads it as certainty.
   notForYou: [
-    "You'll never be guessing. Every workout and every meal is laid out for you.",
+    "You'll never be guessing. Every workout is laid out for you, and you'll know exactly how to fit the foods you love in.",
     "You'll never be left on read. I text you back myself, 24/7.",
     "You'll never have to give up the foods you love to get there.",
     "If something isn't working, I change it that same day. You don't lose weeks.",
