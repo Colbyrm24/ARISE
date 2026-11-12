@@ -156,7 +156,7 @@ export const LANDING: LandingContent = {
   showResultPlaceholders: false,
 
   forYou: [
-    "You're 25–50, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
+    "You're 25+, you've built a real career, and you're done with your body being the one thing that hasn't caught up.",
     'You want to see your abs. Not someday. For real, and for good.',
     "You don't want to live on chicken and rice. You want to get shredded and still have the steak dinner, the drinks and the dessert.",
     "You want someone hands-on with you every step of the way, not someone who sells you a course and leaves you to figure it out.",
