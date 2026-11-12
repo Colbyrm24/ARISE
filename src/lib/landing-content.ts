@@ -143,7 +143,7 @@ export const LANDING: LandingContent = {
   // Real client transformations. Add a name, result line and "about" to any
   // of these when you have them — e.g. result: 'Lost 32 lbs', name: 'Mike',
   // about: '44, owns a roofing company'.
-  results: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({ photo: `/results/result-${n}.jpg` })),
+  results: [1, 2, 3, 10, 11, 4, 12, 5, 6, 7, 8, 9].map((n) => ({ photo: `/results/result-${n}.jpg` })),
 
   // Real clients only. Example of one entry:
   // {
