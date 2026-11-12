@@ -213,11 +213,6 @@ export const LANDING: LandingContent = {
         "Three days a week, about 30 minutes a session. That's all it takes to build the most muscle you can. Most people get this wrong and think more hours in the gym means more results. It doesn't. Short, hard, focused sessions do.",
     },
     {
-      question: 'Do I need a gym?',
-      answer:
-        'A gym gets you there fastest, but it isn’t required. If you train at home or travel a lot, the plan is built around the equipment you have.',
-    },
-    {
       question: "I'm in my 40s. Is it too late to get abs?",
       answer:
         "No. Plenty of men get in the best shape of their life after 40. It takes a plan built for where your body is now, and someone adjusting it every day. That's my job.",
