@@ -153,7 +153,7 @@ export function ApplyForm({
   }
 
   if (done) {
-    // A fit goes straight to the calendar; everyone else hears back from the coach.
+    // A fit goes straight to the calendar; everyone else is sent to DM GOLD on Instagram.
     return calendlyUrl && isCallReady(answers) ? (
       <BookCall name={answers.firstName} email={answers.email} calendlyUrl={calendlyUrl} />
     ) : (
@@ -329,22 +329,39 @@ export function ApplyForm({
   );
 }
 
+/**
+ * Not booking-ready (under $2,000 a month, or not ready to invest yet).
+ * Rather than a dead end, they're sent to Instagram with one word to DM,
+ * which is where Colby picks it up.
+ */
 function Received({ name, instagramUrl }: { name: string; instagramUrl: string }) {
   const first = name.trim().split(' ')[0];
+  // ig.me/m/<handle> opens a DM to him straight in the Instagram app.
+  const handle = instagramUrl.match(/instagram\.com\/([^/?#]+)/i)?.[1] ?? '';
+  const dmUrl = handle ? `https://ig.me/m/${handle}` : instagramUrl;
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-2xl flex-col justify-center px-5 py-16 sm:px-8">
-      <div className="surface-sheen lit-edge relative motion-safe:animate-fade-in rounded-[20px] border border-border px-6 py-10 sm:px-10 sm:py-12">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-success">Application received</p>
+      <div className="surface-sheen lit-edge relative motion-safe:animate-fade-in rounded-[20px] border border-border px-6 py-10 text-center sm:px-10 sm:py-12">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">One more step</p>
         <h1 className="landing-headline mt-4 text-3xl leading-[1.05] sm:text-5xl">Got it{first ? `, ${first}` : ''}.</h1>
-        <p className="mt-6 text-base leading-relaxed text-muted-foreground">
-          I read every application myself. If it looks like a fit, I&apos;ll reach out within 24 hours.
+        <p className="mx-auto mt-6 max-w-md text-lg leading-relaxed text-foreground/90">
+          DM me the word
         </p>
-        <div className="mt-8 flex gap-6 border-t border-border pt-6 text-sm">
-          {instagramUrl && (
-            <a href={instagramUrl} className="text-accent hover:underline">
-              Instagram
-            </a>
-          )}
+        <p className="mt-2 text-6xl font-black tracking-wider text-amber-400 drop-shadow-[0_0_18px_rgba(251,191,36,0.45)] sm:text-7xl">
+          GOLD
+        </p>
+        <p className="mx-auto mt-2 max-w-md text-lg leading-relaxed text-foreground/90">on Instagram.</p>
+        {dmUrl && (
+          <a
+            href={dmUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-cta mt-8 inline-flex h-14 items-center justify-center rounded-full px-8 text-base font-bold"
+          >
+            Open Instagram &rarr;
+          </a>
+        )}
+        <div className="mt-8 border-t border-border pt-6 text-sm">
           <Link href="/coaching" className="text-accent hover:underline">
             Back to the page
           </Link>
