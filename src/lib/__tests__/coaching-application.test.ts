@@ -94,7 +94,12 @@ test('every question is required, phone and income included', () => {
   assert.equal(applicationSchema.safeParse({ ...valid, monthlyIncome: undefined }).success, false);
 });
 
-test('only $3,000+ a month and a yes to investing goes straight to the calendar', () => {
+test('$2,000+ a month and a yes to investing goes straight to the calendar', () => {
+  assert.equal(isCallReady({ monthlyIncome: '2k_3k', investReady: 'yes' }), true);
+  assert.equal(isCallReady({ monthlyIncome: 'under_2k', investReady: 'yes' }), false);
+});
+
+test('only $3,000+ a month and a yes to investing goes straight to the calendar (older answers)', () => {
   assert.equal(isCallReady({ monthlyIncome: '3k_5k', investReady: 'yes' }), true);
   assert.equal(isCallReady({ monthlyIncome: '10k_plus', investReady: 'yes' }), true);
   assert.equal(isCallReady({ monthlyIncome: 'under_3k', investReady: 'yes' }), false);

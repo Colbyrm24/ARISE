@@ -37,11 +37,20 @@ export const START_WHEN: Choice[] = [
 ];
 
 export const MONTHLY_INCOME: Choice[] = [
-  { value: 'under_3k', label: 'Under $3,000' },
+  { value: 'under_2k', label: 'Under $2,000' },
+  { value: '2k_3k', label: '$2,000–$3,000' },
   { value: '3k_5k', label: '$3,000–$5,000' },
   { value: '5k_10k', label: '$5,000–$10,000' },
   { value: '10k_plus', label: '$10,000+' },
+  // Older applications only, from before the bar moved to $2,000.
+  { value: 'under_3k', label: 'Under $3,000' },
 ];
+
+/** What the application form offers today (the older answer is not offered). */
+export const INCOME_CHOICES: Choice[] = MONTHLY_INCOME.filter((c) => c.value !== 'under_3k');
+
+/** Answers that don't go straight to the calendar. */
+const BELOW_BAR = new Set(['under_2k', 'under_3k']);
 
 export const INVEST_READY: Choice[] = [
   { value: 'yes', label: 'Yes' },
@@ -54,12 +63,17 @@ export const INVEST_READY: Choice[] = [
 export const INVEST_CHOICES: Choice[] = INVEST_READY.filter((c) => c.value !== 'more_info');
 
 /**
- * A fit for a call straight away: earning $3,000+ a month and a yes to
+ * A fit for a call straight away: earning $2,000+ a month and a yes to
  * investing. These applicants go straight to the calendar; everyone else
  * gets the "I'll be in touch" screen and the coach decides.
  */
 export function isCallReady(a: { monthlyIncome?: string | null; investReady?: string | null }) {
-  return Boolean(a.monthlyIncome && a.monthlyIncome !== 'under_3k' && MONTHLY_INCOME.some((c) => c.value === a.monthlyIncome) && a.investReady === 'yes');
+  return Boolean(
+    a.monthlyIncome &&
+      !BELOW_BAR.has(a.monthlyIncome) &&
+      MONTHLY_INCOME.some((c) => c.value === a.monthlyIncome) &&
+      a.investReady === 'yes'
+  );
 }
 
 /** Every status a coach can put an application in, in pipeline order. */
