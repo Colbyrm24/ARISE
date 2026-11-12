@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Check, Dumbbell, MessageCircle, Play, Quote, Trophy, UtensilsCrossed, X } from 'lucide-react';
+import { Check, Dumbbell, MessageCircle, Play, Quote, Trophy, UtensilsCrossed } from 'lucide-react';
 import { LANDING, type ClientResult, type Testimonial } from '@/lib/landing-content';
 import { landingVideo, resultsView, testimonialsView } from '@/lib/landing';
 import { normalizeSource } from '@/lib/application-fields';
@@ -163,13 +163,13 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
                 ))}
               </ul>
             </div>
-            <div className="relative rounded-[20px] border border-border bg-card/40 p-7 sm:p-9">
-              <h3 className="text-lg font-bold text-foreground/85">This isn&apos;t for you if</h3>
+            <div className="relative rounded-[20px] border border-accent/40 bg-card/60 p-7 sm:p-9">
+              <h3 className="text-lg font-bold text-foreground">My promise to you</h3>
               <ul className="mt-6 flex flex-col gap-5">
                 {LANDING.notForYou.map((line) => (
-                  <li key={line} className="flex gap-3.5 text-[15px] leading-relaxed text-muted-foreground">
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[999px] bg-foreground/5 text-muted-foreground">
-                      <X size={14} strokeWidth={3} aria-hidden />
+                  <li key={line} className="flex gap-3.5 text-[15px] leading-relaxed text-foreground/90">
+                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-[999px] bg-accent/15 text-accent">
+                      <Check size={14} strokeWidth={3} aria-hidden />
                     </span>
                     {line}
                   </li>
