@@ -168,22 +168,23 @@ export const LANDING: LandingContent = {
     "You want to be told it's easy. It isn't. It's simple.",
   ],
 
+  // "What you get" — the offer, not the process. The call covers the rest.
   steps: [
     {
-      title: 'Apply',
-      body: 'A few quick questions. Tell me where you are and what you want to change.',
+      title: 'Me, every single day',
+      body: "Text me whenever. I check in with you every day, and if you need a call, I jump on one. No team, no assistant. Just me.",
     },
     {
-      title: 'Strategy call',
-      body: "You and I get on a call. If I can help you, I'll show you exactly how. If I can't, I'll tell you.",
+      title: '3 workouts a week, 30 minutes each',
+      body: "That's all it takes to build real muscle. Every session is in your app with a video showing exactly how to do each move.",
     },
     {
-      title: 'Get lean, in the ARISE app',
-      body: 'Training and nutrition built around your week, your travel and the food you actually eat. Every session and every target, right on your phone.',
+      title: 'Eat the foods you love',
+      body: "Your meals are built around what you already like to eat. Snap a photo of your plate and the numbers are done for you.",
     },
     {
-      title: 'Learn to keep it for life',
-      body: "I'm in touch with you every single day, and if you need a call, I jump on one with you. I adjust everything as you go, and I teach you how to eat out, drink and enjoy dessert without losing what you built. So you never have to start over again.",
+      title: 'Abs you keep for life',
+      body: "I teach you how to eat out, have a drink and enjoy dessert without losing what you built. So you never have to start over again.",
     },
   ],
 

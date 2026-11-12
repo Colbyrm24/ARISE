@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Check, Play, Quote, X } from 'lucide-react';
+import { Check, Dumbbell, MessageCircle, Play, Quote, Trophy, UtensilsCrossed, X } from 'lucide-react';
 import { LANDING, type ClientResult, type Testimonial } from '@/lib/landing-content';
 import { landingVideo, resultsView, testimonialsView } from '@/lib/landing';
 import { normalizeSource } from '@/lib/application-fields';
@@ -180,24 +180,27 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
         </div>
       </section>
 
-      {/* ── How it works ─────────────────────────────────────────────── */}
+      {/* ── What you get ─────────────────────────────────────────────── */}
       <section className={`${section} bg-card/30`}>
         <div className={wrap}>
           <div className="max-w-2xl">
-            <Eyebrow>How it works</Eyebrow>
-            <h2 className={h2}>Four steps. Then you never start over again.</h2>
+            <Eyebrow>What you get</Eyebrow>
+            <h2 className={h2}>Everything you need to see your abs. Nothing you don't.</h2>
           </div>
-          <ol className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {LANDING.steps.map((step, i) => (
+          <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {LANDING.steps.map((step, i) => {
+              const Icon = [MessageCircle, Dumbbell, UtensilsCrossed, Trophy][i] ?? Check;
+              return (
               <li key={step.title} className={`${card} p-7`}>
-                <span className="flex h-10 w-10 items-center justify-center rounded-[999px] border border-accent/60 bg-background text-sm font-bold text-accent glow-soft shadow-[0_0_18px_-2px_hsl(var(--accent)/0.7)]">
-                  {i + 1}
+                <span className="flex h-11 w-11 items-center justify-center rounded-[999px] border border-accent/60 bg-background text-accent glow-soft shadow-[0_0_18px_-2px_hsl(var(--accent)/0.7)]">
+                  <Icon size={20} />
                 </span>
                 <h3 className="mt-5 text-lg font-bold">{step.title}</h3>
-                <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">{step.body}</p>
+                <p className="mt-2 text-[15px] leading-relaxed text-foreground/80">{step.body}</p>
               </li>
-            ))}
-          </ol>
+              );
+            })}
+          </ul>
           <div className="mt-12 flex justify-center">
             <ApplyLink href={applyHref} label={LANDING.applyLabel} className="w-full sm:w-auto sm:min-w-[260px]" />
           </div>
