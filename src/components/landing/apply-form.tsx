@@ -7,7 +7,7 @@ import {
   AGE_RANGES,
   EMPTY_ANSWERS,
   INVEST_CHOICES,
-  MONTHLY_INCOME,
+  INCOME_CHOICES,
   checkAnswer,
   isCallReady,
   type ApplicationAnswers,
@@ -49,7 +49,7 @@ const STEPS: StepDef[] = [
     hint: '(Seeing my abs for the first time, learning how to eat what I want and lose weight at the same time, building muscle, etc.)',
     placeholder: 'Type your answer…',
   },
-  { key: 'monthlyIncome', kind: 'choice', prompt: "What's your current monthly income?", choices: MONTHLY_INCOME },
+  { key: 'monthlyIncome', kind: 'choice', prompt: "What's your current monthly income?", choices: INCOME_CHOICES },
   {
     key: 'investReady',
     kind: 'choice',
