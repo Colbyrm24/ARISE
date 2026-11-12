@@ -191,9 +191,9 @@ export const LANDING: LandingContent = {
   about: {
     heading: "I'm Colby.",
     paragraphs: [
-      "I help guys see their abs for the first time while building muscle at the same time. And you don't have to live some strict, miserable life to get there.",
-      "You still go out to eat. You still have a drink with the boys and dessert with your family. You still have time for your kids, your wife and your business. Your life doesn't stop because you're getting in shape.",
-      "After the first month, things start happening faster than you'd ever imagine. Most of my guys never look back, because once it's set up, everything just runs.",
+      "I help men see their abs for the first time while building muscle at the same time. And you don't have to live some strict, miserable life to get there.",
+      "You still go out to eat. You still have date nights with your wife and dessert with your family. You still have time for your kids and your business. Your life doesn't stop because you're getting in shape.",
+      "Things start happening faster than you'd ever imagine. I haven't had a single client look back after seeing their progress in the first month.",
     ],
     photo: '/colby.jpg',
   },
@@ -224,14 +224,9 @@ export const LANDING: LandingContent = {
       answer:
         "A program can't see you. I can. I talk with you every single day, and whenever you need a call, I'm on it. There's no team and no assistant coach. It's just me and you, one on one, until you hit your goal. There's no way you fail.",
     },
-    {
-      question: 'How much does it cost?',
-      answer:
-        "This is premium 1-on-1 coaching and it's a real investment. I'll go through it with you on the call, once I know exactly what you need.",
-    },
   ],
 
-  finalHeadline: 'See your abs. Keep them for life.',
+  finalHeadline: 'Get the six-pack. Keep it for life.',
   finalBody:
     "Apply now. If it's a fit, you'll hear from me within 24 hours.",
 
