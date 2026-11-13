@@ -51,7 +51,7 @@ export type Testimonial = {
   videoUrl?: string;
 };
 
-/** A short proof line under the hero, e.g. { value: '800+', label: 'men coached' }. */
+/** A short proof line under the hero, e.g. { value: '100+', label: 'men coached' }. */
 export type ProofStat = { value: string; label: string };
 
 export type Step = { title: string; body: string };
@@ -135,7 +135,7 @@ export const LANDING: LandingContent = {
   // },
   // Straight from your Instagram bio. Change or remove if a number changes.
   proof: [
-    { value: '800+', label: 'clients coached' },
+    { value: '100+', label: 'clients coached' },
     { value: '1-on-1', label: 'with me, not an app' },
     { value: '6 months', label: 'lean, then keep it' },
   ],
