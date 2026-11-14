@@ -194,9 +194,9 @@ export const LANDING: LandingContent = {
   about: {
     heading: "I'm Colby.",
     paragraphs: [
-      "I help men see their abs for the first time while building muscle at the same time. And you don't have to live some strict, miserable life to get there.",
-      "You still go out to eat, have a few drinks on the weekend and enjoy dessert. You still have time for the people you care about and everything you've got going on. Your life doesn't stop because you're getting in shape.",
-      "Things start happening faster than you'd ever imagine. I haven't had a single client look back after seeing their progress in the first month.",
+      "I've tried every diet in the book. Every one of them was too restrictive. I got as lean as I wanted to be, but at the end of the day I hated my diet.",
+      "So I spent years figuring out how to eat the foods I love, not be restrictive, and still lose the weight just as fast. And I figured it out.",
+      "Now I stay at 10% body fat year-round while eating the foods I love, and over the last couple of years I've helped hundreds of men do the same thing, for life.",
     ],
     photo: '/colby.jpg',
   },
