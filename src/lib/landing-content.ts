@@ -118,7 +118,7 @@ export const LANDING: LandingContent = {
     after: ' while still eating the foods they love',
   },
   subheadline:
-    'Private 1-on-1 coaching with me. I get you in the best shape of your life, then I teach you how to stay there while you still have dessert, drinks and dinners out.',
+    'Watch the short video below to see exactly how I help busy men finally get the results they want, without giving up the foods, drinks and nights out they love.',
   videoUrl: 'https://www.youtube.com/watch?v=1PnVesMmLto',
   videoPoster: '',
   applyLabel: 'Apply now',
