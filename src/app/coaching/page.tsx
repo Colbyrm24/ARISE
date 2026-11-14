@@ -41,12 +41,13 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
   const { headline } = LANDING;
 
   return (
-    <div className="landing-clean relative min-h-screen pb-24 sm:pb-0">
+    <div className="landing-clean relative min-h-screen">
       <div aria-hidden className="viewport-frame" />
       <header className="sticky top-0 z-30 border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className={`${wrap} flex h-16 items-center justify-between`}>
           <span className="text-base font-extrabold tracking-tight">{LANDING.coachName}</span>
-          <ApplyLink href={applyHref} label={LANDING.applyLabel} size="sm" />
+          {/* Desktop only: on a phone the button under the video and the closing one are enough. */}
+          <ApplyLink href={applyHref} label={LANDING.applyLabel} size="sm" className="hidden sm:inline-flex" />
         </div>
       </header>
 
@@ -294,10 +295,6 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
         </div>
       </footer>
 
-      {/* On a phone the button is always one thumb away. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/40 bg-background/90 p-3 backdrop-blur-md sm:hidden">
-        <ApplyLink href={applyHref} label={LANDING.applyLabel} className="w-full" />
-      </div>
     </div>
   );
 }
