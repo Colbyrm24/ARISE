@@ -113,7 +113,7 @@ export const LANDING: LandingContent = {
     'Private 1-on-1 coaching for men 30+. Get your six-pack while still eating the foods you love, and keep it for life.',
 
   headline: {
-    before: 'How men 30+ get their ',
+    before: 'How more men than ever are getting their ',
     highlight: 'six-pack',
     after: ' while still eating the foods they love',
   },
