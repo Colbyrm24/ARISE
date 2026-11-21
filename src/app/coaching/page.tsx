@@ -45,7 +45,7 @@ export default function CoachingPage({ searchParams }: { searchParams?: { ref?: 
       <div aria-hidden className="viewport-frame" />
       <header className="sticky top-0 z-30 border-b border-border/40 bg-background/80 backdrop-blur-md">
         <div className={`${wrap} flex h-16 items-center justify-between`}>
-          <span className="text-base font-extrabold tracking-tight">{LANDING.coachName}</span>
+          <span className="text-base font-extrabold tracking-tight">ARISE <span className="font-semibold text-muted-foreground">Coaching</span></span>
           {/* Desktop only: on a phone the button under the video and the closing one are enough. */}
           <ApplyLink href={applyHref} label={LANDING.applyLabel} size="sm" className="hidden sm:inline-flex" />
         </div>
